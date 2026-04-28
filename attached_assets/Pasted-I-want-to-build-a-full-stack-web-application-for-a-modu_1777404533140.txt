@@ -1,0 +1,343 @@
+I want to build a full-stack web application for a modular small business operations platform.
+
+The system should START as a restaurant-focused platform, but must be designed to expand into retail, grocery, service businesses, and mixed-use businesses later.
+
+Do not hardcode restaurant-only logic. Build a flexible core.
+
+-------------------------------------
+TECH STACK
+-------------------------------------
+- React frontend
+- Node.js / Express backend
+- PostgreSQL database
+- Use Prisma or Drizzle ORM
+- Tailwind CSS for styling
+- Role-based authentication and authorization
+
+-------------------------------------
+CORE CONCEPT
+-------------------------------------
+This is a multi-business, multi-location platform.
+
+Each business can:
+- have multiple locations
+- enable or disable modules
+- manage inventory, orders, employees, and time tracking
+
+Design everything to be modular and scalable.
+
+-------------------------------------
+MODULE SYSTEM
+-------------------------------------
+Create a BusinessModules system so each business can enable or disable features.
+
+Modules:
+- inventory
+- orders
+- employees
+- scheduling
+- time_tracking
+- reports
+- payroll_future
+- recipes_future
+
+The UI should only show enabled modules.
+
+-------------------------------------
+AUTHENTICATION & ROLES
+-------------------------------------
+Users can:
+- sign up
+- log in
+- create a business
+
+Roles:
+- Admin/Owner:
+  full access to everything
+
+- Manager:
+  manage inventory, orders, employees, scheduling
+  approve time entries
+  view reports
+
+- Cashier:
+  create orders
+  view items
+  basic customer lookup
+
+- HR/Payroll (future-ready):
+  view employees
+  view approved time entries
+
+-------------------------------------
+BUSINESS & LOCATION
+-------------------------------------
+Business:
+- id
+- name
+- ownerUserId
+
+Location:
+- id
+- businessId
+- name
+- type (store, restaurant, warehouse, etc.)
+
+-------------------------------------
+ITEM SYSTEM (CRITICAL)
+-------------------------------------
+Items must support two roles:
+
+1. Ingredients (raw inventory items)
+2. Menu Items (items sold to customers)
+
+Item fields:
+- id
+- businessId
+- name
+- type: product | service | ingredient | menu_item
+- categoryId
+- basePrice
+- cost
+- trackInventory (boolean)
+- hasVariants (boolean)
+- active (boolean)
+
+ItemVariant:
+- id
+- itemId
+- name
+- SKU
+- price
+- cost
+- attributes (JSON: size, color, unit, etc.)
+
+Menu Categories (for UI):
+- Burgers
+- Drinks
+- Sides
+- Desserts
+(Use category system for this)
+
+-------------------------------------
+RECIPE SYSTEM (FOUNDATION ONLY)
+-------------------------------------
+Add basic recipe support.
+
+A menu item can be linked to ingredients.
+
+Recipe:
+- id
+- menuItemId
+
+RecipeItem:
+- id
+- recipeId
+- ingredientVariantId
+- quantity
+
+IMPORTANT:
+- Do not fully enforce inventory deduction yet
+- Design it so selling a menu item can later reduce ingredient stock
+
+-------------------------------------
+INVENTORY SYSTEM
+-------------------------------------
+Inventory is tracked by location.
+
+Inventory:
+- id
+- variantId
+- locationId
+- quantity
+- lowStockThreshold
+
+InventoryTransaction:
+- id
+- variantId
+- locationId
+- type:
+  sale | purchase | adjustment | return | waste | transfer
+- quantityChange
+- referenceType
+- referenceId
+- batchId (nullable, for future expiration tracking)
+- createdAt
+
+IMPORTANT:
+- Prepare system for future batch and expiration tracking
+- Do not fully implement expiration UI yet
+
+-------------------------------------
+ORDERS SYSTEM
+-------------------------------------
+This is order recording (not full POS yet).
+
+Orders support:
+- dine-in
+- pickup
+- delivery
+
+Order:
+- id
+- businessId
+- locationId
+- customerId (optional)
+- orderType
+- status:
+  pending | preparing | ready | completed | cancelled | refunded
+- subtotal
+- discount
+- tax (optional)
+- total
+- createdAt
+
+OrderLine:
+- id
+- orderId
+- variantId
+- quantity
+- price
+- notes
+- modifiers (JSON)
+
+IMPORTANT:
+- modifiers are critical for restaurant use cases (add-ons, removals, substitutions)
+
+-------------------------------------
+CUSTOMERS
+-------------------------------------
+Customer:
+- id
+- businessId
+- name
+- phone
+- email
+
+-------------------------------------
+EMPLOYEE SYSTEM
+-------------------------------------
+Employee:
+- id
+- businessId
+- name
+- email/phone
+- roleId
+- locationId
+- hourlyRate
+- active
+
+Role:
+- id
+- businessId
+- name
+
+-------------------------------------
+SCHEDULING SYSTEM
+-------------------------------------
+Scheduling = employee work calendar.
+
+Shift:
+- id
+- employeeId
+- locationId
+- startTime
+- endTime
+
+-------------------------------------
+TIME TRACKING
+-------------------------------------
+Employees must be able to:
+- clock in
+- clock out
+
+TimeEntry:
+- id
+- employeeId
+- clockIn
+- clockOut
+- status:
+  pending | approved | rejected
+
+Managers can:
+- approve or reject time entries
+
+IMPORTANT:
+- Approved time entries will be used later for payroll
+
+-------------------------------------
+CUSTOM FIELDS SYSTEM
+-------------------------------------
+Businesses can define custom fields.
+
+CustomField:
+- id
+- businessId
+- entityType:
+  item | order | employee
+- name
+- type:
+  text | number | date | select | checkbox
+
+CustomFieldValue:
+- id
+- fieldId
+- entityId
+- value
+
+-------------------------------------
+DASHBOARD
+-------------------------------------
+Create a simple dashboard showing:
+- total orders
+- total sales
+- low stock items
+- pending time entries
+- active employees
+
+-------------------------------------
+UI REQUIREMENTS
+-------------------------------------
+- Clean modern dashboard
+- Sidebar navigation
+- Top bar
+- Tables and forms
+- Responsive design
+- Do not overcomplicate UI
+
+-------------------------------------
+ARCHITECTURE RULES
+-------------------------------------
+- Keep code modular
+- Separate routes, services, database schema, and UI
+- Do not hardcode business types
+- Use flexible item system
+- Prepare for future:
+  POS
+  recipe enforcement
+  ingredient deduction
+  expiration tracking
+  payroll
+
+-------------------------------------
+BUILD ORDER
+-------------------------------------
+1. Database schema
+2. Authentication + roles
+3. Business + locations + modules
+4. Dashboard layout
+5. Items + variants + categories
+6. Inventory system
+7. Orders system
+8. Employees
+9. Scheduling
+10. Time tracking
+11. Custom fields
+
+-------------------------------------
+AFTER BUILD
+-------------------------------------
+Explain:
+- what was built
+- what is missing
+- what should be built next (POS, recipe logic, payroll, etc.)
