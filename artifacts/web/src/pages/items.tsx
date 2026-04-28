@@ -240,10 +240,6 @@ function RecipeEditor({ item }: { item: Item }) {
     },
   });
   const { data: ingredients } = useGetItems({ type: "ingredient" });
-  const { data: variantMap } = useGetItemVariants(
-    recipeData?.items?.[0]?.ingredientVariantId ?? 0,
-    { query: { enabled: false, queryKey: getGetItemVariantsQueryKey(0) } }
-  );
   const upsertRecipe = useUpsertRecipe();
 
   const [addDialog, setAddDialog] = useState<{
