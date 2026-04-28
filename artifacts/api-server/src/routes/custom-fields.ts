@@ -114,7 +114,7 @@ router.patch(
     const authedReq = req as AuthedRequest;
     try {
       const businessId = assertBusinessId(authedReq.businessId);
-      const id = parseInt(req.params.id, 10);
+      const id = parseInt(String(req.params.id), 10);
       if (isNaN(id)) {
         res.status(400).json({ error: "Invalid id" });
         return;
@@ -189,7 +189,7 @@ router.delete(
     const authedReq = req as AuthedRequest;
     try {
       const businessId = assertBusinessId(authedReq.businessId);
-      const id = parseInt(req.params.id, 10);
+      const id = parseInt(String(req.params.id), 10);
       if (isNaN(id)) {
         res.status(400).json({ error: "Invalid id" });
         return;
