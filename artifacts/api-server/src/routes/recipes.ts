@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { recipesTable, recipeItemsTable, itemsTable, itemVariantsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   requireAuth,
   loadBusiness,
@@ -101,6 +101,19 @@ router.put("/items/:itemId/recipe", requireAuth, loadBusiness, requireRole("admi
     if (!body.success) {
       res.status(400).json({ error: body.error.message });
       return;
+    }
+
+    if (body.data.items.length > 0) {
+      const ingredientVariantIds = body.data.items.map((ri) => ri.ingredientVariantId);
+      const validVariants = await db
+        .select({ id: itemVariantsTable.id })
+        .from(itemVariantsTable)
+        .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+        .where(and(inArray(itemVariantsTable.id, ingredientVariantIds), tenantWhere(itemsTable.businessId, businessId!)));
+      if (validVariants.length !== ingredientVariantIds.length) {
+        res.status(400).json({ error: "One or more ingredient variants not found or do not belong to your business" });
+        return;
+      }
     }
 
     const [existing] = await db

@@ -43,6 +43,9 @@ router.get("/inventory", requireAuth, loadBusiness, async (req, res): Promise<vo
     if (req.query.categoryId && !isNaN(parseInt(req.query.categoryId as string))) {
       conditions.push(eq(itemsTable.categoryId, parseInt(req.query.categoryId as string)));
     }
+    if (req.query.type && typeof req.query.type === "string") {
+      conditions.push(eq(itemsTable.type, req.query.type));
+    }
 
     const rows = await db
       .select({
@@ -178,6 +181,66 @@ router.get("/inventory/transactions", requireAuth, loadBusiness, async (req, res
       .limit(limit);
 
     res.json(rows);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Internal error";
+    res.status(500).json({ error: msg });
+  }
+});
+
+const updateInventorySchema = z.object({
+  lowStockThreshold: z.string().nullable(),
+});
+
+router.patch("/inventory/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const authedReq = req as AuthedRequest;
+  try {
+    const businessId = authedReq.businessId;
+    assertBusinessId(businessId);
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = updateInventorySchema.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+
+    const [inv] = await db
+      .select({ id: inventoryTable.id, variantId: inventoryTable.variantId })
+      .from(inventoryTable)
+      .where(eq(inventoryTable.id, id));
+    if (!inv) {
+      res.status(404).json({ error: "Inventory entry not found" });
+      return;
+    }
+
+    const [variant] = await db
+      .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
+      .from(itemVariantsTable)
+      .where(eq(itemVariantsTable.id, inv.variantId));
+    if (!variant) {
+      res.status(404).json({ error: "Variant not found" });
+      return;
+    }
+
+    const [item] = await db
+      .select({ id: itemsTable.id })
+      .from(itemsTable)
+      .where(and(eq(itemsTable.id, variant.itemId), tenantWhere(itemsTable.businessId, businessId!)));
+    if (!item) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(inventoryTable)
+      .set({ lowStockThreshold: body.data.lowStockThreshold, updatedAt: new Date() })
+      .where(eq(inventoryTable.id, id))
+      .returning();
+
+    res.json({ ...updated, isLowStock: updated.lowStockThreshold !== null && parseFloat(updated.quantity) < parseFloat(updated.lowStockThreshold) });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Internal error";
     res.status(500).json({ error: msg });

@@ -490,6 +490,7 @@ export const GetInventoryQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   categoryId: zod.coerce.number().optional(),
   lowStock: zod.coerce.boolean().optional(),
+  type: zod.enum(["product", "service", "ingredient", "menu_item"]).optional(),
 });
 
 export const GetInventoryResponseItem = zod.object({
@@ -507,6 +508,32 @@ export const GetInventoryResponseItem = zod.object({
   categoryName: zod.string().nullish(),
 });
 export const GetInventoryResponse = zod.array(GetInventoryResponseItem);
+
+/**
+ * @summary Update inventory entry (e.g. set low stock threshold)
+ */
+export const UpdateInventoryEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateInventoryEntryBody = zod.object({
+  lowStockThreshold: zod.string().nullable(),
+});
+
+export const UpdateInventoryEntryResponse = zod.object({
+  id: zod.number(),
+  variantId: zod.number(),
+  locationId: zod.number(),
+  quantity: zod.string(),
+  lowStockThreshold: zod.string().nullish(),
+  isLowStock: zod.boolean(),
+  itemId: zod.number(),
+  itemName: zod.string(),
+  variantName: zod.string(),
+  sku: zod.string().nullish(),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+});
 
 /**
  * @summary Get inventory transaction history

@@ -376,6 +376,11 @@ export interface CreateInventoryTransactionBody {
   batchId?: string | null;
 }
 
+export interface UpdateInventoryEntryBody {
+  /** @nullable */
+  lowStockThreshold: string | null;
+}
+
 export interface RecipeItem {
   id: number;
   recipeId: number;
@@ -433,7 +438,18 @@ export type GetInventoryParams = {
   search?: string;
   categoryId?: number;
   lowStock?: boolean;
+  type?: GetInventoryType;
 };
+
+export type GetInventoryType =
+  (typeof GetInventoryType)[keyof typeof GetInventoryType];
+
+export const GetInventoryType = {
+  product: "product",
+  service: "service",
+  ingredient: "ingredient",
+  menu_item: "menu_item",
+} as const;
 
 export type GetInventoryTransactionsParams = {
   locationId?: number;

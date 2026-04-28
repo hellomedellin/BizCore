@@ -85,6 +85,16 @@ router.post("/items", requireAuth, loadBusiness, requireRole("admin", "manager")
       res.status(400).json({ error: body.error.message });
       return;
     }
+    if (body.data.categoryId != null) {
+      const [cat] = await db
+        .select({ id: categoriesTable.id })
+        .from(categoriesTable)
+        .where(and(eq(categoriesTable.id, body.data.categoryId), tenantWhere(categoriesTable.businessId, businessId!)));
+      if (!cat) {
+        res.status(400).json({ error: "Category not found or does not belong to your business" });
+        return;
+      }
+    }
     const [row] = await db
       .insert(itemsTable)
       .values({ businessId: businessId!, ...body.data })
@@ -174,6 +184,16 @@ router.patch("/items/:id", requireAuth, loadBusiness, requireRole("admin", "mana
     if (!body.success) {
       res.status(400).json({ error: body.error.message });
       return;
+    }
+    if (body.data.categoryId != null) {
+      const [cat] = await db
+        .select({ id: categoriesTable.id })
+        .from(categoriesTable)
+        .where(and(eq(categoriesTable.id, body.data.categoryId), tenantWhere(categoriesTable.businessId, businessId!)));
+      if (!cat) {
+        res.status(400).json({ error: "Category not found or does not belong to your business" });
+        return;
+      }
     }
     const [row] = await db
       .update(itemsTable)

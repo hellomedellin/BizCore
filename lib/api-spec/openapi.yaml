@@ -571,6 +571,11 @@ paths:
           in: query
           schema:
             type: boolean
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [product, service, ingredient, menu_item]
       responses:
         "200":
           description: Inventory entries
@@ -580,6 +585,31 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventoryEntry"
+
+  /inventory/{id}:
+    patch:
+      operationId: updateInventoryEntry
+      tags: [inventory]
+      summary: Update inventory entry (e.g. set low stock threshold)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryEntryBody"
+      responses:
+        "200":
+          description: Updated inventory entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryEntry"
 
   /inventory/transactions:
     get:
@@ -1270,6 +1300,14 @@ components:
         - locationId
         - type
         - quantityChange
+
+    UpdateInventoryEntryBody:
+      type: object
+      properties:
+        lowStockThreshold:
+          type: ["string", "null"]
+      required:
+        - lowStockThreshold
 
     RecipeItem:
       type: object

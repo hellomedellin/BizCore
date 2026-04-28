@@ -44,6 +44,7 @@ import type {
   RecipeDetail,
   UpdateBusinessBody,
   UpdateCategoryBody,
+  UpdateInventoryEntryBody,
   UpdateItemBody,
   UpdateItemVariantBody,
   UpdateLocationBody,
@@ -2420,6 +2421,94 @@ export function useGetInventory<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update inventory entry (e.g. set low stock threshold)
+ */
+export const getUpdateInventoryEntryUrl = (id: number) => {
+  return `/api/inventory/${id}`;
+};
+
+export const updateInventoryEntry = async (
+  id: number,
+  updateInventoryEntryBody: UpdateInventoryEntryBody,
+  options?: RequestInit,
+): Promise<InventoryEntry> => {
+  return customFetch<InventoryEntry>(getUpdateInventoryEntryUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateInventoryEntryBody),
+  });
+};
+
+export const getUpdateInventoryEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateInventoryEntry>>,
+    TError,
+    { id: number; data: BodyType<UpdateInventoryEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateInventoryEntry>>,
+  TError,
+  { id: number; data: BodyType<UpdateInventoryEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["updateInventoryEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateInventoryEntry>>,
+    { id: number; data: BodyType<UpdateInventoryEntryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateInventoryEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateInventoryEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateInventoryEntry>>
+>;
+export type UpdateInventoryEntryMutationBody =
+  BodyType<UpdateInventoryEntryBody>;
+export type UpdateInventoryEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update inventory entry (e.g. set low stock threshold)
+ */
+export const useUpdateInventoryEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateInventoryEntry>>,
+    TError,
+    { id: number; data: BodyType<UpdateInventoryEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateInventoryEntry>>,
+  TError,
+  { id: number; data: BodyType<UpdateInventoryEntryBody> },
+  TContext
+> => {
+  return useMutation(getUpdateInventoryEntryMutationOptions(options));
+};
 
 /**
  * @summary Get inventory transaction history

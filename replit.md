@@ -58,6 +58,25 @@ pnpm workspace monorepo using TypeScript throughout.
 - `GET /api/business-users` — List team members for the business (admin/manager)
 - `POST /api/business-users` — Assign or update a user's role + location (admin only)
 - `DELETE /api/business-users/:id` — Deactivate a team member (admin only)
+- `GET /api/categories` — List categories for the business
+- `POST /api/categories` — Create a category (validates business ownership)
+- `PATCH /api/categories/:id` — Update a category
+- `DELETE /api/categories/:id` — Delete a category
+- `GET /api/items` — List items with search/type/category/active filters
+- `POST /api/items` — Create an item (validates categoryId ownership)
+- `PATCH /api/items/:id` — Update an item (validates categoryId ownership)
+- `DELETE /api/items/:id` — Delete an item
+- `GET /api/items/:itemId/variants` — List variants for an item
+- `POST /api/items/:itemId/variants` — Create a variant
+- `PATCH /api/variants/:id` — Update a variant (with tenant check via parent item)
+- `DELETE /api/variants/:id` — Delete a variant (with tenant check via parent item)
+- `GET /api/items/:itemId/recipe` — Get recipe for a menu item
+- `PUT /api/items/:itemId/recipe` — Upsert recipe (validates all ingredientVariantIds belong to business)
+- `GET /api/inventory` — List inventory for a location (search/category/type/lowStock filters)
+- `PATCH /api/inventory/:id` — Update inventory entry threshold (with tenant check)
+- `GET /api/inventory/transactions` — List transaction history
+- `POST /api/inventory/transactions` — Record an inventory transaction (atomic quantity update)
+- `GET /api/inventory/low-stock` — Get all low stock items across locations
 
 ### Tenant Isolation
 
@@ -80,10 +99,12 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/sign-in/*?` — Clerk SignIn component
 - `/sign-up/*?` — Clerk SignUp component
 - `/onboarding` — Business setup wizard (shown when no business exists)
-- `/dashboard` — Metrics dashboard with recent orders
+- `/dashboard` — Metrics dashboard with recent orders and low stock count
 - `/settings` — Business profile + module configuration + Team Members management
 - `/locations` — Location CRUD management
-- `/orders`, `/inventory`, `/employees`, `/schedule`, `/time-tracking`, `/reports` — Stub pages (show "Coming soon" when module enabled)
+- `/items` — Items management: products/ingredients/menu items CRUD with search/filter; CategoryManagerSheet for category CRUD; VariantsSheet with Variants tab + Recipe tab (for menu items) including recipe editor
+- `/inventory` — Inventory management: location-scoped stock table with type/category/low-stock filters; record transactions; set low stock thresholds; transaction log tab
+- `/orders`, `/employees`, `/schedule`, `/time-tracking`, `/reports` — Stub pages (show "Coming soon" when module enabled)
 
 ## Key Commands
 

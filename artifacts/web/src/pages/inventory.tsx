@@ -5,11 +5,12 @@ import {
   useGetInventory,
   useGetInventoryTransactions,
   useCreateInventoryTransaction,
+  useUpdateInventoryEntry,
   useGetCategories,
   getGetInventoryQueryKey,
   getGetInventoryTransactionsQueryKey,
 } from "@workspace/api-client-react";
-import type { InventoryEntry } from "@workspace/api-client-react";
+import type { InventoryEntry, GetInventoryType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -202,23 +203,97 @@ function RecordTransactionDialog({
   );
 }
 
+function SetThresholdDialog({
+  open,
+  onOpenChange,
+  entry,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  entry: InventoryEntry;
+  onSuccess: () => void;
+}) {
+  const [threshold, setThreshold] = useState(
+    entry.lowStockThreshold ? parseFloat(entry.lowStockThreshold).toString() : ""
+  );
+  const { toast } = useToast();
+  const updateInventory = useUpdateInventoryEntry();
+
+  const handleSave = async () => {
+    const parsed = threshold === "" ? null : parseFloat(threshold);
+    if (parsed !== null && isNaN(parsed)) {
+      toast({ title: "Enter a valid number", variant: "destructive" });
+      return;
+    }
+    try {
+      await updateInventory.mutateAsync({
+        id: entry.id,
+        data: { lowStockThreshold: parsed !== null ? parsed.toString() : null },
+      });
+      toast({ title: "Threshold updated" });
+      onSuccess();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Error updating threshold", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Set Low Stock Threshold</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{entry.itemName}</span> — {entry.variantName}
+          </p>
+          <div className="grid gap-1.5">
+            <Label>Alert when quantity falls below</Label>
+            <Input
+              type="number"
+              step="0.001"
+              min="0"
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+              placeholder="e.g. 5 (leave blank to disable)"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">Leave blank to disable low stock alerts for this item.</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSave} disabled={updateInventory.isPending}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function InventoryTable({
   locationId,
   search,
   categoryFilter,
+  typeFilter,
   lowStockOnly,
   onRecordTransaction,
 }: {
   locationId: number;
   search: string;
   categoryFilter: string;
+  typeFilter: string;
   lowStockOnly: boolean;
   onRecordTransaction: (entry: InventoryEntry) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [thresholdDialog, setThresholdDialog] = useState<{ open: boolean; entry?: InventoryEntry }>({ open: false });
   const { data: inventory, isLoading } = useGetInventory({
     locationId,
     ...(search ? { search } : {}),
     ...(categoryFilter !== "all" ? { categoryId: parseInt(categoryFilter) } : {}),
+    ...(typeFilter !== "all" ? { type: typeFilter as GetInventoryType } : {}),
     ...(lowStockOnly ? { lowStock: true } : {}),
   });
 
@@ -249,61 +324,80 @@ function InventoryTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Item</TableHead>
-          <TableHead>Variant</TableHead>
-          <TableHead>SKU</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead className="text-right">Qty</TableHead>
-          <TableHead className="text-right">Threshold</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {inventory.map((entry) => (
-          <TableRow key={entry.id}>
-            <TableCell className="font-medium">{entry.itemName}</TableCell>
-            <TableCell className="text-muted-foreground">{entry.variantName}</TableCell>
-            <TableCell className="text-muted-foreground text-sm">{entry.sku || "—"}</TableCell>
-            <TableCell className="text-muted-foreground text-sm">
-              {entry.categoryName || "—"}
-            </TableCell>
-            <TableCell className="text-right font-mono">
-              {parseFloat(entry.quantity).toFixed(2)}
-            </TableCell>
-            <TableCell className="text-right font-mono text-muted-foreground">
-              {entry.lowStockThreshold
-                ? parseFloat(entry.lowStockThreshold).toFixed(2)
-                : "—"}
-            </TableCell>
-            <TableCell>
-              {entry.isLowStock ? (
-                <Badge variant="destructive" className="gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Low Stock
-                </Badge>
-              ) : (
-                <Badge variant="secondary">OK</Badge>
-              )}
-            </TableCell>
-            <TableCell>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRecordTransaction(entry)}
-                className="h-8 text-xs"
-              >
-                <Plus className="mr-1 h-3 w-3" />
-                Adjust
-              </Button>
-            </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Item</TableHead>
+            <TableHead>Variant</TableHead>
+            <TableHead>SKU</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead className="text-right">Qty</TableHead>
+            <TableHead className="text-right">Alert Below</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead></TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {inventory.map((entry) => (
+            <TableRow key={entry.id}>
+              <TableCell className="font-medium">{entry.itemName}</TableCell>
+              <TableCell className="text-muted-foreground">{entry.variantName}</TableCell>
+              <TableCell className="text-muted-foreground text-sm">{entry.sku || "—"}</TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {entry.categoryName || "—"}
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                {parseFloat(entry.quantity).toFixed(2)}
+              </TableCell>
+              <TableCell className="text-right font-mono text-muted-foreground">
+                <button
+                  className="hover:text-foreground transition-colors cursor-pointer"
+                  onClick={() => setThresholdDialog({ open: true, entry })}
+                  title="Set low stock threshold"
+                >
+                  {entry.lowStockThreshold
+                    ? parseFloat(entry.lowStockThreshold).toFixed(2)
+                    : <span className="text-xs text-muted-foreground/50">Set</span>}
+                </button>
+              </TableCell>
+              <TableCell>
+                {entry.isLowStock ? (
+                  <Badge variant="destructive" className="gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Low Stock
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">OK</Badge>
+                )}
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRecordTransaction(entry)}
+                  className="h-8 text-xs"
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Adjust
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      {thresholdDialog.entry && (
+        <SetThresholdDialog
+          open={thresholdDialog.open}
+          onOpenChange={(v) => setThresholdDialog((d) => ({ ...d, open: v }))}
+          entry={thresholdDialog.entry}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: getGetInventoryQueryKey({ locationId }) });
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -387,6 +481,7 @@ export default function InventoryPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("none");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [txnDialog, setTxnDialog] = useState<{
     open: boolean;
@@ -495,8 +590,19 @@ export default function InventoryPage() {
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </div>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="w-full sm:w-[150px]">
+                      <SelectValue placeholder="All types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      <SelectItem value="product">Product</SelectItem>
+                      <SelectItem value="ingredient">Ingredient</SelectItem>
+                      <SelectItem value="menu_item">Menu Item</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[150px]">
                       <SelectValue placeholder="All categories" />
                     </SelectTrigger>
                     <SelectContent>
@@ -528,6 +634,7 @@ export default function InventoryPage() {
                   locationId={locationId}
                   search={search}
                   categoryFilter={categoryFilter}
+                  typeFilter={typeFilter}
                   lowStockOnly={lowStockOnly}
                   onRecordTransaction={(entry) => setTxnDialog({ open: true, entry })}
                 />
