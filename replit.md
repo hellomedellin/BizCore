@@ -91,11 +91,11 @@ pnpm workspace monorepo using TypeScript throughout.
 - `PATCH /api/shifts/:id` — Update a shift (admin/manager)
 - `DELETE /api/shifts/:id` — Delete a shift (admin/manager)
 - `GET /api/time-entries` — List time entries (employeeId, locationId, status, from, to filters; includes durationMinutes)
-- `POST /api/time-entries/clock-in` — Clock in an employee (creates open TimeEntry; 409 if already clocked in)
-- `POST /api/time-entries/:id/clock-out` — Clock out an open entry (sets clockOut timestamp)
+- `POST /api/time-entries/clock-in` — Clock in an employee (admin/manager; 409 if already clocked in; validates employee + location tenant ownership)
+- `POST /api/time-entries/:id/clock-out` — Clock out an open entry (admin/manager; tenant-scoped via employee join)
 - `POST /api/time-entries/:id/approve` — Approve a completed time entry (admin/manager; sets approvedBy to Clerk userId)
 - `POST /api/time-entries/:id/reject` — Reject a time entry with required reason (admin/manager)
-- `POST /api/time-entries/:id/resubmit` — Resubmit a rejected entry with corrected clockIn/clockOut (resets status to pending; 400 if not rejected)
+- `POST /api/time-entries/:id/resubmit` — Resubmit a rejected entry with corrected clockIn/clockOut (admin/manager; resets status to pending; 400 if not rejected)
 
 ### Tenant Isolation
 
@@ -126,7 +126,7 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/customers` — Customer management: searchable table with create/edit dialogs, customer detail sheet, order history count
 - `/orders` — Order management: state machine (pending→confirmed→preparing→ready→completed/cancelled), status history, role-based permissions
 - `/employees` — Employee management: searchable/filterable table by role, location, active status; create/edit dialogs; RolesManagerSheet for CRUD on job roles; EmployeeDetailSheet; active/deactivate toggle
-- `/schedule` — Weekly shift calendar: week navigation, location filter, 7-column day grid, color-coded shift cards per employee, conflict detection badges, add/edit/delete shifts via dialog
+- `/schedule` — Shift calendar with Week/Day view toggle: week view is a 7-column day grid (click a day header to jump to day view); day view groups shifts by employee with time/location/notes; shared add/edit/delete dialogs; location filter; conflict badges; nav arrows + today button
 - `/time-tracking` — Time entry management: 3 tabs (All/Pending/Open), clock-in dialog, clock-out action, approve/reject with required reason, resubmit dialog for rejected entries (shows rejection reason, editable clockIn/clockOut/notes); stat cards for open/pending/total counts
 - `/reports` — Stub page (Coming soon)
 

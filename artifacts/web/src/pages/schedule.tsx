@@ -270,16 +270,24 @@ export default function SchedulePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [viewMode, setViewMode] = useState<"week" | "day">("week");
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+  });
   const [locationFilter, setLocationFilter] = useState("all");
   const [shiftDialog, setShiftDialog] = useState<{ open: boolean; shift?: Shift; prefillDay?: Date }>({ open: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; shift?: Shift }>({ open: false });
 
   const weekEnd = addDays(weekStart, 7);
+  const dayEnd = addDays(selectedDay, 1);
+
+  const queryFrom = viewMode === "week" ? weekStart : selectedDay;
+  const queryTo = viewMode === "week" ? weekEnd : dayEnd;
 
   const queryParams = {
-    from: weekStart.toISOString(),
-    to: weekEnd.toISOString(),
+    from: queryFrom.toISOString(),
+    to: queryTo.toISOString(),
     ...(locationFilter !== "all" ? { locationId: parseInt(locationFilter) } : {}),
   };
 
@@ -312,6 +320,22 @@ export default function SchedulePage() {
     return map;
   }, [shifts, weekDays]);
 
+  const sortedDayShifts = useMemo(() => {
+    if (viewMode !== "day") return [];
+    return [...(shifts ?? [])].sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+  }, [shifts, viewMode]);
+
+  const shiftsByEmployee = useMemo(() => {
+    const map = new Map<number, { name: string; shifts: Shift[] }>();
+    sortedDayShifts.forEach((s) => {
+      if (!map.has(s.employeeId)) map.set(s.employeeId, { name: s.employeeName ?? "", shifts: [] });
+      map.get(s.employeeId)!.shifts.push(s);
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [sortedDayShifts]);
+
   const handleDelete = async () => {
     if (!deleteDialog.shift) return;
     try {
@@ -328,6 +352,26 @@ export default function SchedulePage() {
   const today = new Date().toDateString();
 
   const weekLabel = `${formatDate(weekStart)} – ${formatDate(addDays(weekStart, 6))}`;
+  const dayLabel = selectedDay.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+
+  const navPrev = () => {
+    if (viewMode === "week") setWeekStart(addDays(weekStart, -7));
+    else setSelectedDay(addDays(selectedDay, -1));
+  };
+  const navNext = () => {
+    if (viewMode === "week") setWeekStart(addDays(weekStart, 7));
+    else setSelectedDay(addDays(selectedDay, 1));
+  };
+  const navToday = () => {
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    setWeekStart(getWeekStart(now));
+    setSelectedDay(now);
+  };
+
+  const switchToDay = (day: Date) => {
+    setSelectedDay(day);
+    setViewMode("day");
+  };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto pb-10">
@@ -336,23 +380,38 @@ export default function SchedulePage() {
           <h1 className="text-3xl font-bold tracking-tight">Schedule</h1>
           <p className="text-muted-foreground">Manage shift assignments for your team.</p>
         </div>
-        <Button onClick={() => setShiftDialog({ open: true })}>
+        <Button onClick={() => setShiftDialog({ open: true, prefillDay: viewMode === "day" ? selectedDay : undefined })}>
           <Plus className="mr-2 h-4 w-4" /> Add Shift
         </Button>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1 rounded-md border bg-card p-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={navPrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-sm font-medium" onClick={() => setWeekStart(getWeekStart(new Date()))}>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-sm font-medium" onClick={navToday}>
             <Calendar className="mr-1.5 h-3.5 w-3.5" />
-            {weekLabel}
+            {viewMode === "week" ? weekLabel : dayLabel}
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={navNext}>
             <ChevronRight className="h-4 w-4" />
           </Button>
+        </div>
+
+        <div className="flex items-center rounded-md border bg-card overflow-hidden">
+          <button
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            onClick={() => setViewMode("week")}
+          >
+            Week
+          </button>
+          <button
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "day" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            onClick={() => setViewMode("day")}
+          >
+            Day
+          </button>
         </div>
 
         <Select value={locationFilter} onValueChange={setLocationFilter}>
@@ -375,85 +434,152 @@ export default function SchedulePage() {
         )}
       </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-7 gap-2">
-          {Array.from({ length: 7 }, (_, i) => (
-            <Skeleton key={i} className="h-48 w-full" />
-          ))}
-        </div>
+      {viewMode === "week" ? (
+        <>
+          {isLoading ? (
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 7 }, (_, i) => (
+                <Skeleton key={i} className="h-48 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-7 gap-1.5 min-w-0">
+              {weekDays.map((day, i) => {
+                const isToday = day.toDateString() === today;
+                const dayShifts = shiftsByDay.get(day.toDateString()) ?? [];
+
+                return (
+                  <div key={i} className="flex flex-col gap-1.5 min-w-0">
+                    <button
+                      className={`rounded-md px-2 py-1.5 text-center w-full transition-colors ${isToday ? "bg-primary text-primary-foreground" : "bg-muted/50 hover:bg-muted"}`}
+                      onClick={() => switchToDay(day)}
+                    >
+                      <p className="text-xs font-medium">{DAYS[i]}</p>
+                      <p className={`text-sm font-bold ${isToday ? "" : "text-foreground"}`}>{day.getDate()}</p>
+                    </button>
+
+                    <button
+                      className="flex items-center justify-center h-8 rounded border border-dashed text-muted-foreground hover:border-primary hover:text-primary transition-colors w-full"
+                      onClick={() => setShiftDialog({ open: true, prefillDay: day })}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+
+                    <div className="flex flex-col gap-1 min-h-[8rem]">
+                      {dayShifts.map((shift) => {
+                        const colorClass = employeeColorMap.get(shift.employeeId) ?? EMPLOYEE_COLORS[0];
+                        return (
+                          <Card
+                            key={shift.id}
+                            className={`border cursor-pointer hover:shadow-sm transition-shadow ${colorClass} ${shift.hasConflict ? "ring-2 ring-destructive" : ""}`}
+                            onClick={() => setShiftDialog({ open: true, shift })}
+                          >
+                            <CardContent className="p-1.5">
+                              <p className="text-xs font-semibold truncate">{shift.employeeName}</p>
+                              <p className="text-xs opacity-80">
+                                {formatTime(shift.startTime)}–{formatTime(shift.endTime)}
+                              </p>
+                              {shift.hasConflict && (
+                                <div className="flex items-center gap-0.5 mt-0.5">
+                                  <AlertTriangle className="h-2.5 w-2.5 text-destructive" />
+                                  <span className="text-[10px] text-destructive font-medium">Conflict</span>
+                                </div>
+                              )}
+                              <div className="flex justify-end gap-0.5 mt-1">
+                                <button
+                                  className="p-0.5 rounded hover:bg-black/10"
+                                  onClick={(e) => { e.stopPropagation(); setShiftDialog({ open: true, shift }); }}
+                                >
+                                  <Pencil className="h-2.5 w-2.5" />
+                                </button>
+                                <button
+                                  className="p-0.5 rounded hover:bg-black/10"
+                                  onClick={(e) => { e.stopPropagation(); setDeleteDialog({ open: true, shift }); }}
+                                >
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!isLoading && shifts && shifts.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed">
+              <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-muted-foreground font-medium">No shifts this week</p>
+              <p className="text-sm text-muted-foreground mt-1">Click + on any day or the Add Shift button to schedule a shift.</p>
+            </div>
+          )}
+        </>
       ) : (
-        <div className="grid grid-cols-7 gap-1.5 min-w-0">
-          {weekDays.map((day, i) => {
-            const isToday = day.toDateString() === today;
-            const dayShifts = shiftsByDay.get(day.toDateString()) ?? [];
-
-            return (
-              <div key={i} className="flex flex-col gap-1.5 min-w-0">
-                <div
-                  className={`rounded-md px-2 py-1.5 text-center ${isToday ? "bg-primary text-primary-foreground" : "bg-muted/50"}`}
-                >
-                  <p className="text-xs font-medium">{DAYS[i]}</p>
-                  <p className={`text-sm font-bold ${isToday ? "" : "text-foreground"}`}>{day.getDate()}</p>
-                </div>
-
-                <button
-                  className="flex items-center justify-center h-8 rounded border border-dashed text-muted-foreground hover:border-primary hover:text-primary transition-colors w-full"
-                  onClick={() => setShiftDialog({ open: true, prefillDay: day })}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-
-                <div className="flex flex-col gap-1 min-h-[8rem]">
-                  {dayShifts.map((shift) => {
-                    const colorClass = employeeColorMap.get(shift.employeeId) ?? EMPLOYEE_COLORS[0];
-                    return (
-                      <Card
-                        key={shift.id}
-                        className={`border cursor-pointer hover:shadow-sm transition-shadow ${colorClass} ${shift.hasConflict ? "ring-2 ring-destructive" : ""}`}
-                        onClick={() => setShiftDialog({ open: true, shift })}
-                      >
-                        <CardContent className="p-1.5">
-                          <p className="text-xs font-semibold truncate">{shift.employeeName}</p>
-                          <p className="text-xs opacity-80">
-                            {formatTime(shift.startTime)}–{formatTime(shift.endTime)}
-                          </p>
-                          {shift.hasConflict && (
-                            <div className="flex items-center gap-0.5 mt-0.5">
-                              <AlertTriangle className="h-2.5 w-2.5 text-destructive" />
-                              <span className="text-[10px] text-destructive font-medium">Conflict</span>
+        <>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
+            </div>
+          ) : shiftsByEmployee.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed">
+              <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-muted-foreground font-medium">No shifts on this day</p>
+              <p className="text-sm text-muted-foreground mt-1">Use the Add Shift button to schedule someone.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {shiftsByEmployee.map(({ name, shifts: empShifts }) => (
+                <div key={name} className="rounded-lg border bg-card overflow-hidden">
+                  <div className="px-4 py-2 bg-muted/40 border-b">
+                    <p className="text-sm font-semibold">{name}</p>
+                  </div>
+                  <div className="divide-y">
+                    {empShifts.map((shift) => {
+                      const colorClass = employeeColorMap.get(shift.employeeId) ?? EMPLOYEE_COLORS[0];
+                      return (
+                        <div
+                          key={shift.id}
+                          className={`flex items-center justify-between px-4 py-3 gap-3 ${colorClass}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div>
+                              <p className="text-sm font-medium">
+                                {formatTime(shift.startTime)} – {formatTime(shift.endTime)}
+                              </p>
+                              {shift.locationName && (
+                                <p className="text-xs opacity-70">{shift.locationName}</p>
+                              )}
+                              {shift.notes && (
+                                <p className="text-xs opacity-60 mt-0.5 truncate max-w-[300px]">{shift.notes}</p>
+                              )}
                             </div>
-                          )}
-                          <div className="flex justify-end gap-0.5 mt-1">
-                            <button
-                              className="p-0.5 rounded hover:bg-black/10"
-                              onClick={(e) => { e.stopPropagation(); setShiftDialog({ open: true, shift }); }}
-                            >
-                              <Pencil className="h-2.5 w-2.5" />
-                            </button>
-                            <button
-                              className="p-0.5 rounded hover:bg-black/10"
-                              onClick={(e) => { e.stopPropagation(); setDeleteDialog({ open: true, shift }); }}
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
-                            </button>
+                            {shift.hasConflict && (
+                              <Badge variant="destructive" className="gap-1 text-[10px] h-5">
+                                <AlertTriangle className="h-2.5 w-2.5" /> Conflict
+                              </Badge>
+                            )}
                           </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setShiftDialog({ open: true, shift })}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteDialog({ open: true, shift })}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {!isLoading && shifts && shifts.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed">
-          <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
-          <p className="text-muted-foreground font-medium">No shifts this week</p>
-          <p className="text-sm text-muted-foreground mt-1">Click + on any day or the Add Shift button to schedule a shift.</p>
-        </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <ShiftDialog

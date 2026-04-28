@@ -351,7 +351,7 @@ const clockInSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-router.post("/time-entries/clock-in", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+router.post("/time-entries/clock-in", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const authedReq = req as AuthedRequest;
   try {
     const businessId = authedReq.businessId;
@@ -401,7 +401,7 @@ const clockOutSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-router.post("/time-entries/:id/clock-out", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+router.post("/time-entries/:id/clock-out", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const authedReq = req as AuthedRequest;
   try {
     const businessId = authedReq.businessId;
@@ -509,7 +509,7 @@ const resubmitSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-router.post("/time-entries/:id/resubmit", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+router.post("/time-entries/:id/resubmit", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const authedReq = req as AuthedRequest;
   try {
     const businessId = authedReq.businessId;
