@@ -371,31 +371,15 @@ router.put("/custom-field-values", requireAuth, loadBusiness, async (req, res): 
 
     const results = await Promise.all(
       toUpsert.map(async ({ fieldId, value }) => {
-        const existing = await db
-          .select()
-          .from(customFieldValuesTable)
-          .where(
-            and(
-              eq(customFieldValuesTable.fieldId, fieldId),
-              eq(customFieldValuesTable.entityId, entityIdNum)
-            )
-          )
-          .limit(1);
-
-        if (existing.length) {
-          const [updated] = await db
-            .update(customFieldValuesTable)
-            .set({ value: value ?? null })
-            .where(eq(customFieldValuesTable.id, existing[0].id))
-            .returning();
-          return updated;
-        } else {
-          const [created] = await db
-            .insert(customFieldValuesTable)
-            .values({ fieldId, entityId: entityIdNum, value: value ?? null })
-            .returning();
-          return created;
-        }
+        const [upserted] = await db
+          .insert(customFieldValuesTable)
+          .values({ fieldId, entityId: entityIdNum, value: value ?? null })
+          .onConflictDoUpdate({
+            target: [customFieldValuesTable.fieldId, customFieldValuesTable.entityId],
+            set: { value: value ?? null, updatedAt: new Date() },
+          })
+          .returning();
+        return upserted;
       })
     );
 
