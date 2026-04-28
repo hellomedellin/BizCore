@@ -1,6 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { customFieldsTable, customFieldValuesTable } from "@workspace/db/schema";
+import {
+  customFieldsTable,
+  customFieldValuesTable,
+  itemsTable,
+  ordersTable,
+  employeesTable,
+} from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import {
   requireAuth,
@@ -68,6 +74,15 @@ router.post(
         return;
       }
 
+      const normalizedOptions = type === "select"
+        ? (Array.isArray(options) ? options.map(String).filter(Boolean) : [])
+        : null;
+
+      if (type === "select" && (!normalizedOptions || normalizedOptions.length === 0)) {
+        res.status(400).json({ error: "Select fields must include at least one option" });
+        return;
+      }
+
       const [field] = await db
         .insert(customFieldsTable)
         .values({
@@ -75,7 +90,7 @@ router.post(
           entityType,
           name,
           type,
-          options: options ?? null,
+          options: normalizedOptions,
           sortOrder: sortOrder ?? 0,
           required: required ?? false,
         })
@@ -120,7 +135,19 @@ router.patch(
       const updates: Record<string, unknown> = {};
       if (name !== undefined) updates.name = name;
       if (type !== undefined) updates.type = type;
-      if (options !== undefined) updates.options = options;
+      if (options !== undefined) {
+        const resolvedType = type ?? existing[0].type;
+        if (resolvedType === "select") {
+          const normalized = Array.isArray(options) ? options.map(String).filter(Boolean) : [];
+          if (normalized.length === 0) {
+            res.status(400).json({ error: "Select fields must include at least one option" });
+            return;
+          }
+          updates.options = normalized;
+        } else {
+          updates.options = options;
+        }
+      }
       if (sortOrder !== undefined) updates.sortOrder = sortOrder;
       if (required !== undefined) updates.required = required;
 
@@ -241,6 +268,31 @@ router.put("/custom-field-values", requireAuth, loadBusiness, async (req, res): 
     const entityIdNum = parseInt(String(entityId), 10);
     if (isNaN(entityIdNum)) {
       res.status(400).json({ error: "Invalid entityId" });
+      return;
+    }
+
+    // Verify entity belongs to this business before writing values
+    const entityTable = entityType === "item"
+      ? itemsTable
+      : entityType === "order"
+        ? ordersTable
+        : entityType === "employee"
+          ? employeesTable
+          : null;
+
+    if (!entityTable) {
+      res.status(400).json({ error: "Invalid entityType" });
+      return;
+    }
+
+    const entityRow = await db
+      .select({ id: entityTable.id })
+      .from(entityTable)
+      .where(and(eq(entityTable.id, entityIdNum), eq(entityTable.businessId, businessId)))
+      .limit(1);
+
+    if (!entityRow.length) {
+      res.status(404).json({ error: "Entity not found or does not belong to this business" });
       return;
     }
 
