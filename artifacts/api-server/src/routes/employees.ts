@@ -83,7 +83,12 @@ router.delete("/employee-roles/:id", requireAuth, loadBusiness, requireRole("adm
       .where(and(eq(employeeRolesTable.id, id), tenantWhere(employeeRolesTable.businessId, businessId!)));
     res.status(204).send();
   } catch (err: unknown) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.includes("foreign key") || msg.includes("violates") || msg.includes("constraint")) {
+      res.status(409).json({ error: "This role is assigned to one or more employees. Reassign or remove them first." });
+      return;
+    }
+    res.status(500).json({ error: msg || "Internal error" });
   }
 });
 
@@ -142,7 +147,7 @@ const createEmployeeSchema = z.object({
   phone: z.string().nullable().optional(),
   roleId: z.number().int().nullable().optional(),
   locationId: z.number().int().nullable().optional(),
-  hourlyRate: z.string().regex(/^\d+(\.\d{1,4})?$/).nullable().optional(),
+  hourlyRate: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
 });
 
 router.post("/employees", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
@@ -240,7 +245,7 @@ const updateEmployeeSchema = z.object({
   phone: z.string().nullable().optional(),
   roleId: z.number().int().nullable().optional(),
   locationId: z.number().int().nullable().optional(),
-  hourlyRate: z.string().regex(/^\d+(\.\d{1,4})?$/).nullable().optional(),
+  hourlyRate: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
   active: z.boolean().optional(),
 });
 
