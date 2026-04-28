@@ -20,6 +20,14 @@ tags:
     description: Dashboard analytics
   - name: businessUsers
     description: Business team member management
+  - name: categories
+    description: Item category management
+  - name: items
+    description: Item and product management
+  - name: inventory
+    description: Inventory management
+  - name: recipes
+    description: Recipe management
 paths:
   /healthz:
     get:
@@ -277,6 +285,414 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /categories:
+    get:
+      operationId: getCategories
+      tags: [categories]
+      summary: Get all categories for the business
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /items:
+    get:
+      operationId: getItems
+      tags: [items]
+      summary: List items with optional filters
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: active
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Item"
+    post:
+      operationId: createItem
+      tags: [items]
+      summary: Create an item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+
+  /items/{id}:
+    get:
+      operationId: getItem
+      tags: [items]
+      summary: Get a single item with variants
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Item with variants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateItem
+      tags: [items]
+      summary: Update an item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+    delete:
+      operationId: deleteItem
+      tags: [items]
+      summary: Delete an item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /items/{itemId}/variants:
+    get:
+      operationId: getItemVariants
+      tags: [items]
+      summary: Get all variants for an item
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of variants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ItemVariant"
+    post:
+      operationId: createItemVariant
+      tags: [items]
+      summary: Add a variant to an item
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemVariantBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemVariant"
+
+  /variants/{id}:
+    patch:
+      operationId: updateVariant
+      tags: [items]
+      summary: Update a variant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemVariantBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemVariant"
+    delete:
+      operationId: deleteVariant
+      tags: [items]
+      summary: Delete a variant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /inventory:
+    get:
+      operationId: getInventory
+      tags: [inventory]
+      summary: Get inventory entries for a location
+      parameters:
+        - name: locationId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: lowStock
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Inventory entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryEntry"
+
+  /inventory/transactions:
+    get:
+      operationId: getInventoryTransactions
+      tags: [inventory]
+      summary: Get inventory transaction history
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: variantId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryTransaction"
+    post:
+      operationId: createInventoryTransaction
+      tags: [inventory]
+      summary: Record an inventory transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryTransactionBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryTransaction"
+
+  /inventory/low-stock:
+    get:
+      operationId: getLowStockItems
+      tags: [inventory]
+      summary: Get items below their low stock threshold
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryEntry"
+
+  /items/{itemId}/recipe:
+    get:
+      operationId: getRecipe
+      tags: [recipes]
+      summary: Get the recipe for a menu item
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recipe with ingredients
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeDetail"
+        "404":
+          description: No recipe found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertRecipe
+      tags: [recipes]
+      summary: Create or replace the recipe for a menu item
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertRecipeBody"
+      responses:
+        "200":
+          description: Recipe saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeDetail"
 
 components:
   schemas:
@@ -543,3 +959,381 @@ components:
       required:
         - userId
         - role
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: ["integer", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - name
+        - active
+        - createdAt
+
+    CreateCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+      required:
+        - name
+
+    UpdateCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        active:
+          type: boolean
+
+    ItemVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: ["string", "null"]
+        price:
+          type: ["string", "null"]
+        cost:
+          type: ["string", "null"]
+        attributes:
+          type: ["object", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - itemId
+        - name
+        - active
+        - createdAt
+
+    CreateItemVariantBody:
+      type: object
+      properties:
+        name:
+          type: string
+        sku:
+          type: ["string", "null"]
+        price:
+          type: ["string", "null"]
+        cost:
+          type: ["string", "null"]
+        attributes:
+          type: ["object", "null"]
+      required:
+        - name
+
+    UpdateItemVariantBody:
+      type: object
+      properties:
+        name:
+          type: string
+        sku:
+          type: ["string", "null"]
+        price:
+          type: ["string", "null"]
+        cost:
+          type: ["string", "null"]
+        attributes:
+          type: ["object", "null"]
+        active:
+          type: boolean
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        type:
+          type: string
+        categoryId:
+          type: ["integer", "null"]
+        basePrice:
+          type: ["string", "null"]
+        cost:
+          type: ["string", "null"]
+        trackInventory:
+          type: boolean
+        hasVariants:
+          type: boolean
+        imageUrl:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        categoryName:
+          type: ["string", "null"]
+      required:
+        - id
+        - businessId
+        - name
+        - type
+        - trackInventory
+        - hasVariants
+        - active
+        - createdAt
+
+    ItemDetail:
+      allOf:
+        - $ref: "#/components/schemas/Item"
+        - type: object
+          properties:
+            variants:
+              type: array
+              items:
+                $ref: "#/components/schemas/ItemVariant"
+          required:
+            - variants
+
+    CreateItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        type:
+          type: string
+          enum: [product, service, ingredient, menu_item]
+        categoryId:
+          type: ["integer", "null"]
+        basePrice:
+          type: ["string", "null"]
+        cost:
+          type: ["string", "null"]
+        trackInventory:
+          type: boolean
+        hasVariants:
+          type: boolean
+        imageUrl:
+          type: ["string", "null"]
+      required:
+        - name
+        - type
+
+    UpdateItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        type:
+          type: string
+        categoryId:
+          type: ["integer", "null"]
+        basePrice:
+          type: ["string", "null"]
+        cost:
+          type: ["string", "null"]
+        trackInventory:
+          type: boolean
+        hasVariants:
+          type: boolean
+        imageUrl:
+          type: ["string", "null"]
+        active:
+          type: boolean
+
+    InventoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        variantId:
+          type: integer
+        locationId:
+          type: integer
+        quantity:
+          type: string
+        lowStockThreshold:
+          type: ["string", "null"]
+        isLowStock:
+          type: boolean
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        variantName:
+          type: string
+        sku:
+          type: ["string", "null"]
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: ["string", "null"]
+      required:
+        - id
+        - variantId
+        - locationId
+        - quantity
+        - isLowStock
+        - itemId
+        - itemName
+        - variantName
+
+    InventoryTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        variantId:
+          type: integer
+        locationId:
+          type: integer
+        type:
+          type: string
+        quantityChange:
+          type: string
+        referenceType:
+          type: ["string", "null"]
+        referenceId:
+          type: ["integer", "null"]
+        batchId:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        itemName:
+          type: ["string", "null"]
+        variantName:
+          type: ["string", "null"]
+      required:
+        - id
+        - variantId
+        - locationId
+        - type
+        - quantityChange
+        - createdAt
+
+    CreateInventoryTransactionBody:
+      type: object
+      properties:
+        variantId:
+          type: integer
+        locationId:
+          type: integer
+        type:
+          type: string
+          enum: [purchase, adjustment, waste, return, transfer, sale]
+        quantityChange:
+          type: string
+        notes:
+          type: ["string", "null"]
+        batchId:
+          type: ["string", "null"]
+      required:
+        - variantId
+        - locationId
+        - type
+        - quantityChange
+
+    RecipeItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipeId:
+          type: integer
+        ingredientVariantId:
+          type: integer
+        quantity:
+          type: string
+        unit:
+          type: ["string", "null"]
+        ingredientName:
+          type: ["string", "null"]
+        variantName:
+          type: ["string", "null"]
+      required:
+        - id
+        - recipeId
+        - ingredientVariantId
+        - quantity
+
+    RecipeDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        menuItemId:
+          type: integer
+        name:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipeItem"
+      required:
+        - id
+        - menuItemId
+        - items
+
+    UpsertRecipeBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              ingredientVariantId:
+                type: integer
+              quantity:
+                type: string
+              unit:
+                type: ["string", "null"]
+            required:
+              - ingredientVariantId
+              - quantity
+      required:
+        - items

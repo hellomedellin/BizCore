@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { itemVariantsTable } from "./items";
@@ -15,6 +15,7 @@ export const inventoryTable = pgTable("inventory", {
 }, (t) => [
   index("inventory_location_id_idx").on(t.locationId),
   index("inventory_variant_id_idx").on(t.variantId),
+  unique("inventory_variant_location_unique").on(t.variantId, t.locationId),
 ]);
 
 export const insertInventorySchema = createInsertSchema(inventoryTable).omit({ id: true, createdAt: true, updatedAt: true });

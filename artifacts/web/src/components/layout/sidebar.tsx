@@ -5,6 +5,7 @@ import {
   MapPin, 
   ShoppingBag, 
   Package, 
+  Tag,
   Users, 
   Calendar, 
   Clock, 
@@ -33,6 +34,7 @@ export function Sidebar() {
   const navItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard, alwaysVisible: true },
     { name: "Orders", path: "/orders", icon: ShoppingBag, module: "orders" },
+    { name: "Items", path: "/items", icon: Tag, module: "inventory" },
     { name: "Inventory", path: "/inventory", icon: Package, module: "inventory" },
     { name: "Employees", path: "/employees", icon: Users, module: "employees" },
     { name: "Schedule", path: "/schedule", icon: Calendar, module: "scheduling" },

@@ -156,9 +156,291 @@ export interface UpsertBusinessUserBody {
   locationId?: number | null;
 }
 
+export interface Category {
+  id: number;
+  businessId: number;
+  name: string;
+  /** @nullable */
+  parentId?: number | null;
+  /** @nullable */
+  sortOrder?: number | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface CreateCategoryBody {
+  name: string;
+  /** @nullable */
+  parentId?: number | null;
+  sortOrder?: number;
+}
+
+export interface UpdateCategoryBody {
+  name?: string;
+  /** @nullable */
+  parentId?: number | null;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+/**
+ * @nullable
+ */
+export type ItemVariantAttributes = { [key: string]: unknown } | null;
+
+export interface ItemVariant {
+  id: number;
+  itemId: number;
+  name: string;
+  /** @nullable */
+  sku?: string | null;
+  /** @nullable */
+  price?: string | null;
+  /** @nullable */
+  cost?: string | null;
+  /** @nullable */
+  attributes?: ItemVariantAttributes;
+  active: boolean;
+  createdAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type CreateItemVariantBodyAttributes = { [key: string]: unknown } | null;
+
+export interface CreateItemVariantBody {
+  name: string;
+  /** @nullable */
+  sku?: string | null;
+  /** @nullable */
+  price?: string | null;
+  /** @nullable */
+  cost?: string | null;
+  /** @nullable */
+  attributes?: CreateItemVariantBodyAttributes;
+}
+
+/**
+ * @nullable
+ */
+export type UpdateItemVariantBodyAttributes = { [key: string]: unknown } | null;
+
+export interface UpdateItemVariantBody {
+  name?: string;
+  /** @nullable */
+  sku?: string | null;
+  /** @nullable */
+  price?: string | null;
+  /** @nullable */
+  cost?: string | null;
+  /** @nullable */
+  attributes?: UpdateItemVariantBodyAttributes;
+  active?: boolean;
+}
+
+export interface Item {
+  id: number;
+  businessId: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  type: string;
+  /** @nullable */
+  categoryId?: number | null;
+  /** @nullable */
+  basePrice?: string | null;
+  /** @nullable */
+  cost?: string | null;
+  trackInventory: boolean;
+  hasVariants: boolean;
+  /** @nullable */
+  imageUrl?: string | null;
+  active: boolean;
+  createdAt: string;
+  /** @nullable */
+  categoryName?: string | null;
+}
+
+export type ItemDetail = Item & {
+  variants: ItemVariant[];
+};
+
+export type CreateItemBodyType =
+  (typeof CreateItemBodyType)[keyof typeof CreateItemBodyType];
+
+export const CreateItemBodyType = {
+  product: "product",
+  service: "service",
+  ingredient: "ingredient",
+  menu_item: "menu_item",
+} as const;
+
+export interface CreateItemBody {
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  type: CreateItemBodyType;
+  /** @nullable */
+  categoryId?: number | null;
+  /** @nullable */
+  basePrice?: string | null;
+  /** @nullable */
+  cost?: string | null;
+  trackInventory?: boolean;
+  hasVariants?: boolean;
+  /** @nullable */
+  imageUrl?: string | null;
+}
+
+export interface UpdateItemBody {
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  type?: string;
+  /** @nullable */
+  categoryId?: number | null;
+  /** @nullable */
+  basePrice?: string | null;
+  /** @nullable */
+  cost?: string | null;
+  trackInventory?: boolean;
+  hasVariants?: boolean;
+  /** @nullable */
+  imageUrl?: string | null;
+  active?: boolean;
+}
+
+export interface InventoryEntry {
+  id: number;
+  variantId: number;
+  locationId: number;
+  quantity: string;
+  /** @nullable */
+  lowStockThreshold?: string | null;
+  isLowStock: boolean;
+  itemId: number;
+  itemName: string;
+  variantName: string;
+  /** @nullable */
+  sku?: string | null;
+  /** @nullable */
+  categoryId?: number | null;
+  /** @nullable */
+  categoryName?: string | null;
+}
+
+export interface InventoryTransaction {
+  id: number;
+  variantId: number;
+  locationId: number;
+  type: string;
+  quantityChange: string;
+  /** @nullable */
+  referenceType?: string | null;
+  /** @nullable */
+  referenceId?: number | null;
+  /** @nullable */
+  batchId?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+  /** @nullable */
+  itemName?: string | null;
+  /** @nullable */
+  variantName?: string | null;
+}
+
+export type CreateInventoryTransactionBodyType =
+  (typeof CreateInventoryTransactionBodyType)[keyof typeof CreateInventoryTransactionBodyType];
+
+export const CreateInventoryTransactionBodyType = {
+  purchase: "purchase",
+  adjustment: "adjustment",
+  waste: "waste",
+  return: "return",
+  transfer: "transfer",
+  sale: "sale",
+} as const;
+
+export interface CreateInventoryTransactionBody {
+  variantId: number;
+  locationId: number;
+  type: CreateInventoryTransactionBodyType;
+  quantityChange: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  batchId?: string | null;
+}
+
+export interface RecipeItem {
+  id: number;
+  recipeId: number;
+  ingredientVariantId: number;
+  quantity: string;
+  /** @nullable */
+  unit?: string | null;
+  /** @nullable */
+  ingredientName?: string | null;
+  /** @nullable */
+  variantName?: string | null;
+}
+
+export interface RecipeDetail {
+  id: number;
+  menuItemId: number;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  items: RecipeItem[];
+}
+
+export type UpsertRecipeBodyItemsItem = {
+  ingredientVariantId: number;
+  quantity: string;
+  /** @nullable */
+  unit?: string | null;
+};
+
+export interface UpsertRecipeBody {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  items: UpsertRecipeBodyItemsItem[];
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable
    */
   locationId?: number | null;
+};
+
+export type GetItemsParams = {
+  search?: string;
+  type?: string;
+  categoryId?: number;
+  active?: boolean;
+};
+
+export type GetInventoryParams = {
+  locationId: number;
+  search?: string;
+  categoryId?: number;
+  lowStock?: boolean;
+};
+
+export type GetInventoryTransactionsParams = {
+  locationId?: number;
+  variantId?: number;
+  limit?: number;
+};
+
+export type GetLowStockItemsParams = {
+  locationId?: number;
 };

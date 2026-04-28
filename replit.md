@@ -24,7 +24,7 @@ pnpm workspace monorepo using TypeScript throughout.
 
 ### Packages
 
-- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard
+- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes
 - `artifacts/web` — React + Vite SPA, Clerk-authenticated, module-aware sidebar navigation
 - `lib/db` — Drizzle ORM schema + migrations (7 schema files)
 - `lib/api-spec` — OpenAPI 3.0 spec + Orval codegen config

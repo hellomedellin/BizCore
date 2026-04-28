@@ -228,3 +228,414 @@ export const UpsertBusinessUserResponse = zod.object({
 export const DeactivateBusinessUserParams = zod.object({
   id: zod.coerce.number(),
 });
+
+/**
+ * @summary Get all categories for the business
+ */
+export const GetCategoriesResponseItem = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  parentId: zod.number().nullish(),
+  sortOrder: zod.number().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const GetCategoriesResponse = zod.array(GetCategoriesResponseItem);
+
+/**
+ * @summary Create a category
+ */
+export const CreateCategoryBody = zod.object({
+  name: zod.string(),
+  parentId: zod.number().nullish(),
+  sortOrder: zod.number().optional(),
+});
+
+/**
+ * @summary Update a category
+ */
+export const UpdateCategoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCategoryBody = zod.object({
+  name: zod.string().optional(),
+  parentId: zod.number().nullish(),
+  sortOrder: zod.number().optional(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateCategoryResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  parentId: zod.number().nullish(),
+  sortOrder: zod.number().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a category
+ */
+export const DeleteCategoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List items with optional filters
+ */
+export const GetItemsQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+  type: zod.coerce.string().optional(),
+  categoryId: zod.coerce.number().optional(),
+  active: zod.coerce.boolean().optional(),
+});
+
+export const GetItemsResponseItem = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  type: zod.string(),
+  categoryId: zod.number().nullish(),
+  basePrice: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  trackInventory: zod.boolean(),
+  hasVariants: zod.boolean(),
+  imageUrl: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  categoryName: zod.string().nullish(),
+});
+export const GetItemsResponse = zod.array(GetItemsResponseItem);
+
+/**
+ * @summary Create an item
+ */
+export const CreateItemBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+  type: zod.enum(["product", "service", "ingredient", "menu_item"]),
+  categoryId: zod.number().nullish(),
+  basePrice: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  trackInventory: zod.boolean().optional(),
+  hasVariants: zod.boolean().optional(),
+  imageUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary Get a single item with variants
+ */
+export const GetItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetItemResponse = zod
+  .object({
+    id: zod.number(),
+    businessId: zod.number(),
+    name: zod.string(),
+    description: zod.string().nullish(),
+    type: zod.string(),
+    categoryId: zod.number().nullish(),
+    basePrice: zod.string().nullish(),
+    cost: zod.string().nullish(),
+    trackInventory: zod.boolean(),
+    hasVariants: zod.boolean(),
+    imageUrl: zod.string().nullish(),
+    active: zod.boolean(),
+    createdAt: zod.coerce.date(),
+    categoryName: zod.string().nullish(),
+  })
+  .and(
+    zod.object({
+      variants: zod.array(
+        zod.object({
+          id: zod.number(),
+          itemId: zod.number(),
+          name: zod.string(),
+          sku: zod.string().nullish(),
+          price: zod.string().nullish(),
+          cost: zod.string().nullish(),
+          attributes: zod.object({}).passthrough().nullish(),
+          active: zod.boolean(),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Update an item
+ */
+export const UpdateItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateItemBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().nullish(),
+  type: zod.string().optional(),
+  categoryId: zod.number().nullish(),
+  basePrice: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  trackInventory: zod.boolean().optional(),
+  hasVariants: zod.boolean().optional(),
+  imageUrl: zod.string().nullish(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateItemResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  type: zod.string(),
+  categoryId: zod.number().nullish(),
+  basePrice: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  trackInventory: zod.boolean(),
+  hasVariants: zod.boolean(),
+  imageUrl: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  categoryName: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete an item
+ */
+export const DeleteItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get all variants for an item
+ */
+export const GetItemVariantsParams = zod.object({
+  itemId: zod.coerce.number(),
+});
+
+export const GetItemVariantsResponseItem = zod.object({
+  id: zod.number(),
+  itemId: zod.number(),
+  name: zod.string(),
+  sku: zod.string().nullish(),
+  price: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  attributes: zod.object({}).passthrough().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const GetItemVariantsResponse = zod.array(GetItemVariantsResponseItem);
+
+/**
+ * @summary Add a variant to an item
+ */
+export const CreateItemVariantParams = zod.object({
+  itemId: zod.coerce.number(),
+});
+
+export const CreateItemVariantBody = zod.object({
+  name: zod.string(),
+  sku: zod.string().nullish(),
+  price: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  attributes: zod.object({}).passthrough().nullish(),
+});
+
+/**
+ * @summary Update a variant
+ */
+export const UpdateVariantParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateVariantBody = zod.object({
+  name: zod.string().optional(),
+  sku: zod.string().nullish(),
+  price: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  attributes: zod.object({}).passthrough().nullish(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateVariantResponse = zod.object({
+  id: zod.number(),
+  itemId: zod.number(),
+  name: zod.string(),
+  sku: zod.string().nullish(),
+  price: zod.string().nullish(),
+  cost: zod.string().nullish(),
+  attributes: zod.object({}).passthrough().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a variant
+ */
+export const DeleteVariantParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get inventory entries for a location
+ */
+export const GetInventoryQueryParams = zod.object({
+  locationId: zod.coerce.number(),
+  search: zod.coerce.string().optional(),
+  categoryId: zod.coerce.number().optional(),
+  lowStock: zod.coerce.boolean().optional(),
+});
+
+export const GetInventoryResponseItem = zod.object({
+  id: zod.number(),
+  variantId: zod.number(),
+  locationId: zod.number(),
+  quantity: zod.string(),
+  lowStockThreshold: zod.string().nullish(),
+  isLowStock: zod.boolean(),
+  itemId: zod.number(),
+  itemName: zod.string(),
+  variantName: zod.string(),
+  sku: zod.string().nullish(),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+});
+export const GetInventoryResponse = zod.array(GetInventoryResponseItem);
+
+/**
+ * @summary Get inventory transaction history
+ */
+export const GetInventoryTransactionsQueryParams = zod.object({
+  locationId: zod.coerce.number().optional(),
+  variantId: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetInventoryTransactionsResponseItem = zod.object({
+  id: zod.number(),
+  variantId: zod.number(),
+  locationId: zod.number(),
+  type: zod.string(),
+  quantityChange: zod.string(),
+  referenceType: zod.string().nullish(),
+  referenceId: zod.number().nullish(),
+  batchId: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  itemName: zod.string().nullish(),
+  variantName: zod.string().nullish(),
+});
+export const GetInventoryTransactionsResponse = zod.array(
+  GetInventoryTransactionsResponseItem,
+);
+
+/**
+ * @summary Record an inventory transaction
+ */
+export const CreateInventoryTransactionBody = zod.object({
+  variantId: zod.number(),
+  locationId: zod.number(),
+  type: zod.enum([
+    "purchase",
+    "adjustment",
+    "waste",
+    "return",
+    "transfer",
+    "sale",
+  ]),
+  quantityChange: zod.string(),
+  notes: zod.string().nullish(),
+  batchId: zod.string().nullish(),
+});
+
+/**
+ * @summary Get items below their low stock threshold
+ */
+export const GetLowStockItemsQueryParams = zod.object({
+  locationId: zod.coerce.number().optional(),
+});
+
+export const GetLowStockItemsResponseItem = zod.object({
+  id: zod.number(),
+  variantId: zod.number(),
+  locationId: zod.number(),
+  quantity: zod.string(),
+  lowStockThreshold: zod.string().nullish(),
+  isLowStock: zod.boolean(),
+  itemId: zod.number(),
+  itemName: zod.string(),
+  variantName: zod.string(),
+  sku: zod.string().nullish(),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+});
+export const GetLowStockItemsResponse = zod.array(GetLowStockItemsResponseItem);
+
+/**
+ * @summary Get the recipe for a menu item
+ */
+export const GetRecipeParams = zod.object({
+  itemId: zod.coerce.number(),
+});
+
+export const GetRecipeResponse = zod.object({
+  id: zod.number(),
+  menuItemId: zod.number(),
+  name: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      recipeId: zod.number(),
+      ingredientVariantId: zod.number(),
+      quantity: zod.string(),
+      unit: zod.string().nullish(),
+      ingredientName: zod.string().nullish(),
+      variantName: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Create or replace the recipe for a menu item
+ */
+export const UpsertRecipeParams = zod.object({
+  itemId: zod.coerce.number(),
+});
+
+export const UpsertRecipeBody = zod.object({
+  name: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  items: zod.array(
+    zod.object({
+      ingredientVariantId: zod.number(),
+      quantity: zod.string(),
+      unit: zod.string().nullish(),
+    }),
+  ),
+});
+
+export const UpsertRecipeResponse = zod.object({
+  id: zod.number(),
+  menuItemId: zod.number(),
+  name: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      recipeId: zod.number(),
+      ingredientVariantId: zod.number(),
+      quantity: zod.string(),
+      unit: zod.string().nullish(),
+      ingredientName: zod.string().nullish(),
+      variantName: zod.string().nullish(),
+    }),
+  ),
+});
