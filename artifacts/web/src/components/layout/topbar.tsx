@@ -4,12 +4,18 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, Settings, Building2 } from "lucide-react";
+import { useGetMyBusiness, getGetMyBusinessQueryKey } from "@workspace/api-client-react";
 
 export function Topbar() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [, setLocation] = useLocation();
+  const { data: business } = useGetMyBusiness({
+    query: {
+      queryKey: getGetMyBusinessQueryKey(),
+    },
+  });
 
   const handleSignOut = () => {
     signOut(() => setLocation("/"));
@@ -17,13 +23,18 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
-      <div className="flex items-center gap-4">
-        {/* Mobile menu trigger could go here */}
+      <div className="flex items-center gap-2">
+        {business && (
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground" data-testid="topbar-business-name">
+            <Building2 className="h-4 w-4 text-primary" />
+            <span>{business.name}</span>
+          </div>
+        )}
       </div>
-      
+
       <div className="flex items-center gap-4">
         <ModeToggle />
-        
+
         {user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -37,8 +48,8 @@ export function Topbar() {
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.fullName}</p>
-                  <p className="text-xs leading-none text-muted-foreground">
+                  <p className="text-sm font-medium leading-none" data-testid="user-full-name">{user.fullName}</p>
+                  <p className="text-xs leading-none text-muted-foreground" data-testid="user-email">
                     {user.primaryEmailAddress?.emailAddress}
                   </p>
                 </div>

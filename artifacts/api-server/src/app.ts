@@ -30,7 +30,22 @@ app.use(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
+// Restrict CORS to the known frontend origin in production.
+// In development, allow all origins for local convenience.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [];
+
+app.use(
+  cors({
+    credentials: true,
+    origin:
+      process.env.NODE_ENV === "production" && allowedOrigins.length > 0
+        ? allowedOrigins
+        : true,
+  }),
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
