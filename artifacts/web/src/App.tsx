@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactElement } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { shadcn } from '@clerk/themes';
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from 'wouter';
@@ -93,13 +93,18 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+type LayoutRouteProps = {
+  path: string;
+  component: () => ReactElement;
+};
+
 // Routes wrapper that forces layout
-function LayoutRoute({ component: Component, ...rest }: any) {
+function LayoutRoute({ component: Component, path }: LayoutRouteProps) {
   return (
-    <Route {...rest}>
-      {(params) => (
+    <Route path={path}>
+      {() => (
         <AppLayout>
-          <Component params={params} />
+          <Component />
         </AppLayout>
       )}
     </Route>
@@ -130,7 +135,7 @@ function PortalRouter() {
   }
 
   // If user has no business (404), force them to onboarding (unless already there)
-  if (error && (error as any)?.status === 404) {
+  if (error && error.status === 404) {
     return (
       <Switch>
         <Route path="/onboarding" component={Onboarding} />

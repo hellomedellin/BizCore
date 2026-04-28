@@ -1,14 +1,15 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and, gte, sql, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   ordersTable,
   employeesTable,
   inventoryTable,
   timeEntriesTable,
+  locationsTable,
 } from "@workspace/db";
 import { requireAuth, loadBusiness, type AuthedRequest } from "../middlewares/auth";
-import { GetDashboardSummaryResponse, GetDashboardSummaryQueryParams } from "@workspace/api-zod";
+import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -39,10 +40,24 @@ router.get(
     today.setHours(0, 0, 0, 0);
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
+    // Get all location IDs for this business (used to scope inventory/time entries)
+    const businessLocations = await db
+      .select({ id: locationsTable.id })
+      .from(locationsTable)
+      .where(eq(locationsTable.businessId, businessId));
+    const locationIds = businessLocations.map((l) => l.id);
+
+    // Get all employee IDs for this business (used to scope time entries)
+    const businessEmployees = await db
+      .select({ id: employeesTable.id })
+      .from(employeesTable)
+      .where(eq(employeesTable.businessId, businessId));
+    const employeeIds = businessEmployees.map((e) => e.id);
+
     const [todayOrders] = await db
       .select({
         count: sql<number>`count(*)::int`,
-        total: sql<number>`coalesce(sum(total::numeric), 0)`,
+        total: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
       })
       .from(ordersTable)
       .where(
@@ -56,7 +71,7 @@ router.get(
     const [monthOrders] = await db
       .select({
         count: sql<number>`count(*)::int`,
-        total: sql<number>`coalesce(sum(total::numeric), 0)`,
+        total: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
       })
       .from(ordersTable)
       .where(
@@ -77,22 +92,37 @@ router.get(
         ),
       );
 
-    const [lowStockResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(inventoryTable)
-      .where(
-        sql`${inventoryTable.quantity}::numeric <= ${inventoryTable.lowStockThreshold}::numeric AND ${inventoryTable.lowStockThreshold} IS NOT NULL`,
-      );
+    // Scope low stock items by locations belonging to this business
+    let lowStockCount = 0;
+    if (locationIds.length > 0) {
+      const [lowStockResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(inventoryTable)
+        .where(
+          and(
+            inArray(inventoryTable.locationId, locationIds),
+            sql`${inventoryTable.quantity}::numeric <= ${inventoryTable.lowStockThreshold}::numeric`,
+            sql`${inventoryTable.lowStockThreshold} IS NOT NULL`,
+          ),
+        );
+      lowStockCount = lowStockResult?.count ?? 0;
+    }
 
-    const [pendingTimeResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(timeEntriesTable)
-      .where(
-        and(
-          eq(timeEntriesTable.status, "pending"),
-          sql`${timeEntriesTable.clockOut} IS NOT NULL`,
-        ),
-      );
+    // Scope pending time entries by employees belonging to this business
+    let pendingTimeCount = 0;
+    if (employeeIds.length > 0) {
+      const [pendingTimeResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(timeEntriesTable)
+        .where(
+          and(
+            inArray(timeEntriesTable.employeeId, employeeIds),
+            eq(timeEntriesTable.status, "pending"),
+            sql`${timeEntriesTable.clockOut} IS NOT NULL`,
+          ),
+        );
+      pendingTimeCount = pendingTimeResult?.count ?? 0;
+    }
 
     const recentOrders = await db
       .select({
@@ -114,8 +144,8 @@ router.get(
         totalOrdersMonth: monthOrders?.count ?? 0,
         totalSalesMonth: Number(monthOrders?.total ?? 0),
         activeEmployees: activeEmployeesResult?.count ?? 0,
-        lowStockItems: lowStockResult?.count ?? 0,
-        pendingTimeEntries: pendingTimeResult?.count ?? 0,
+        lowStockItems: lowStockCount,
+        pendingTimeEntries: pendingTimeCount,
         recentOrders: recentOrders.map((o) => ({
           ...o,
           total: String(o.total),

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { businessesTable, locationsTable } from "./businesses";
@@ -13,7 +13,9 @@ export const customersTable = pgTable("customers", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("customers_business_id_idx").on(t.businessId),
+]);
 
 export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
@@ -35,7 +37,11 @@ export const ordersTable = pgTable("orders", {
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("orders_business_id_idx").on(t.businessId),
+  index("orders_business_id_created_at_idx").on(t.businessId, t.createdAt),
+  index("orders_location_id_idx").on(t.locationId),
+]);
 
 export const insertOrderSchema = createInsertSchema(ordersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
@@ -51,7 +57,9 @@ export const orderLinesTable = pgTable("order_lines", {
   notes: text("notes"),
   modifiers: jsonb("modifiers"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("order_lines_order_id_idx").on(t.orderId),
+]);
 
 export const insertOrderLineSchema = createInsertSchema(orderLinesTable).omit({ id: true, createdAt: true });
 export type InsertOrderLine = z.infer<typeof insertOrderLineSchema>;

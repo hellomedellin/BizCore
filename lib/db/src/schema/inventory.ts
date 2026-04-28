@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { itemVariantsTable } from "./items";
@@ -12,7 +12,10 @@ export const inventoryTable = pgTable("inventory", {
   lowStockThreshold: numeric("low_stock_threshold", { precision: 10, scale: 3 }).default("10"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("inventory_location_id_idx").on(t.locationId),
+  index("inventory_variant_id_idx").on(t.variantId),
+]);
 
 export const insertInventorySchema = createInsertSchema(inventoryTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertInventory = z.infer<typeof insertInventorySchema>;
@@ -30,7 +33,10 @@ export const inventoryTransactionsTable = pgTable("inventory_transactions", {
   notes: text("notes"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("inventory_transactions_location_id_idx").on(t.locationId),
+  index("inventory_transactions_variant_id_idx").on(t.variantId),
+]);
 
 export const insertInventoryTransactionSchema = createInsertSchema(inventoryTransactionsTable).omit({ id: true, createdAt: true });
 export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;

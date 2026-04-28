@@ -8,7 +8,8 @@ import {
   useGetModules,
   useUpdateModules,
   getGetMyBusinessQueryKey,
-  getGetModulesQueryKey
+  getGetModulesQueryKey,
+  type Business,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Save, Building2, Blocks, Loader2 } from "lucide-react";
@@ -76,7 +77,7 @@ export default function Settings() {
         id: business.id,
         data: values,
       });
-      queryClient.setQueryData(getGetMyBusinessQueryKey(), (old: any) => 
+      queryClient.setQueryData<Business>(getGetMyBusinessQueryKey(), (old) => 
         old ? { ...old, ...values } : old
       );
       toast({ title: "Business settings saved" });

@@ -2,15 +2,17 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { businessModulesTable } from "@workspace/db";
-import { requireAuth, loadBusiness, type AuthedRequest } from "../middlewares/auth";
 import {
-  UpdateModulesBody,
-  GetModulesResponse,
-  UpdateModulesResponse,
-} from "@workspace/api-zod";
+  requireAuth,
+  loadBusiness,
+  requireRole,
+  type AuthedRequest,
+} from "../middlewares/auth";
+import { UpdateModulesBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// All authenticated users can view modules
 router.get(
   "/modules",
   requireAuth,
@@ -27,14 +29,16 @@ router.get(
       .from(businessModulesTable)
       .where(eq(businessModulesTable.businessId, authedReq.businessId));
 
-    res.json(GetModulesResponse.parse(modules));
+    res.json(modules);
   },
 );
 
+// Only admin can toggle module configuration
 router.put(
   "/modules",
   requireAuth,
   loadBusiness,
+  requireRole("admin"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
     if (!authedReq.businessId) {
@@ -48,6 +52,8 @@ router.put(
       return;
     }
 
+    const businessId = authedReq.businessId;
+
     const updates = await Promise.all(
       parsed.data.modules.map(async ({ module, enabled }) => {
         const existing = await db
@@ -55,7 +61,7 @@ router.put(
           .from(businessModulesTable)
           .where(
             and(
-              eq(businessModulesTable.businessId, authedReq.businessId!),
+              eq(businessModulesTable.businessId, businessId),
               eq(businessModulesTable.module, module),
             ),
           )
@@ -64,21 +70,21 @@ router.put(
         if (existing.length === 0) {
           const [created] = await db
             .insert(businessModulesTable)
-            .values({ businessId: authedReq.businessId!, module, enabled })
+            .values({ businessId, module, enabled })
             .returning();
           return created;
-        } else {
-          const [updated] = await db
-            .update(businessModulesTable)
-            .set({ enabled })
-            .where(eq(businessModulesTable.id, existing[0].id))
-            .returning();
-          return updated;
         }
+
+        const [updated] = await db
+          .update(businessModulesTable)
+          .set({ enabled })
+          .where(eq(businessModulesTable.id, existing[0].id))
+          .returning();
+        return updated;
       }),
     );
 
-    res.json(UpdateModulesResponse.parse(updates));
+    res.json(updates);
   },
 );
 

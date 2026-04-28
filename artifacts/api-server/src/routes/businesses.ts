@@ -6,13 +6,16 @@ import {
   businessModulesTable,
   businessUsersTable,
 } from "@workspace/db";
-import { requireAuth, loadBusiness, type AuthedRequest } from "../middlewares/auth";
+import {
+  requireAuth,
+  loadBusiness,
+  requireRole,
+  type AuthedRequest,
+} from "../middlewares/auth";
 import {
   CreateBusinessBody,
   UpdateBusinessBody,
   UpdateBusinessParams,
-  GetMyBusinessResponse,
-  UpdateBusinessResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -35,18 +38,44 @@ router.get(
     const authedReq = req as AuthedRequest;
     const userId = authedReq.userId;
 
+    // Check if user owns a business
     const ownedBusiness = await db
       .select()
       .from(businessesTable)
       .where(eq(businessesTable.ownerUserId, userId))
       .limit(1);
 
-    if (ownedBusiness.length === 0) {
-      res.status(404).json({ error: "No business found" });
+    if (ownedBusiness.length > 0) {
+      res.json(ownedBusiness[0]);
       return;
     }
 
-    res.json(GetMyBusinessResponse.parse(ownedBusiness[0]));
+    // Check if user is a member of any business via business_users
+    const membership = await db
+      .select({ businessId: businessUsersTable.businessId })
+      .from(businessUsersTable)
+      .where(
+        and(
+          eq(businessUsersTable.userId, userId),
+          eq(businessUsersTable.active, true),
+        ),
+      )
+      .limit(1);
+
+    if (membership.length > 0) {
+      const memberBusiness = await db
+        .select()
+        .from(businessesTable)
+        .where(eq(businessesTable.id, membership[0].businessId))
+        .limit(1);
+
+      if (memberBusiness.length > 0) {
+        res.json(memberBusiness[0]);
+        return;
+      }
+    }
+
+    res.status(404).json({ error: "No business found" });
   },
 );
 
@@ -91,10 +120,12 @@ router.post(
   },
 );
 
+// Only admin/owner can update business settings
 router.patch(
   "/businesses/:id",
   requireAuth,
   loadBusiness,
+  requireRole("admin"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
     const params = UpdateBusinessParams.safeParse(req.params);
@@ -125,7 +156,7 @@ router.patch(
       return;
     }
 
-    res.json(UpdateBusinessResponse.parse(business));
+    res.json(business);
   },
 );
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { businessesTable, locationsTable } from "./businesses";
@@ -8,7 +8,9 @@ export const employeeRolesTable = pgTable("employee_roles", {
   businessId: integer("business_id").notNull().references(() => businessesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("employee_roles_business_id_idx").on(t.businessId),
+]);
 
 export const insertEmployeeRoleSchema = createInsertSchema(employeeRolesTable).omit({ id: true, createdAt: true });
 export type InsertEmployeeRole = z.infer<typeof insertEmployeeRoleSchema>;
@@ -26,7 +28,10 @@ export const employeesTable = pgTable("employees", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("employees_business_id_idx").on(t.businessId),
+  index("employees_location_id_idx").on(t.locationId),
+]);
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
@@ -40,7 +45,10 @@ export const shiftsTable = pgTable("shifts", {
   endTime: timestamp("end_time", { withTimezone: true }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("shifts_employee_id_idx").on(t.employeeId),
+  index("shifts_location_id_idx").on(t.locationId),
+]);
 
 export const insertShiftSchema = createInsertSchema(shiftsTable).omit({ id: true, createdAt: true });
 export type InsertShift = z.infer<typeof insertShiftSchema>;
@@ -58,7 +66,10 @@ export const timeEntriesTable = pgTable("time_entries", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("time_entries_employee_id_idx").on(t.employeeId),
+  index("time_entries_status_idx").on(t.status),
+]);
 
 export const insertTimeEntrySchema = createInsertSchema(timeEntriesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,7 +13,9 @@ export const businessesTable = pgTable("businesses", {
   address: text("address"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("businesses_owner_user_id_idx").on(t.ownerUserId),
+]);
 
 export const insertBusinessSchema = createInsertSchema(businessesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertBusiness = z.infer<typeof insertBusinessSchema>;
@@ -29,7 +31,9 @@ export const locationsTable = pgTable("locations", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("locations_business_id_idx").on(t.businessId),
+]);
 
 export const insertLocationSchema = createInsertSchema(locationsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertLocation = z.infer<typeof insertLocationSchema>;
@@ -42,7 +46,9 @@ export const businessModulesTable = pgTable("business_modules", {
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("business_modules_business_id_idx").on(t.businessId),
+]);
 
 export const insertBusinessModuleSchema = createInsertSchema(businessModulesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertBusinessModule = z.infer<typeof insertBusinessModuleSchema>;
@@ -57,7 +63,10 @@ export const businessUsersTable = pgTable("business_users", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("business_users_business_id_idx").on(t.businessId),
+  index("business_users_user_id_idx").on(t.userId),
+]);
 
 export const insertBusinessUserSchema = createInsertSchema(businessUsersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertBusinessUser = z.infer<typeof insertBusinessUserSchema>;

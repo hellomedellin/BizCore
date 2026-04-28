@@ -2,18 +2,22 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { locationsTable } from "@workspace/db";
-import { requireAuth, loadBusiness, type AuthedRequest } from "../middlewares/auth";
+import {
+  requireAuth,
+  loadBusiness,
+  requireRole,
+  type AuthedRequest,
+} from "../middlewares/auth";
 import {
   CreateLocationBody,
   UpdateLocationBody,
   UpdateLocationParams,
   DeleteLocationParams,
-  GetLocationsResponse,
-  UpdateLocationResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// All authenticated users can list locations
 router.get(
   "/locations",
   requireAuth,
@@ -30,14 +34,16 @@ router.get(
       .from(locationsTable)
       .where(eq(locationsTable.businessId, authedReq.businessId));
 
-    res.json(GetLocationsResponse.parse(locations));
+    res.json(locations);
   },
 );
 
+// Only admin or manager can create locations
 router.post(
   "/locations",
   requireAuth,
   loadBusiness,
+  requireRole("admin", "manager"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
     if (!authedReq.businessId) {
@@ -60,10 +66,12 @@ router.post(
   },
 );
 
+// Only admin or manager can update locations
 router.patch(
   "/locations/:id",
   requireAuth,
   loadBusiness,
+  requireRole("admin", "manager"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
     if (!authedReq.businessId) {
@@ -99,14 +107,16 @@ router.patch(
       return;
     }
 
-    res.json(UpdateLocationResponse.parse(location));
+    res.json(location);
   },
 );
 
+// Only admin can delete locations
 router.delete(
   "/locations/:id",
   requireAuth,
   loadBusiness,
+  requireRole("admin"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
     if (!authedReq.businessId) {

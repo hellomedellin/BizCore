@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, numeric, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, numeric, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { businessesTable } from "./businesses";
@@ -12,7 +12,9 @@ export const categoriesTable = pgTable("categories", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("categories_business_id_idx").on(t.businessId),
+]);
 
 export const insertCategorySchema = createInsertSchema(categoriesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
@@ -33,7 +35,9 @@ export const itemsTable = pgTable("items", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("items_business_id_idx").on(t.businessId),
+]);
 
 export const insertItemSchema = createInsertSchema(itemsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertItem = z.infer<typeof insertItemSchema>;
@@ -50,7 +54,9 @@ export const itemVariantsTable = pgTable("item_variants", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("item_variants_item_id_idx").on(t.itemId),
+]);
 
 export const insertItemVariantSchema = createInsertSchema(itemVariantsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertItemVariant = z.infer<typeof insertItemVariantSchema>;
