@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { locationsTable } from "@workspace/db";
 import {
@@ -8,6 +8,7 @@ import {
   requireRole,
   type AuthedRequest,
 } from "../middlewares/auth";
+import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
 import {
   CreateLocationBody,
   UpdateLocationBody,
@@ -28,11 +29,12 @@ router.get(
       res.json([]);
       return;
     }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const locations = await db
       .select()
       .from(locationsTable)
-      .where(eq(locationsTable.businessId, authedReq.businessId));
+      .where(tenantWhere(locationsTable.businessId, businessId));
 
     res.json(locations);
   },
@@ -46,10 +48,7 @@ router.post(
   requireRole("admin", "manager"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.status(400).json({ error: "No business found" });
-      return;
-    }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const parsed = CreateLocationBody.safeParse(req.body);
     if (!parsed.success) {
@@ -59,7 +58,7 @@ router.post(
 
     const [location] = await db
       .insert(locationsTable)
-      .values({ ...parsed.data, businessId: authedReq.businessId })
+      .values({ ...parsed.data, businessId })
       .returning();
 
     res.status(201).json(location);
@@ -74,10 +73,7 @@ router.patch(
   requireRole("admin", "manager"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.status(400).json({ error: "No business found" });
-      return;
-    }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const params = UpdateLocationParams.safeParse(req.params);
     if (!params.success) {
@@ -94,12 +90,7 @@ router.patch(
     const [location] = await db
       .update(locationsTable)
       .set(parsed.data)
-      .where(
-        and(
-          eq(locationsTable.id, params.data.id),
-          eq(locationsTable.businessId, authedReq.businessId),
-        ),
-      )
+      .where(tenantWhere(locationsTable.businessId, businessId, eq(locationsTable.id, params.data.id)))
       .returning();
 
     if (!location) {
@@ -119,10 +110,7 @@ router.delete(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.status(400).json({ error: "No business found" });
-      return;
-    }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const params = DeleteLocationParams.safeParse(req.params);
     if (!params.success) {
@@ -132,12 +120,7 @@ router.delete(
 
     const [location] = await db
       .delete(locationsTable)
-      .where(
-        and(
-          eq(locationsTable.id, params.data.id),
-          eq(locationsTable.businessId, authedReq.businessId),
-        ),
-      )
+      .where(tenantWhere(locationsTable.businessId, businessId, eq(locationsTable.id, params.data.id)))
       .returning();
 
     if (!location) {

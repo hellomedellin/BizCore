@@ -111,6 +111,34 @@ function LayoutRoute({ component: Component, path }: LayoutRouteProps) {
   );
 }
 
+// Sync Clerk user profile to local DB on every sign-in session
+function UserSyncEffect() {
+  const { user, isLoaded, isSignedIn } = useUser();
+  const syncedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user || syncedRef.current) return;
+    syncedRef.current = true;
+    const primaryEmail = user.primaryEmailAddress?.emailAddress;
+    if (!primaryEmail) return;
+    fetch("/api/users/sync", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: primaryEmail,
+        firstName: user.firstName ?? undefined,
+        lastName: user.lastName ?? undefined,
+        imageUrl: user.imageUrl ?? undefined,
+      }),
+    }).catch(() => {
+      // Best-effort sync — don't block the UI on failure
+    });
+  }, [isLoaded, isSignedIn, user]);
+
+  return null;
+}
+
 // Handle the portal access check
 function PortalRouter() {
   const { isLoaded, isSignedIn } = useUser();
@@ -200,6 +228,7 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
+        <UserSyncEffect />
         <Switch>
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />

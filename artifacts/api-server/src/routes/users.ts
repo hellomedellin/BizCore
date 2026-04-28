@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { usersTable, businessUsersTable, businessesTable } from "@workspace/db";
+import { usersTable, businessUsersTable, businessesTable, locationsTable } from "@workspace/db";
 import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -54,7 +55,7 @@ router.post(
   },
 );
 
-// List all users in the business (admin/manager)
+// List all users in the business (admin/manager) — scoped by tenant via tenantWhere
 router.get(
   "/business-users",
   requireAuth,
@@ -62,10 +63,7 @@ router.get(
   requireRole("admin", "manager"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.json([]);
-      return;
-    }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const members = await db
       .select({
@@ -81,7 +79,7 @@ router.get(
       })
       .from(businessUsersTable)
       .leftJoin(usersTable, eq(businessUsersTable.userId, usersTable.id))
-      .where(eq(businessUsersTable.businessId, authedReq.businessId));
+      .where(tenantWhere(businessUsersTable.businessId, businessId));
 
     res.json(members);
   },
@@ -95,10 +93,7 @@ router.post(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.status(400).json({ error: "No business found" });
-      return;
-    }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const parsed = UpsertBusinessUserBody.safeParse(req.body);
     if (!parsed.success) {
@@ -110,7 +105,7 @@ router.post(
     const business = await db
       .select()
       .from(businessesTable)
-      .where(eq(businessesTable.id, authedReq.businessId))
+      .where(eq(businessesTable.id, businessId))
       .limit(1);
 
     if (business[0]?.ownerUserId === parsed.data.userId) {
@@ -118,14 +113,28 @@ router.post(
       return;
     }
 
+    // Validate that locationId (if provided) belongs to this business — prevents cross-tenant FK association
+    if (parsed.data.locationId !== undefined) {
+      const loc = await db
+        .select({ id: locationsTable.id })
+        .from(locationsTable)
+        .where(tenantWhere(locationsTable.businessId, businessId, eq(locationsTable.id, parsed.data.locationId)))
+        .limit(1);
+      if (loc.length === 0) {
+        res.status(400).json({ error: "Location not found or does not belong to this business" });
+        return;
+      }
+    }
+
     // Scope the existing membership check to this business only (prevent cross-tenant IDOR)
     const existing = await db
       .select()
       .from(businessUsersTable)
       .where(
-        and(
+        tenantWhere(
+          businessUsersTable.businessId,
+          businessId,
           eq(businessUsersTable.userId, parsed.data.userId),
-          eq(businessUsersTable.businessId, authedReq.businessId),
         ),
       )
       .limit(1);
@@ -139,9 +148,10 @@ router.post(
           active: true,
         })
         .where(
-          and(
+          tenantWhere(
+            businessUsersTable.businessId,
+            businessId,
             eq(businessUsersTable.id, existing[0].id),
-            eq(businessUsersTable.businessId, authedReq.businessId),
           ),
         )
         .returning();
@@ -152,7 +162,7 @@ router.post(
     const [created] = await db
       .insert(businessUsersTable)
       .values({
-        businessId: authedReq.businessId,
+        businessId,
         userId: parsed.data.userId,
         role: parsed.data.role,
         locationId: parsed.data.locationId ?? null,
@@ -164,7 +174,7 @@ router.post(
   },
 );
 
-// Deactivate a business user (admin only)
+// Deactivate a business user (admin only) — scoped by businessId via tenantWhere to prevent cross-tenant IDOR
 router.delete(
   "/business-users/:id",
   requireAuth,
@@ -172,10 +182,7 @@ router.delete(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.status(400).json({ error: "No business found" });
-      return;
-    }
+    const businessId = assertBusinessId(authedReq.businessId);
 
     const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const id = parseInt(rawId ?? "", 10);
@@ -184,16 +191,10 @@ router.delete(
       return;
     }
 
-    // Always scope by businessId to prevent cross-tenant IDOR
     const [deactivated] = await db
       .update(businessUsersTable)
       .set({ active: false })
-      .where(
-        and(
-          eq(businessUsersTable.id, id),
-          eq(businessUsersTable.businessId, authedReq.businessId),
-        ),
-      )
+      .where(tenantWhere(businessUsersTable.businessId, businessId, eq(businessUsersTable.id, id)))
       .returning();
 
     if (!deactivated) {
