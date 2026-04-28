@@ -73,7 +73,7 @@ import { Plus, MoreHorizontal, Search, Package, Layers, BookOpen, FolderOpen, Tr
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEntityCustomFields } from "@/components/use-entity-custom-fields";
-import { CustomFieldsSection } from "@/components/custom-fields-section";
+import { CustomFieldsSection, CustomFieldsReadView } from "@/components/custom-fields-section";
 
 const ITEM_TYPES = [
   { value: "product", label: "Product" },
@@ -811,6 +811,11 @@ function VariantsSheet({
     variant?: ItemVariant;
   }>({ open: false });
 
+  const { fields: cfFields, values: cfValues } = useEntityCustomFields(
+    "item",
+    open ? item?.id : undefined
+  );
+
   const handleDelete = async (variantId: number) => {
     try {
       await deleteVariant.mutateAsync({ id: variantId });
@@ -832,6 +837,7 @@ function VariantsSheet({
             {item.name}
           </SheetTitle>
         </SheetHeader>
+        <CustomFieldsReadView fields={cfFields} values={cfValues} />
         <div className="mt-4">
           <Tabs defaultValue="variants">
             <TabsList className={showRecipeTab ? "grid w-full grid-cols-2" : ""}>

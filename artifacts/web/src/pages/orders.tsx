@@ -863,11 +863,7 @@ function CreateOrderDialog({
         },
       });
       if (cfFields.length > 0) {
-        try {
-          await cfSave(result.id);
-        } catch {
-          // non-fatal — order is created, custom fields can be edited later
-        }
+        await cfSave(result.id);
       }
       toast({ title: `Order #${result.id} created` });
       onCreated(result.id);
