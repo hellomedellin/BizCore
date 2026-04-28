@@ -119,3 +119,34 @@ export function CustomFieldsSection({
     </div>
   );
 }
+
+export function CustomFieldsReadView({
+  fields,
+  values,
+}: {
+  fields: CustomFieldDef[];
+  values: Record<number, string | null>;
+}) {
+  if (!fields.length) return null;
+
+  const formatValue = (field: CustomFieldDef, raw: string | null): string => {
+    if (raw === null || raw === "") return "—";
+    if (field.type === "checkbox") return raw === "true" ? "Yes" : "No";
+    return raw;
+  };
+
+  return (
+    <div className="space-y-3">
+      <Separator />
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Custom Fields
+      </p>
+      {fields.map((field) => (
+        <div key={field.id} className="flex justify-between items-start gap-4 text-sm">
+          <span className="text-muted-foreground shrink-0">{field.name}</span>
+          <span className="font-medium text-right">{formatValue(field, values[field.id] ?? null)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}

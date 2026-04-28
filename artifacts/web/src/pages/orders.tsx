@@ -844,6 +844,9 @@ function CreateOrderDialog({
   });
   const [customerId, setCustomerId] = useState<number | null>(null);
 
+  const { fields: cfFields, values: cfValues, setFieldValue: cfSet, save: cfSave, reset: cfReset } =
+    useEntityCustomFields("order");
+
   const handleSubmit = async () => {
     if (form.locationId === "none") {
       toast({ title: "Select a location", variant: "destructive" });
@@ -859,11 +862,19 @@ function CreateOrderDialog({
           notes: form.notes || null,
         },
       });
+      if (cfFields.length > 0) {
+        try {
+          await cfSave(result.id);
+        } catch {
+          // non-fatal — order is created, custom fields can be edited later
+        }
+      }
       toast({ title: `Order #${result.id} created` });
       onCreated(result.id);
       onOpenChange(false);
       setForm({ locationId: "none", orderType: "dine_in", tableNumber: "", notes: "" });
       setCustomerId(null);
+      cfReset();
     } catch {
       toast({ title: "Failed to create order", variant: "destructive" });
     }
@@ -926,6 +937,7 @@ function CreateOrderDialog({
               rows={2}
             />
           </div>
+          <CustomFieldsSection fields={cfFields} values={cfValues} onChange={cfSet} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

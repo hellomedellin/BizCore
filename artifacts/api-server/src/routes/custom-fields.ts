@@ -225,8 +225,8 @@ router.get("/custom-field-values", requireAuth, loadBusiness, async (req, res): 
   }
 });
 
-// PUT /custom-field-values (upsert)
-router.put("/custom-field-values", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+// PUT /custom-field-values (upsert) — admin/manager only
+router.put("/custom-field-values", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const authedReq = req as AuthedRequest;
   try {
     const businessId = assertBusinessId(authedReq.businessId);

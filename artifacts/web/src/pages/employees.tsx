@@ -58,7 +58,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useEntityCustomFields } from "@/components/use-entity-custom-fields";
-import { CustomFieldsSection } from "@/components/custom-fields-section";
+import { CustomFieldsSection, CustomFieldsReadView } from "@/components/custom-fields-section";
 import {
   Users,
   Plus,
@@ -291,6 +291,11 @@ function EmployeeDetailSheet({
   employee: Employee;
   onEdit: () => void;
 }) {
+  const { fields: cfFields, values: cfValues } = useEntityCustomFields(
+    "employee",
+    open ? employee?.id : undefined
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md">
@@ -348,6 +353,8 @@ function EmployeeDetailSheet({
               </div>
             )}
           </div>
+
+          <CustomFieldsReadView fields={cfFields} values={cfValues} />
 
           <div className="rounded-md border border-dashed p-4">
             <p className="text-sm font-medium text-muted-foreground mb-1">Schedule & Time Tracking</p>
