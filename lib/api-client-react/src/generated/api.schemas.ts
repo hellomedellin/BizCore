@@ -593,6 +593,73 @@ export interface UpdateOrderLineBody {
   modifiers?: UpdateOrderLineBodyModifiers;
 }
 
+export interface EmployeeRole {
+  id: number;
+  businessId: number;
+  name: string;
+  createdAt: string;
+}
+
+export interface CreateEmployeeRoleBody {
+  name: string;
+}
+
+export interface UpdateEmployeeRoleBody {
+  name?: string;
+}
+
+export interface Employee {
+  id: number;
+  businessId: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  roleId?: number | null;
+  /** @nullable */
+  roleName?: string | null;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  locationName?: string | null;
+  /** @nullable */
+  hourlyRate?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateEmployeeBody {
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  roleId?: number | null;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  hourlyRate?: string | null;
+}
+
+export interface UpdateEmployeeBody {
+  name?: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  roleId?: number | null;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  hourlyRate?: string | null;
+  active?: boolean;
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable
@@ -680,3 +747,10 @@ export const GetOrdersOrderType = {
   pickup: "pickup",
   delivery: "delivery",
 } as const;
+
+export type GetEmployeesParams = {
+  search?: string;
+  locationId?: number;
+  roleId?: number;
+  active?: boolean;
+};

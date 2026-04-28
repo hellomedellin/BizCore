@@ -32,6 +32,8 @@ tags:
     description: Customer management
   - name: orders
     description: Order management
+  - name: employees
+    description: Employee management
 paths:
   /healthz:
     get:
@@ -1034,6 +1036,202 @@ paths:
               schema:
                 $ref: "#/components/schemas/OrderDetail"
 
+  /employee-roles:
+    get:
+      operationId: getEmployeeRoles
+      tags: [employees]
+      summary: List all business-defined employee roles
+      responses:
+        "200":
+          description: List of employee roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmployeeRole"
+    post:
+      operationId: createEmployeeRole
+      tags: [employees]
+      summary: Create a business-defined employee role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeRoleBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeRole"
+
+  /employee-roles/{id}:
+    patch:
+      operationId: updateEmployeeRole
+      tags: [employees]
+      summary: Update an employee role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeRoleBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeRole"
+    delete:
+      operationId: deleteEmployeeRole
+      tags: [employees]
+      summary: Delete an employee role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /employees:
+    get:
+      operationId: getEmployees
+      tags: [employees]
+      summary: List employees with optional filters
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: roleId
+          in: query
+          schema:
+            type: integer
+        - name: active
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /employees/{id}:
+    get:
+      operationId: getEmployee
+      tags: [employees]
+      summary: Get a single employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Employee found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update an employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deactivateEmployee
+      tags: [employees]
+      summary: Deactivate an employee (soft delete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Employee deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1939,4 +2137,113 @@ components:
           type: ["string", "null"]
         modifiers:
           type: ["object", "null"]
+
+    EmployeeRole:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - name
+        - createdAt
+
+    CreateEmployeeRoleBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    UpdateEmployeeRoleBody:
+      type: object
+      properties:
+        name:
+          type: string
+
+    Employee:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        roleId:
+          type: ["integer", "null"]
+        roleName:
+          type: ["string", "null"]
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+        hourlyRate:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - name
+        - active
+        - createdAt
+        - updatedAt
+
+    CreateEmployeeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        roleId:
+          type: ["integer", "null"]
+        locationId:
+          type: ["integer", "null"]
+        hourlyRate:
+          type: ["string", "null"]
+      required:
+        - name
+
+    UpdateEmployeeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        roleId:
+          type: ["integer", "null"]
+        locationId:
+          type: ["integer", "null"]
+        hourlyRate:
+          type: ["string", "null"]
+        active:
+          type: boolean
+
+
 

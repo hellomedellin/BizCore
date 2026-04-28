@@ -1081,3 +1081,164 @@ export const DeleteOrderLineResponse = zod
       ),
     }),
   );
+
+/**
+ * @summary List all business-defined employee roles
+ */
+export const GetEmployeeRolesResponseItem = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const GetEmployeeRolesResponse = zod.array(GetEmployeeRolesResponseItem);
+
+/**
+ * @summary Create a business-defined employee role
+ */
+export const CreateEmployeeRoleBody = zod.object({
+  name: zod.string(),
+});
+
+/**
+ * @summary Update an employee role
+ */
+export const UpdateEmployeeRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateEmployeeRoleBody = zod.object({
+  name: zod.string().optional(),
+});
+
+export const UpdateEmployeeRoleResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete an employee role
+ */
+export const DeleteEmployeeRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List employees with optional filters
+ */
+export const GetEmployeesQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+  locationId: zod.coerce.number().optional(),
+  roleId: zod.coerce.number().optional(),
+  active: zod.coerce.boolean().optional(),
+});
+
+export const GetEmployeesResponseItem = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  roleId: zod.number().nullish(),
+  roleName: zod.string().nullish(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  hourlyRate: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const GetEmployeesResponse = zod.array(GetEmployeesResponseItem);
+
+/**
+ * @summary Create an employee
+ */
+export const CreateEmployeeBody = zod.object({
+  name: zod.string(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  roleId: zod.number().nullish(),
+  locationId: zod.number().nullish(),
+  hourlyRate: zod.string().nullish(),
+});
+
+/**
+ * @summary Get a single employee
+ */
+export const GetEmployeeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetEmployeeResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  roleId: zod.number().nullish(),
+  roleName: zod.string().nullish(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  hourlyRate: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update an employee
+ */
+export const UpdateEmployeeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateEmployeeBody = zod.object({
+  name: zod.string().optional(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  roleId: zod.number().nullish(),
+  locationId: zod.number().nullish(),
+  hourlyRate: zod.string().nullish(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateEmployeeResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  roleId: zod.number().nullish(),
+  roleName: zod.string().nullish(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  hourlyRate: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Deactivate an employee (soft delete)
+ */
+export const DeactivateEmployeeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeactivateEmployeeResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  roleId: zod.number().nullish(),
+  roleName: zod.string().nullish(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  hourlyRate: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});

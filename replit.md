@@ -24,7 +24,7 @@ pnpm workspace monorepo using TypeScript throughout.
 
 ### Packages
 
-- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes
+- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes/employees
 - `artifacts/web` — React + Vite SPA, Clerk-authenticated, module-aware sidebar navigation
 - `lib/db` — Drizzle ORM schema + migrations (7 schema files)
 - `lib/api-spec` — OpenAPI 3.0 spec + Orval codegen config
@@ -77,6 +77,15 @@ pnpm workspace monorepo using TypeScript throughout.
 - `GET /api/inventory/transactions` — List transaction history
 - `POST /api/inventory/transactions` — Record an inventory transaction (atomic quantity update)
 - `GET /api/inventory/low-stock` — Get all low stock items across locations
+- `GET /api/employee-roles` — List employee roles for the business
+- `POST /api/employee-roles` — Create a role (admin/manager)
+- `PATCH /api/employee-roles/:id` — Rename a role (admin/manager)
+- `DELETE /api/employee-roles/:id` — Delete a role (admin/manager)
+- `GET /api/employees` — List employees (search/locationId/roleId/active filters)
+- `GET /api/employees/:id` — Get a single employee (with role + location names)
+- `POST /api/employees` — Create an employee (admin/manager; validates role + location ownership)
+- `PATCH /api/employees/:id` — Update an employee (admin/manager)
+- `DELETE /api/employees/:id` — Soft-deactivate an employee (sets active=false)
 
 ### Tenant Isolation
 
@@ -104,7 +113,10 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/locations` — Location CRUD management
 - `/items` — Items management: products/ingredients/menu items CRUD with search/filter; CategoryManagerSheet for category CRUD; VariantsSheet with Variants tab + Recipe tab (for menu items) including recipe editor
 - `/inventory` — Inventory management: location-scoped stock table with type/category/low-stock filters; record transactions; set low stock thresholds; transaction log tab
-- `/orders`, `/employees`, `/schedule`, `/time-tracking`, `/reports` — Stub pages (show "Coming soon" when module enabled)
+- `/customers` — Customer management: searchable table with create/edit dialogs, customer detail sheet, order history count
+- `/orders` — Order management: state machine (pending→confirmed→preparing→ready→completed/cancelled), status history, role-based permissions
+- `/employees` — Employee management: searchable/filterable table by role, location, active status; create/edit dialogs; RolesManagerSheet for CRUD on job roles; EmployeeDetailSheet; active/deactivate toggle
+- `/schedule`, `/time-tracking`, `/reports` — Stub pages (Coming soon)
 
 ## Key Commands
 
