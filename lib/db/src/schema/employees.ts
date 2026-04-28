@@ -69,6 +69,7 @@ export const timeEntriesTable = pgTable("time_entries", {
 }, (t) => [
   index("time_entries_employee_id_idx").on(t.employeeId),
   index("time_entries_status_idx").on(t.status),
+  index("time_entries_location_id_idx").on(t.locationId),
 ]);
 
 export const insertTimeEntrySchema = createInsertSchema(timeEntriesTable).omit({ id: true, createdAt: true, updatedAt: true });
