@@ -151,6 +151,20 @@ router.patch(
       if (sortOrder !== undefined) updates.sortOrder = sortOrder;
       if (required !== undefined) updates.required = required;
 
+      // If type is being set to select, ensure options are non-empty
+      // (handles case where only `type` is patched without `options`)
+      const effectiveType = (updates.type ?? existing[0].type) as string;
+      if (effectiveType === "select") {
+        const effectiveOptions = updates.options ?? existing[0].options;
+        const optionList = Array.isArray(effectiveOptions)
+          ? effectiveOptions.filter(Boolean)
+          : [];
+        if (optionList.length === 0) {
+          res.status(400).json({ error: "Select fields must include at least one option" });
+          return;
+        }
+      }
+
       const [updated] = await db
         .update(customFieldsTable)
         .set(updates)
@@ -216,6 +230,32 @@ router.get("/custom-field-values", requireAuth, loadBusiness, async (req, res): 
     const entityIdNum = parseInt(entityId as string, 10);
     if (isNaN(entityIdNum)) {
       res.status(400).json({ error: "Invalid entityId" });
+      return;
+    }
+
+    // Verify entity belongs to this business (defense-in-depth; fieldId scoping
+    // already prevents cross-tenant value leakage, but this ensures entity existence)
+    const entityTableForGet = entityType === "item"
+      ? itemsTable
+      : entityType === "order"
+        ? ordersTable
+        : entityType === "employee"
+          ? employeesTable
+          : null;
+
+    if (!entityTableForGet) {
+      res.status(400).json({ error: "Invalid entityType" });
+      return;
+    }
+
+    const entityRowForGet = await db
+      .select({ id: entityTableForGet.id })
+      .from(entityTableForGet)
+      .where(and(eq(entityTableForGet.id, entityIdNum), eq(entityTableForGet.businessId, businessId)))
+      .limit(1);
+
+    if (!entityRowForGet.length) {
+      res.status(404).json({ error: "Entity not found or does not belong to this business" });
       return;
     }
 
