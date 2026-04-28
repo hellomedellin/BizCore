@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { usersTable, businessUsersTable, businessesTable } from "@workspace/db";
 import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
@@ -69,7 +69,7 @@ router.get(
 
     const members = await db
       .select({
-        id: businessUsersTable.id,
+        membershipId: businessUsersTable.id,
         userId: businessUsersTable.userId,
         role: businessUsersTable.role,
         locationId: businessUsersTable.locationId,
@@ -118,10 +118,16 @@ router.post(
       return;
     }
 
+    // Scope the existing membership check to this business only (prevent cross-tenant IDOR)
     const existing = await db
       .select()
       .from(businessUsersTable)
-      .where(eq(businessUsersTable.userId, parsed.data.userId))
+      .where(
+        and(
+          eq(businessUsersTable.userId, parsed.data.userId),
+          eq(businessUsersTable.businessId, authedReq.businessId),
+        ),
+      )
       .limit(1);
 
     if (existing.length > 0) {
@@ -132,7 +138,12 @@ router.post(
           locationId: parsed.data.locationId ?? null,
           active: true,
         })
-        .where(eq(businessUsersTable.id, existing[0].id))
+        .where(
+          and(
+            eq(businessUsersTable.id, existing[0].id),
+            eq(businessUsersTable.businessId, authedReq.businessId),
+          ),
+        )
         .returning();
       res.json(updated);
       return;
@@ -173,10 +184,16 @@ router.delete(
       return;
     }
 
+    // Always scope by businessId to prevent cross-tenant IDOR
     const [deactivated] = await db
       .update(businessUsersTable)
       .set({ active: false })
-      .where(eq(businessUsersTable.id, id))
+      .where(
+        and(
+          eq(businessUsersTable.id, id),
+          eq(businessUsersTable.businessId, authedReq.businessId),
+        ),
+      )
       .returning();
 
     if (!deactivated) {

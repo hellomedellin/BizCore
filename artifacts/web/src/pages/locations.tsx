@@ -7,7 +7,8 @@ import {
   useCreateLocation, 
   useUpdateLocation, 
   useDeleteLocation,
-  getGetLocationsQueryKey
+  getGetLocationsQueryKey,
+  type Location,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MapPin, Plus, Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react";
@@ -109,7 +110,7 @@ export default function Locations() {
     }
   };
 
-  const openEditDialog = (location: any) => {
+  const openEditDialog = (location: Location) => {
     editForm.reset({
       name: location.name,
       type: location.type,

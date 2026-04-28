@@ -11,8 +11,8 @@ import {
   getGetModulesQueryKey,
   type Business,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Save, Building2, Blocks, Loader2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Save, Building2, Blocks, Loader2, Users, UserMinus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const businessSchema = z.object({
   name: z.string().min(2, "Business name must be at least 2 characters"),
@@ -30,6 +33,34 @@ const businessSchema = z.object({
   phone: z.string().optional().nullable(),
   email: z.string().email("Invalid email address").optional().nullable().or(z.literal("")),
 });
+
+type BusinessMember = {
+  membershipId: number;
+  userId: string;
+  role: string;
+  locationId: number | null;
+  active: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  imageUrl: string | null;
+};
+
+const BUSINESS_MEMBERS_KEY = ["business-members"];
+
+async function fetchBusinessMembers(): Promise<BusinessMember[]> {
+  const res = await fetch("/api/business-users", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load team members");
+  return res.json() as Promise<BusinessMember[]>;
+}
+
+async function deactivateMember(membershipId: number): Promise<void> {
+  const res = await fetch(`/api/business-users/${membershipId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok && res.status !== 204) throw new Error("Failed to remove member");
+}
 
 const ALL_MODULES = [
   { id: "orders", name: "Orders", description: "Manage customer orders and checkout" },
@@ -49,6 +80,22 @@ export default function Settings() {
   
   const updateBusiness = useUpdateBusiness();
   const updateModules = useUpdateModules();
+
+  const { data: members, isLoading: isMembersLoading } = useQuery({
+    queryKey: BUSINESS_MEMBERS_KEY,
+    queryFn: fetchBusinessMembers,
+  });
+
+  const removeMember = useMutation({
+    mutationFn: deactivateMember,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BUSINESS_MEMBERS_KEY });
+      toast({ title: "Team member removed" });
+    },
+    onError: () => {
+      toast({ title: "Error removing member", variant: "destructive" });
+    },
+  });
 
   const businessForm = useForm<z.infer<typeof businessSchema>>({
     resolver: zodResolver(businessSchema),
@@ -224,6 +271,84 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card data-testid="card-team-members">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" /> Team Members
+          </CardTitle>
+          <CardDescription>Manage staff access and roles for your business.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isMembersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : !members || members.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No team members assigned yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[80px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {members.map((member) => (
+                  <TableRow key={member.membershipId} data-testid={`row-member-${member.membershipId}`}>
+                    <TableCell className="font-medium">
+                      {member.firstName || member.lastName
+                        ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
+                        : member.userId}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{member.email ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant={member.role === "admin" ? "default" : "secondary"} className="capitalize">
+                        {member.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={member.active ? "outline" : "destructive"}>
+                        {member.active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" data-testid={`btn-remove-member-${member.membershipId}`}>
+                            <UserMinus className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove team member?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will deactivate their access to this business. You can re-assign them later.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => removeMember.mutate(member.membershipId)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
