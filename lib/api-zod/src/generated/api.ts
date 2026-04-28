@@ -666,3 +666,377 @@ export const UpsertRecipeResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Search customers for the business
+ */
+export const GetCustomersQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+});
+
+export const GetCustomersResponseItem = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const GetCustomersResponse = zod.array(GetCustomersResponseItem);
+
+/**
+ * @summary Create a new customer
+ */
+export const CreateCustomerBody = zod.object({
+  name: zod.string(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Get a customer by ID
+ */
+export const GetCustomerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetCustomerResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update a customer
+ */
+export const UpdateCustomerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCustomerBody = zod.object({
+  name: zod.string().optional(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+export const UpdateCustomerResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  name: zod.string(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a customer
+ */
+export const DeleteCustomerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List orders with filters
+ */
+export const GetOrdersQueryParams = zod.object({
+  locationId: zod.coerce.number().optional(),
+  status: zod
+    .enum([
+      "pending",
+      "preparing",
+      "ready",
+      "completed",
+      "cancelled",
+      "refunded",
+    ])
+    .optional(),
+  orderType: zod.enum(["dine_in", "pickup", "delivery"]).optional(),
+  search: zod.coerce.string().optional(),
+  dateFrom: zod.coerce.string().optional(),
+  dateTo: zod.coerce.string().optional(),
+  limit: zod.coerce.number().optional(),
+  offset: zod.coerce.number().optional(),
+});
+
+export const GetOrdersResponse = zod.object({
+  orders: zod.array(
+    zod.object({
+      id: zod.number(),
+      businessId: zod.number(),
+      locationId: zod.number(),
+      customerId: zod.number().nullish(),
+      customerName: zod.string().nullish(),
+      orderType: zod.string(),
+      status: zod.string(),
+      tableNumber: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      subtotal: zod.string(),
+      discount: zod.string(),
+      tax: zod.string(),
+      total: zod.string(),
+      createdBy: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Create a new order
+ */
+export const CreateOrderBody = zod.object({
+  locationId: zod.number(),
+  orderType: zod.enum(["dine_in", "pickup", "delivery"]).optional(),
+  customerId: zod.number().nullish(),
+  tableNumber: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  lines: zod
+    .array(
+      zod.object({
+        variantId: zod.number().nullish(),
+        name: zod.string(),
+        quantity: zod.string(),
+        price: zod.string(),
+        notes: zod.string().nullish(),
+        modifiers: zod.object({}).passthrough().nullish(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Get order detail with lines
+ */
+export const GetOrderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetOrderResponse = zod
+  .object({
+    id: zod.number(),
+    businessId: zod.number(),
+    locationId: zod.number(),
+    customerId: zod.number().nullish(),
+    customerName: zod.string().nullish(),
+    orderType: zod.string(),
+    status: zod.string(),
+    tableNumber: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    subtotal: zod.string(),
+    discount: zod.string(),
+    tax: zod.string(),
+    total: zod.string(),
+    createdBy: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      lines: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          variantId: zod.number().nullish(),
+          name: zod.string(),
+          quantity: zod.string(),
+          price: zod.string(),
+          notes: zod.string().nullish(),
+          modifiers: zod.object({}).passthrough().nullish(),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Update order status, discount, notes, etc.
+ */
+export const UpdateOrderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateOrderBody = zod.object({
+  status: zod
+    .enum([
+      "pending",
+      "preparing",
+      "ready",
+      "completed",
+      "cancelled",
+      "refunded",
+    ])
+    .optional(),
+  customerId: zod.number().nullish(),
+  tableNumber: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  discount: zod.string().optional(),
+});
+
+export const UpdateOrderResponse = zod
+  .object({
+    id: zod.number(),
+    businessId: zod.number(),
+    locationId: zod.number(),
+    customerId: zod.number().nullish(),
+    customerName: zod.string().nullish(),
+    orderType: zod.string(),
+    status: zod.string(),
+    tableNumber: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    subtotal: zod.string(),
+    discount: zod.string(),
+    tax: zod.string(),
+    total: zod.string(),
+    createdBy: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      lines: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          variantId: zod.number().nullish(),
+          name: zod.string(),
+          quantity: zod.string(),
+          price: zod.string(),
+          notes: zod.string().nullish(),
+          modifiers: zod.object({}).passthrough().nullish(),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Cancel/delete an order
+ */
+export const DeleteOrderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Add a line item to an order
+ */
+export const AddOrderLineParams = zod.object({
+  orderId: zod.coerce.number(),
+});
+
+export const AddOrderLineBody = zod.object({
+  variantId: zod.number().nullish(),
+  name: zod.string(),
+  quantity: zod.string(),
+  price: zod.string(),
+  notes: zod.string().nullish(),
+  modifiers: zod.object({}).passthrough().nullish(),
+});
+
+/**
+ * @summary Update a line item
+ */
+export const UpdateOrderLineParams = zod.object({
+  orderId: zod.coerce.number(),
+  lineId: zod.coerce.number(),
+});
+
+export const UpdateOrderLineBody = zod.object({
+  quantity: zod.string().optional(),
+  price: zod.string().optional(),
+  notes: zod.string().nullish(),
+  modifiers: zod.object({}).passthrough().nullish(),
+});
+
+export const UpdateOrderLineResponse = zod
+  .object({
+    id: zod.number(),
+    businessId: zod.number(),
+    locationId: zod.number(),
+    customerId: zod.number().nullish(),
+    customerName: zod.string().nullish(),
+    orderType: zod.string(),
+    status: zod.string(),
+    tableNumber: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    subtotal: zod.string(),
+    discount: zod.string(),
+    tax: zod.string(),
+    total: zod.string(),
+    createdBy: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      lines: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          variantId: zod.number().nullish(),
+          name: zod.string(),
+          quantity: zod.string(),
+          price: zod.string(),
+          notes: zod.string().nullish(),
+          modifiers: zod.object({}).passthrough().nullish(),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );
+
+/**
+ * @summary Remove a line item from an order
+ */
+export const DeleteOrderLineParams = zod.object({
+  orderId: zod.coerce.number(),
+  lineId: zod.coerce.number(),
+});
+
+export const DeleteOrderLineResponse = zod
+  .object({
+    id: zod.number(),
+    businessId: zod.number(),
+    locationId: zod.number(),
+    customerId: zod.number().nullish(),
+    customerName: zod.string().nullish(),
+    orderType: zod.string(),
+    status: zod.string(),
+    tableNumber: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    subtotal: zod.string(),
+    discount: zod.string(),
+    tax: zod.string(),
+    total: zod.string(),
+    createdBy: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      lines: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          variantId: zod.number().nullish(),
+          name: zod.string(),
+          quantity: zod.string(),
+          price: zod.string(),
+          notes: zod.string().nullish(),
+          modifiers: zod.object({}).passthrough().nullish(),
+          createdAt: zod.coerce.date(),
+        }),
+      ),
+    }),
+  );

@@ -28,6 +28,10 @@ tags:
     description: Inventory management
   - name: recipes
     description: Recipe management
+  - name: customers
+    description: Customer management
+  - name: orders
+    description: Order management
 paths:
   /healthz:
     get:
@@ -724,6 +728,307 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecipeDetail"
 
+  /customers:
+    get:
+      operationId: getCustomers
+      tags: [customers]
+      summary: Search customers for the business
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a new customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get a customer by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Delete a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [orders]
+      summary: List orders with filters
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, preparing, ready, completed, cancelled, refunded]
+        - name: orderType
+          in: query
+          schema:
+            type: string
+            enum: [dine_in, pickup, delivery]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrdersPage"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order detail with lines
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order with lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update order status, discount, notes, etc.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderBody"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+    delete:
+      operationId: deleteOrder
+      tags: [orders]
+      summary: Cancel/delete an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /orders/{orderId}/lines:
+    post:
+      operationId: addOrderLine
+      tags: [orders]
+      summary: Add a line item to an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrderLineBody"
+      responses:
+        "201":
+          description: Line added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
+  /orders/{orderId}/lines/{lineId}:
+    patch:
+      operationId: updateOrderLine
+      tags: [orders]
+      summary: Update a line item
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lineId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderLineBody"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+    delete:
+      operationId: deleteOrderLine
+      tags: [orders]
+      summary: Remove a line item from an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lineId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated order after removal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
 components:
   schemas:
     HealthStatus:
@@ -1375,3 +1680,231 @@ components:
               - quantity
       required:
         - items
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - name
+        - createdAt
+        - updatedAt
+
+    CreateCustomerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+
+    UpdateCustomerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    OrderLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        variantId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        quantity:
+          type: string
+        price:
+          type: string
+        notes:
+          type: ["string", "null"]
+        modifiers:
+          type: ["object", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - orderId
+        - name
+        - quantity
+        - price
+        - createdAt
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        locationId:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        customerName:
+          type: ["string", "null"]
+        orderType:
+          type: string
+        status:
+          type: string
+        tableNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        subtotal:
+          type: string
+        discount:
+          type: string
+        tax:
+          type: string
+        total:
+          type: string
+        createdBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - locationId
+        - orderType
+        - status
+        - subtotal
+        - discount
+        - tax
+        - total
+        - createdAt
+        - updatedAt
+
+    OrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/Order"
+        - type: object
+          properties:
+            lines:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrderLine"
+          required:
+            - lines
+
+    OrdersPage:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        total:
+          type: integer
+      required:
+        - orders
+        - total
+
+    CreateOrderBody:
+      type: object
+      properties:
+        locationId:
+          type: integer
+        orderType:
+          type: string
+          enum: [dine_in, pickup, delivery]
+        customerId:
+          type: ["integer", "null"]
+        tableNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddOrderLineBody"
+      required:
+        - locationId
+
+    UpdateOrderBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, preparing, ready, completed, cancelled, refunded]
+        customerId:
+          type: ["integer", "null"]
+        tableNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        discount:
+          type: string
+
+    AddOrderLineBody:
+      type: object
+      properties:
+        variantId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        quantity:
+          type: string
+        price:
+          type: string
+        notes:
+          type: ["string", "null"]
+        modifiers:
+          type: ["object", "null"]
+      required:
+        - name
+        - quantity
+        - price
+
+    UpdateOrderLineBody:
+      type: object
+      properties:
+        quantity:
+          type: string
+        price:
+          type: string
+        notes:
+          type: ["string", "null"]
+        modifiers:
+          type: ["object", "null"]
+

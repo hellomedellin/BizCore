@@ -419,6 +419,168 @@ export interface UpsertRecipeBody {
   items: UpsertRecipeBodyItemsItem[];
 }
 
+export interface Customer {
+  id: number;
+  businessId: number;
+  name: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCustomerBody {
+  name: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface UpdateCustomerBody {
+  name?: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type OrderLineModifiers = { [key: string]: unknown } | null;
+
+export interface OrderLine {
+  id: number;
+  orderId: number;
+  /** @nullable */
+  variantId?: number | null;
+  name: string;
+  quantity: string;
+  price: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  modifiers?: OrderLineModifiers;
+  createdAt: string;
+}
+
+export interface Order {
+  id: number;
+  businessId: number;
+  locationId: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  orderType: string;
+  status: string;
+  /** @nullable */
+  tableNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  subtotal: string;
+  discount: string;
+  tax: string;
+  total: string;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OrderDetail = Order & {
+  lines: OrderLine[];
+};
+
+export interface OrdersPage {
+  orders: Order[];
+  total: number;
+}
+
+export type CreateOrderBodyOrderType =
+  (typeof CreateOrderBodyOrderType)[keyof typeof CreateOrderBodyOrderType];
+
+export const CreateOrderBodyOrderType = {
+  dine_in: "dine_in",
+  pickup: "pickup",
+  delivery: "delivery",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AddOrderLineBodyModifiers = { [key: string]: unknown } | null;
+
+export interface AddOrderLineBody {
+  /** @nullable */
+  variantId?: number | null;
+  name: string;
+  quantity: string;
+  price: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  modifiers?: AddOrderLineBodyModifiers;
+}
+
+export interface CreateOrderBody {
+  locationId: number;
+  orderType?: CreateOrderBodyOrderType;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  tableNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  lines?: AddOrderLineBody[];
+}
+
+export type UpdateOrderBodyStatus =
+  (typeof UpdateOrderBodyStatus)[keyof typeof UpdateOrderBodyStatus];
+
+export const UpdateOrderBodyStatus = {
+  pending: "pending",
+  preparing: "preparing",
+  ready: "ready",
+  completed: "completed",
+  cancelled: "cancelled",
+  refunded: "refunded",
+} as const;
+
+export interface UpdateOrderBody {
+  status?: UpdateOrderBodyStatus;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  tableNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  discount?: string;
+}
+
+/**
+ * @nullable
+ */
+export type UpdateOrderLineBodyModifiers = { [key: string]: unknown } | null;
+
+export interface UpdateOrderLineBody {
+  quantity?: string;
+  price?: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  modifiers?: UpdateOrderLineBodyModifiers;
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable
@@ -460,3 +622,39 @@ export type GetInventoryTransactionsParams = {
 export type GetLowStockItemsParams = {
   locationId?: number;
 };
+
+export type GetCustomersParams = {
+  search?: string;
+};
+
+export type GetOrdersParams = {
+  locationId?: number;
+  status?: GetOrdersStatus;
+  orderType?: GetOrdersOrderType;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type GetOrdersStatus =
+  (typeof GetOrdersStatus)[keyof typeof GetOrdersStatus];
+
+export const GetOrdersStatus = {
+  pending: "pending",
+  preparing: "preparing",
+  ready: "ready",
+  completed: "completed",
+  cancelled: "cancelled",
+  refunded: "refunded",
+} as const;
+
+export type GetOrdersOrderType =
+  (typeof GetOrdersOrderType)[keyof typeof GetOrdersOrderType];
+
+export const GetOrdersOrderType = {
+  dine_in: "dine_in",
+  pickup: "pickup",
+  delivery: "delivery",
+} as const;
