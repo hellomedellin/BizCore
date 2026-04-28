@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,12 +7,18 @@ import {
   useUpdateBusiness, 
   useGetModules,
   useUpdateModules,
+  useGetBusinessUsers,
+  useUpsertBusinessUser,
+  useDeactivateBusinessUser,
+  useGetLocations,
   getGetMyBusinessQueryKey,
   getGetModulesQueryKey,
+  getGetBusinessUsersQueryKey,
   type Business,
+  type UpsertBusinessUserBodyRole,
 } from "@workspace/api-client-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, Building2, Blocks, Loader2, Users, UserMinus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Save, Building2, Blocks, Loader2, Users, UserMinus, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +30,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const businessSchema = z.object({
@@ -34,33 +41,11 @@ const businessSchema = z.object({
   email: z.string().email("Invalid email address").optional().nullable().or(z.literal("")),
 });
 
-type BusinessMember = {
-  membershipId: number;
-  userId: string;
-  role: string;
-  locationId: number | null;
-  active: boolean;
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  imageUrl: string | null;
-};
-
-const BUSINESS_MEMBERS_KEY = ["business-members"];
-
-async function fetchBusinessMembers(): Promise<BusinessMember[]> {
-  const res = await fetch("/api/business-users", { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to load team members");
-  return res.json() as Promise<BusinessMember[]>;
-}
-
-async function deactivateMember(membershipId: number): Promise<void> {
-  const res = await fetch(`/api/business-users/${membershipId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  if (!res.ok && res.status !== 204) throw new Error("Failed to remove member");
-}
+const assignMemberSchema = z.object({
+  userId: z.string().min(1, "Clerk user ID is required"),
+  role: z.enum(["admin", "manager", "cashier", "hr"]),
+  locationId: z.string().optional(),
+});
 
 const ALL_MODULES = [
   { id: "orders", name: "Orders", description: "Manage customer orders and checkout" },
@@ -74,32 +59,48 @@ const ALL_MODULES = [
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
   
   const { data: business, isLoading: isBusinessLoading } = useGetMyBusiness();
   const { data: modules, isLoading: isModulesLoading } = useGetModules();
+  const { data: members, isLoading: isMembersLoading } = useGetBusinessUsers();
+  const { data: locations } = useGetLocations();
   
   const updateBusiness = useUpdateBusiness();
   const updateModules = useUpdateModules();
-
-  const { data: members, isLoading: isMembersLoading } = useQuery({
-    queryKey: BUSINESS_MEMBERS_KEY,
-    queryFn: fetchBusinessMembers,
-  });
-
-  const removeMember = useMutation({
-    mutationFn: deactivateMember,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: BUSINESS_MEMBERS_KEY });
-      toast({ title: "Team member removed" });
+  const upsertMember = useUpsertBusinessUser({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetBusinessUsersQueryKey() });
+        toast({ title: "Team member assigned" });
+        setIsAssignOpen(false);
+        assignForm.reset({ userId: "", role: "cashier", locationId: "" });
+      },
+      onError: () => {
+        toast({ title: "Error assigning team member", variant: "destructive" });
+      },
     },
-    onError: () => {
-      toast({ title: "Error removing member", variant: "destructive" });
+  });
+  const removeMember = useDeactivateBusinessUser({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetBusinessUsersQueryKey() });
+        toast({ title: "Team member removed" });
+      },
+      onError: () => {
+        toast({ title: "Error removing member", variant: "destructive" });
+      },
     },
   });
 
   const businessForm = useForm<z.infer<typeof businessSchema>>({
     resolver: zodResolver(businessSchema),
     defaultValues: { name: "", industry: "", address: "", phone: "", email: "" },
+  });
+
+  const assignForm = useForm<z.infer<typeof assignMemberSchema>>({
+    resolver: zodResolver(assignMemberSchema),
+    defaultValues: { userId: "", role: "cashier", locationId: "" },
   });
 
   // Init business form
@@ -136,7 +137,6 @@ export default function Settings() {
   const handleModuleToggle = async (moduleId: string, enabled: boolean) => {
     if (!modules) return;
     
-    // Create new modules array with the toggled module
     const currentModules = [...modules];
     const moduleIndex = currentModules.findIndex(m => m.module === moduleId);
     
@@ -165,6 +165,19 @@ export default function Settings() {
 
   const isModuleEnabled = (moduleId: string) => {
     return modules?.some(m => m.module === moduleId && m.enabled) || false;
+  };
+
+  const onAssignSubmit = (values: z.infer<typeof assignMemberSchema>) => {
+    const locationId = values.locationId && values.locationId !== "none"
+      ? parseInt(values.locationId, 10)
+      : null;
+    upsertMember.mutate({
+      data: {
+        userId: values.userId,
+        role: values.role as UpsertBusinessUserBodyRole,
+        locationId,
+      },
+    });
   };
 
   if (isBusinessLoading || isModulesLoading) {
@@ -273,11 +286,76 @@ export default function Settings() {
       </div>
 
       <Card data-testid="card-team-members">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" /> Team Members
-          </CardTitle>
-          <CardDescription>Manage staff access and roles for your business.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" /> Team Members
+            </CardTitle>
+            <CardDescription className="mt-1">Manage staff access and roles for your business.</CardDescription>
+          </div>
+          <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" data-testid="btn-assign-member">
+                <UserPlus className="mr-2 h-4 w-4" /> Assign Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Assign Team Member</DialogTitle>
+                <DialogDescription>Enter the Clerk user ID of the person you want to add to this business.</DialogDescription>
+              </DialogHeader>
+              <Form {...assignForm}>
+                <form onSubmit={assignForm.handleSubmit(onAssignSubmit)} className="space-y-4 pt-2">
+                  <FormField control={assignForm.control} name="userId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Clerk User ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="user_2abc..." {...field} data-testid="input-assign-user-id" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={assignForm.control} name="role" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger data-testid="select-assign-role"><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="cashier">Cashier</SelectItem>
+                          <SelectItem value="hr">HR</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={assignForm.control} name="locationId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location (optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="All locations" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">All locations</SelectItem>
+                          {locations?.map((loc) => (
+                            <SelectItem key={loc.id} value={String(loc.id)}>{loc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAssignOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={upsertMember.isPending} data-testid="btn-confirm-assign">
+                      {upsertMember.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Assign
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent>
           {isMembersLoading ? (
@@ -333,7 +411,7 @@ export default function Settings() {
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => removeMember.mutate(member.membershipId)}
+                              onClick={() => removeMember.mutate({ id: member.membershipId })}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
                               Remove

@@ -59,13 +59,14 @@ export const businessUsersTable = pgTable("business_users", {
   businessId: integer("business_id").notNull().references(() => businessesTable.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("cashier"),
-  locationId: integer("location_id"),
+  locationId: integer("location_id").references(() => locationsTable.id, { onDelete: "set null" }),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
   index("business_users_business_id_idx").on(t.businessId),
   index("business_users_user_id_idx").on(t.userId),
+  index("business_users_location_id_idx").on(t.locationId),
 ]);
 
 export const insertBusinessUserSchema = createInsertSchema(businessUsersTable).omit({ id: true, createdAt: true, updatedAt: true });

@@ -18,6 +18,8 @@ tags:
     description: Business module management
   - name: dashboard
     description: Dashboard analytics
+  - name: businessUsers
+    description: Business team member management
 paths:
   /healthz:
     get:
@@ -216,6 +218,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+
+  /business-users:
+    get:
+      operationId: getBusinessUsers
+      tags: [businessUsers]
+      summary: List all team members for the current business
+      responses:
+        "200":
+          description: List of business members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BusinessMember"
+    post:
+      operationId: upsertBusinessUser
+      tags: [businessUsers]
+      summary: Assign or update a team member's role and location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertBusinessUserBody"
+      responses:
+        "200":
+          description: Updated membership record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessMember"
+        "201":
+          description: New membership created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessMember"
+
+  /business-users/{id}:
+    delete:
+      operationId: deactivateBusinessUser
+      tags: [businessUsers]
+      summary: Deactivate a team member's access to the business
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Member deactivated
+        "404":
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -441,3 +502,44 @@ components:
         - total
         - orderType
         - createdAt
+
+    BusinessMember:
+      type: object
+      properties:
+        membershipId:
+          type: integer
+        userId:
+          type: string
+        role:
+          type: string
+        locationId:
+          type: ["integer", "null"]
+        active:
+          type: boolean
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+      required:
+        - membershipId
+        - userId
+        - role
+        - active
+
+    UpsertBusinessUserBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, cashier, hr]
+        locationId:
+          type: ["integer", "null"]
+      required:
+        - userId
+        - role

@@ -184,3 +184,47 @@ export const GetDashboardSummaryResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary List all team members for the current business
+ */
+export const GetBusinessUsersResponseItem = zod.object({
+  membershipId: zod.number(),
+  userId: zod.string(),
+  role: zod.string(),
+  locationId: zod.number().nullish(),
+  active: zod.boolean(),
+  email: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
+});
+export const GetBusinessUsersResponse = zod.array(GetBusinessUsersResponseItem);
+
+/**
+ * @summary Assign or update a team member's role and location
+ */
+export const UpsertBusinessUserBody = zod.object({
+  userId: zod.string(),
+  role: zod.enum(["admin", "manager", "cashier", "hr"]),
+  locationId: zod.number().nullish(),
+});
+
+export const UpsertBusinessUserResponse = zod.object({
+  membershipId: zod.number(),
+  userId: zod.string(),
+  role: zod.string(),
+  locationId: zod.number().nullish(),
+  active: zod.boolean(),
+  email: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary Deactivate a team member's access to the business
+ */
+export const DeactivateBusinessUserParams = zod.object({
+  id: zod.coerce.number(),
+});

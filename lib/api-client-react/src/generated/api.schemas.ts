@@ -122,6 +122,40 @@ export interface DashboardSummary {
   recentOrders: RecentOrder[];
 }
 
+export interface BusinessMember {
+  membershipId: number;
+  userId: string;
+  role: string;
+  /** @nullable */
+  locationId?: number | null;
+  active: boolean;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+}
+
+export type UpsertBusinessUserBodyRole =
+  (typeof UpsertBusinessUserBodyRole)[keyof typeof UpsertBusinessUserBodyRole];
+
+export const UpsertBusinessUserBodyRole = {
+  admin: "admin",
+  manager: "manager",
+  cashier: "cashier",
+  hr: "hr",
+} as const;
+
+export interface UpsertBusinessUserBody {
+  userId: string;
+  role: UpsertBusinessUserBodyRole;
+  /** @nullable */
+  locationId?: number | null;
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable

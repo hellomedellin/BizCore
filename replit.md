@@ -46,14 +46,33 @@ pnpm workspace monorepo using TypeScript throughout.
 - `GET /api/health` — Health check
 - `GET /api/businesses/me` — Get authenticated user's business
 - `POST /api/businesses` — Create a business (one per user)
-- `PATCH /api/businesses/:id` — Update business info
+- `PATCH /api/businesses/:id` — Update business info (admin only)
 - `GET /api/locations` — List locations for the business
-- `POST /api/locations` — Create a location
-- `PATCH /api/locations/:id` — Update a location
-- `DELETE /api/locations/:id` — Delete a location
+- `POST /api/locations` — Create a location (admin/manager)
+- `PATCH /api/locations/:id` — Update a location (admin/manager)
+- `DELETE /api/locations/:id` — Delete a location (admin only)
 - `GET /api/modules` — Get enabled modules
-- `PUT /api/modules` — Update module configuration
+- `PUT /api/modules` — Update module configuration (admin only)
 - `GET /api/dashboard/summary` — Dashboard metrics (orders, sales, employees, low stock, time entries)
+- `POST /api/users/sync` — Sync Clerk user profile to local users table (called on sign-in)
+- `GET /api/business-users` — List team members for the business (admin/manager)
+- `POST /api/business-users` — Assign or update a user's role + location (admin only)
+- `DELETE /api/business-users/:id` — Deactivate a team member (admin only)
+
+### Tenant Isolation
+
+- `lib/tenantScope.ts` — `tenantWhere(col, businessId, ...extra)` helper used in all business-scoped DB queries; `assertBusinessId(id?)` throws 400 if missing context
+- All mutations on business-scoped resources verify `businessId` matches the authenticated user's business
+- Cross-tenant IDOR prevented in business-users endpoints via AND(id, businessId) predicates
+
+### Auth Flow
+
+1. User signs in via Clerk
+2. `UserSyncEffect` in `App.tsx` calls `POST /api/users/sync` (best-effort, non-blocking) to sync Clerk profile to local `users` table
+3. `PortalRouter` in `App.tsx` calls `GET /api/businesses/me`
+4. If 404 → redirect to `/onboarding`
+5. If found → redirect to `/dashboard`
+6. Sidebar nav dynamically shows links based on enabled modules (`useGetModules()`)
 
 ### Frontend Pages
 
@@ -62,17 +81,9 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/sign-up/*?` — Clerk SignUp component
 - `/onboarding` — Business setup wizard (shown when no business exists)
 - `/dashboard` — Metrics dashboard with recent orders
-- `/settings` — Business profile + module configuration
+- `/settings` — Business profile + module configuration + Team Members management
 - `/locations` — Location CRUD management
 - `/orders`, `/inventory`, `/employees`, `/schedule`, `/time-tracking`, `/reports` — Stub pages (show "Coming soon" when module enabled)
-
-### Auth Flow
-
-1. User signs in via Clerk
-2. `PortalRouter` in `App.tsx` calls `GET /api/businesses/me`
-3. If 404 → redirect to `/onboarding`
-4. If found → redirect to `/dashboard`
-5. Sidebar nav dynamically shows links based on enabled modules (`useGetModules()`)
 
 ## Key Commands
 

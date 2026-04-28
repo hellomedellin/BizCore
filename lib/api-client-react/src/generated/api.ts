@@ -18,6 +18,7 @@ import type {
 
 import type {
   Business,
+  BusinessMember,
   BusinessModule,
   CreateBusinessBody,
   CreateLocationBody,
@@ -29,6 +30,7 @@ import type {
   UpdateBusinessBody,
   UpdateLocationBody,
   UpdateModulesBody,
+  UpsertBusinessUserBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -955,3 +957,248 @@ export function useGetDashboardSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all team members for the current business
+ */
+export const getGetBusinessUsersUrl = () => {
+  return `/api/business-users`;
+};
+
+export const getBusinessUsers = async (
+  options?: RequestInit,
+): Promise<BusinessMember[]> => {
+  return customFetch<BusinessMember[]>(getGetBusinessUsersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBusinessUsersQueryKey = () => {
+  return [`/api/business-users`] as const;
+};
+
+export const getGetBusinessUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBusinessUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBusinessUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBusinessUsersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBusinessUsers>>
+  > = ({ signal }) => getBusinessUsers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBusinessUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBusinessUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBusinessUsers>>
+>;
+export type GetBusinessUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all team members for the current business
+ */
+
+export function useGetBusinessUsers<
+  TData = Awaited<ReturnType<typeof getBusinessUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBusinessUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBusinessUsersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Assign or update a team member's role and location
+ */
+export const getUpsertBusinessUserUrl = () => {
+  return `/api/business-users`;
+};
+
+export const upsertBusinessUser = async (
+  upsertBusinessUserBody: UpsertBusinessUserBody,
+  options?: RequestInit,
+): Promise<BusinessMember> => {
+  return customFetch<BusinessMember>(getUpsertBusinessUserUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertBusinessUserBody),
+  });
+};
+
+export const getUpsertBusinessUserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertBusinessUser>>,
+    TError,
+    { data: BodyType<UpsertBusinessUserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertBusinessUser>>,
+  TError,
+  { data: BodyType<UpsertBusinessUserBody> },
+  TContext
+> => {
+  const mutationKey = ["upsertBusinessUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertBusinessUser>>,
+    { data: BodyType<UpsertBusinessUserBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertBusinessUser(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertBusinessUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertBusinessUser>>
+>;
+export type UpsertBusinessUserMutationBody = BodyType<UpsertBusinessUserBody>;
+export type UpsertBusinessUserMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Assign or update a team member's role and location
+ */
+export const useUpsertBusinessUser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertBusinessUser>>,
+    TError,
+    { data: BodyType<UpsertBusinessUserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertBusinessUser>>,
+  TError,
+  { data: BodyType<UpsertBusinessUserBody> },
+  TContext
+> => {
+  return useMutation(getUpsertBusinessUserMutationOptions(options));
+};
+
+/**
+ * @summary Deactivate a team member's access to the business
+ */
+export const getDeactivateBusinessUserUrl = (id: number) => {
+  return `/api/business-users/${id}`;
+};
+
+export const deactivateBusinessUser = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeactivateBusinessUserUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeactivateBusinessUserMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deactivateBusinessUser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deactivateBusinessUser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deactivateBusinessUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deactivateBusinessUser>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deactivateBusinessUser(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeactivateBusinessUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deactivateBusinessUser>>
+>;
+
+export type DeactivateBusinessUserMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Deactivate a team member's access to the business
+ */
+export const useDeactivateBusinessUser = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deactivateBusinessUser>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deactivateBusinessUser>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeactivateBusinessUserMutationOptions(options));
+};
