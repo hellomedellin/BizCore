@@ -654,6 +654,7 @@ function VariantFormDialog({
     sku: variant?.sku ?? "",
     price: variant?.price ?? "",
     cost: variant?.cost ?? "",
+    attributes: variant?.attributes ? JSON.stringify(variant.attributes, null, 2) : "",
   });
 
   const { toast } = useToast();
@@ -666,11 +667,25 @@ function VariantFormDialog({
       toast({ title: "Variant name is required", variant: "destructive" });
       return;
     }
+    let parsedAttributes: Record<string, unknown> | null = null;
+    if (form.attributes.trim()) {
+      try {
+        parsedAttributes = JSON.parse(form.attributes.trim());
+        if (typeof parsedAttributes !== "object" || Array.isArray(parsedAttributes)) {
+          toast({ title: "Attributes must be a JSON object (e.g. {\"size\": \"M\"})", variant: "destructive" });
+          return;
+        }
+      } catch {
+        toast({ title: "Attributes contain invalid JSON", variant: "destructive" });
+        return;
+      }
+    }
     const payload: CreateItemVariantBody = {
       name: form.name.trim(),
       sku: form.sku || null,
       price: form.price || null,
       cost: form.cost || null,
+      attributes: parsedAttributes,
     };
     try {
       if (isEditing) {
@@ -731,6 +746,19 @@ function VariantFormDialog({
                 placeholder="0.00"
               />
             </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Attributes</Label>
+            <Textarea
+              value={form.attributes}
+              onChange={(e) => setForm((f) => ({ ...f, attributes: e.target.value }))}
+              placeholder={'{\n  "size": "M",\n  "color": "red"\n}'}
+              rows={3}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional JSON object for size, color, unit, or other properties.
+            </p>
           </div>
         </div>
         <DialogFooter>

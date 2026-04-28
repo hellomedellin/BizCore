@@ -7,8 +7,12 @@ import {
   useCreateInventoryTransaction,
   useUpdateInventoryEntry,
   useGetCategories,
+  useGetItems,
+  useGetItemVariants,
   getGetInventoryQueryKey,
   getGetInventoryTransactionsQueryKey,
+  getGetItemVariantsQueryKey,
+  getGetItemsQueryKey,
 } from "@workspace/api-client-react";
 import type { InventoryEntry, GetInventoryType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -68,16 +72,17 @@ function RecordTransactionDialog({
   onOpenChange,
   locationId,
   preselectedEntry,
-  inventoryEntries,
   onSuccess,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   locationId: number;
   preselectedEntry?: InventoryEntry;
-  inventoryEntries: InventoryEntry[];
   onSuccess: () => void;
 }) {
+  const [selectedItemId, setSelectedItemId] = useState<string>(
+    preselectedEntry?.itemId?.toString() ?? "none"
+  );
   const [form, setForm] = useState({
     variantId: preselectedEntry?.variantId?.toString() ?? "none",
     type: "purchase",
@@ -88,9 +93,27 @@ function RecordTransactionDialog({
   const { toast } = useToast();
   const createTxn = useCreateInventoryTransaction();
 
+  const activeItemsParams = { active: true };
+  const { data: allItems } = useGetItems(activeItemsParams, {
+    query: { enabled: open, queryKey: getGetItemsQueryKey(activeItemsParams) },
+  });
+
+  const itemIdNum = selectedItemId !== "none" ? parseInt(selectedItemId) : 0;
+  const { data: itemVariants } = useGetItemVariants(itemIdNum, {
+    query: {
+      enabled: open && itemIdNum > 0,
+      queryKey: getGetItemVariantsQueryKey(itemIdNum),
+    },
+  });
+
+  const handleItemChange = (itemId: string) => {
+    setSelectedItemId(itemId);
+    setForm((f) => ({ ...f, variantId: "none" }));
+  };
+
   const handleSubmit = async () => {
     if (form.variantId === "none") {
-      toast({ title: "Select an item/variant", variant: "destructive" });
+      toast({ title: "Select an item and variant", variant: "destructive" });
       return;
     }
     const qty = parseFloat(form.quantity);
@@ -115,6 +138,7 @@ function RecordTransactionDialog({
       toast({ title: "Transaction recorded" });
       onSuccess();
       onOpenChange(false);
+      setSelectedItemId("none");
       setForm({ variantId: "none", type: "purchase", quantity: "", notes: "" });
     } catch {
       toast({ title: "Error recording transaction", variant: "destructive" });
@@ -129,20 +153,45 @@ function RecordTransactionDialog({
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-1.5">
-            <Label>Item / Variant *</Label>
-            <Select
-              value={form.variantId}
-              onValueChange={(v) => setForm((f) => ({ ...f, variantId: v }))}
-            >
+            <Label>Item *</Label>
+            <Select value={selectedItemId} onValueChange={handleItemChange}>
               <SelectTrigger>
-                <SelectValue placeholder="Select item" />
+                <SelectValue placeholder="Select an item..." />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Select an item...</SelectItem>
-                {inventoryEntries.map((e) => (
-                  <SelectItem key={e.variantId} value={e.variantId.toString()}>
-                    {e.itemName} — {e.variantName}
-                    {e.sku ? ` (${e.sku})` : ""}
+                {allItems?.map((item) => (
+                  <SelectItem key={item.id} value={item.id.toString()}>
+                    {item.name}
+                    <span className="ml-1 text-xs text-muted-foreground capitalize">
+                      ({item.type?.replace("_", " ")})
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Variant *</Label>
+            <Select
+              value={form.variantId}
+              onValueChange={(v) => setForm((f) => ({ ...f, variantId: v }))}
+              disabled={selectedItemId === "none"}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a variant..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select a variant...</SelectItem>
+                {itemVariants?.map((v) => (
+                  <SelectItem key={v.id} value={v.id.toString()}>
+                    {v.name}
+                    {v.sku ? ` — ${v.sku}` : ""}
+                    {v.attributes
+                      ? ` (${Object.entries(v.attributes as Record<string, unknown>)
+                          .map(([k, val]) => `${k}: ${val}`)
+                          .join(", ")})`
+                      : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -522,10 +571,7 @@ export default function InventoryPage() {
           </p>
         </div>
         {locationId && (
-          <Button
-            onClick={() => setTxnDialog({ open: true })}
-            disabled={!inventoryEntries?.length}
-          >
+          <Button onClick={() => setTxnDialog({ open: true })}>
             <Plus className="mr-2 h-4 w-4" /> Record Transaction
           </Button>
         )}
@@ -661,7 +707,6 @@ export default function InventoryPage() {
           onOpenChange={(v) => setTxnDialog((d) => ({ ...d, open: v }))}
           locationId={locationId}
           preselectedEntry={txnDialog.entry}
-          inventoryEntries={inventoryEntries ?? []}
           onSuccess={() => {
             queryClient.invalidateQueries({
               queryKey: getGetInventoryQueryKey({ locationId }),
