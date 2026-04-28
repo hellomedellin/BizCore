@@ -91,11 +91,11 @@ pnpm workspace monorepo using TypeScript throughout.
 - `PATCH /api/shifts/:id` — Update a shift (admin/manager)
 - `DELETE /api/shifts/:id` — Delete a shift (admin/manager)
 - `GET /api/time-entries` — List time entries (employeeId, locationId, status, from, to filters; includes durationMinutes)
-- `POST /api/time-entries/clock-in` — Clock in an employee (admin/manager; 409 if already clocked in; validates employee + location tenant ownership)
-- `POST /api/time-entries/:id/clock-out` — Clock out an open entry (admin/manager; tenant-scoped via employee join)
+- `POST /api/time-entries/clock-in` — Clock in an employee (any auth'd business member; 409 if already clocked in; validates employee + location tenant ownership)
+- `POST /api/time-entries/:id/clock-out` — Clock out an open entry (any auth'd business member; tenant-scoped via employee join)
 - `POST /api/time-entries/:id/approve` — Approve a completed time entry (admin/manager; sets approvedBy to Clerk userId)
 - `POST /api/time-entries/:id/reject` — Reject a time entry with required reason (admin/manager)
-- `POST /api/time-entries/:id/resubmit` — Resubmit a rejected entry with corrected clockIn/clockOut (admin/manager; resets status to pending; 400 if not rejected)
+- `POST /api/time-entries/:id/resubmit` — Resubmit a rejected entry with corrected clockIn/clockOut (any auth'd business member; resets status to pending; 400 if not rejected)
 
 ### Tenant Isolation
 
