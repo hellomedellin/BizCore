@@ -34,6 +34,10 @@ tags:
     description: Order management
   - name: employees
     description: Employee management
+  - name: scheduling
+    description: Shift scheduling
+  - name: timeTracking
+    description: Time entry tracking and approval
 paths:
   /healthz:
     get:
@@ -1035,6 +1039,264 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrderDetail"
+
+  /shifts:
+    get:
+      operationId: getShifts
+      tags: [scheduling]
+      summary: List shifts with optional filters
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: List of shifts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+    post:
+      operationId: createShift
+      tags: [scheduling]
+      summary: Create a shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShiftBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /shifts/{id}:
+    patch:
+      operationId: updateShift
+      tags: [scheduling]
+      summary: Update a shift
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateShiftBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteShift
+      tags: [scheduling]
+      summary: Delete a shift
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /time-entries:
+    get:
+      operationId: getTimeEntries
+      tags: [timeTracking]
+      summary: List time entries with optional filters
+      parameters:
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: List of time entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeEntry"
+
+  /time-entries/clock-in:
+    post:
+      operationId: clockIn
+      tags: [timeTracking]
+      summary: Clock in an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockInBody"
+      responses:
+        "201":
+          description: Time entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "409":
+          description: Employee is already clocked in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /time-entries/{id}/clock-out:
+    post:
+      operationId: clockOut
+      tags: [timeTracking]
+      summary: Clock out an open time entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockOutBody"
+      responses:
+        "200":
+          description: Time entry updated with clock-out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /time-entries/{id}/approve:
+    post:
+      operationId: approveTimeEntry
+      tags: [timeTracking]
+      summary: Approve a completed time entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveTimeEntryBody"
+      responses:
+        "200":
+          description: Time entry approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /time-entries/{id}/reject:
+    post:
+      operationId: rejectTimeEntry
+      tags: [timeTracking]
+      summary: Reject a time entry with a reason
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectTimeEntryBody"
+      responses:
+        "200":
+          description: Time entry rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /employee-roles:
     get:
@@ -2244,6 +2506,156 @@ components:
           type: ["string", "null"]
         active:
           type: boolean
+
+    Shift:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: integer
+        employeeName:
+          type: string
+        locationId:
+          type: integer
+        locationName:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+        hasConflict:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - employeeId
+        - employeeName
+        - locationId
+        - startTime
+        - endTime
+        - hasConflict
+        - createdAt
+
+    CreateShiftBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        locationId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+      required:
+        - employeeId
+        - locationId
+        - startTime
+        - endTime
+
+    UpdateShiftBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        locationId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        notes:
+          type: ["string", "null"]
+
+    TimeEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: integer
+        employeeName:
+          type: string
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+        clockIn:
+          type: string
+          format: date-time
+        clockOut:
+          type: ["string", "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        approvedBy:
+          type: ["string", "null"]
+        rejectionReason:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        durationMinutes:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - employeeId
+        - employeeName
+        - clockIn
+        - status
+        - createdAt
+        - updatedAt
+
+    ClockInBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        locationId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - employeeId
+
+    ClockOutBody:
+      type: object
+      properties:
+        notes:
+          type: ["string", "null"]
+
+    ApproveTimeEntryBody:
+      type: object
+      properties:
+        notes:
+          type: ["string", "null"]
+
+    RejectTimeEntryBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
 
 
 

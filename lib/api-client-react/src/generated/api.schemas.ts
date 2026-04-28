@@ -660,6 +660,94 @@ export interface UpdateEmployeeBody {
   active?: boolean;
 }
 
+export interface Shift {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  locationId: number;
+  /** @nullable */
+  locationName?: string | null;
+  startTime: string;
+  endTime: string;
+  /** @nullable */
+  notes?: string | null;
+  hasConflict: boolean;
+  createdAt: string;
+}
+
+export interface CreateShiftBody {
+  employeeId: number;
+  locationId: number;
+  startTime: string;
+  endTime: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface UpdateShiftBody {
+  employeeId?: number;
+  locationId?: number;
+  startTime?: string;
+  endTime?: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type TimeEntryStatus =
+  (typeof TimeEntryStatus)[keyof typeof TimeEntryStatus];
+
+export const TimeEntryStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface TimeEntry {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  locationName?: string | null;
+  clockIn: string;
+  /** @nullable */
+  clockOut?: string | null;
+  status: TimeEntryStatus;
+  /** @nullable */
+  approvedBy?: string | null;
+  /** @nullable */
+  rejectionReason?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  durationMinutes?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClockInBody {
+  employeeId: number;
+  /** @nullable */
+  locationId?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface ClockOutBody {
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface ApproveTimeEntryBody {
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface RejectTimeEntryBody {
+  reason: string;
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable
@@ -746,6 +834,30 @@ export const GetOrdersOrderType = {
   dine_in: "dine_in",
   pickup: "pickup",
   delivery: "delivery",
+} as const;
+
+export type GetShiftsParams = {
+  locationId?: number;
+  employeeId?: number;
+  from?: string;
+  to?: string;
+};
+
+export type GetTimeEntriesParams = {
+  employeeId?: number;
+  locationId?: number;
+  status?: GetTimeEntriesStatus;
+  from?: string;
+  to?: string;
+};
+
+export type GetTimeEntriesStatus =
+  (typeof GetTimeEntriesStatus)[keyof typeof GetTimeEntriesStatus];
+
+export const GetTimeEntriesStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
 } as const;
 
 export type GetEmployeesParams = {

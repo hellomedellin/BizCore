@@ -18,10 +18,13 @@ import type {
 
 import type {
   AddOrderLineBody,
+  ApproveTimeEntryBody,
   Business,
   BusinessMember,
   BusinessModule,
   Category,
+  ClockInBody,
+  ClockOutBody,
   CreateBusinessBody,
   CreateCategoryBody,
   CreateCustomerBody,
@@ -32,6 +35,7 @@ import type {
   CreateItemVariantBody,
   CreateLocationBody,
   CreateOrderBody,
+  CreateShiftBody,
   Customer,
   DashboardSummary,
   Employee,
@@ -45,6 +49,8 @@ import type {
   GetItemsParams,
   GetLowStockItemsParams,
   GetOrdersParams,
+  GetShiftsParams,
+  GetTimeEntriesParams,
   HealthStatus,
   InventoryEntry,
   InventoryTransaction,
@@ -55,6 +61,9 @@ import type {
   OrderDetail,
   OrdersPage,
   RecipeDetail,
+  RejectTimeEntryBody,
+  Shift,
+  TimeEntry,
   UpdateBusinessBody,
   UpdateCategoryBody,
   UpdateCustomerBody,
@@ -67,6 +76,7 @@ import type {
   UpdateModulesBody,
   UpdateOrderBody,
   UpdateOrderLineBody,
+  UpdateShiftBody,
   UpsertBusinessUserBody,
   UpsertRecipeBody,
 } from "./api.schemas";
@@ -4119,6 +4129,798 @@ export const useDeleteOrderLine = <
   TContext
 > => {
   return useMutation(getDeleteOrderLineMutationOptions(options));
+};
+
+/**
+ * @summary List shifts with optional filters
+ */
+export const getGetShiftsUrl = (params?: GetShiftsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/shifts?${stringifiedParams}`
+    : `/api/shifts`;
+};
+
+export const getShifts = async (
+  params?: GetShiftsParams,
+  options?: RequestInit,
+): Promise<Shift[]> => {
+  return customFetch<Shift[]>(getGetShiftsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetShiftsQueryKey = (params?: GetShiftsParams) => {
+  return [`/api/shifts`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetShiftsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getShifts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetShiftsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getShifts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetShiftsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getShifts>>> = ({
+    signal,
+  }) => getShifts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getShifts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetShiftsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getShifts>>
+>;
+export type GetShiftsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List shifts with optional filters
+ */
+
+export function useGetShifts<
+  TData = Awaited<ReturnType<typeof getShifts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetShiftsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getShifts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetShiftsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a shift
+ */
+export const getCreateShiftUrl = () => {
+  return `/api/shifts`;
+};
+
+export const createShift = async (
+  createShiftBody: CreateShiftBody,
+  options?: RequestInit,
+): Promise<Shift> => {
+  return customFetch<Shift>(getCreateShiftUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createShiftBody),
+  });
+};
+
+export const getCreateShiftMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createShift>>,
+    TError,
+    { data: BodyType<CreateShiftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createShift>>,
+  TError,
+  { data: BodyType<CreateShiftBody> },
+  TContext
+> => {
+  const mutationKey = ["createShift"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createShift>>,
+    { data: BodyType<CreateShiftBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createShift(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateShiftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createShift>>
+>;
+export type CreateShiftMutationBody = BodyType<CreateShiftBody>;
+export type CreateShiftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a shift
+ */
+export const useCreateShift = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createShift>>,
+    TError,
+    { data: BodyType<CreateShiftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createShift>>,
+  TError,
+  { data: BodyType<CreateShiftBody> },
+  TContext
+> => {
+  return useMutation(getCreateShiftMutationOptions(options));
+};
+
+/**
+ * @summary Update a shift
+ */
+export const getUpdateShiftUrl = (id: number) => {
+  return `/api/shifts/${id}`;
+};
+
+export const updateShift = async (
+  id: number,
+  updateShiftBody: UpdateShiftBody,
+  options?: RequestInit,
+): Promise<Shift> => {
+  return customFetch<Shift>(getUpdateShiftUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateShiftBody),
+  });
+};
+
+export const getUpdateShiftMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateShift>>,
+    TError,
+    { id: number; data: BodyType<UpdateShiftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateShift>>,
+  TError,
+  { id: number; data: BodyType<UpdateShiftBody> },
+  TContext
+> => {
+  const mutationKey = ["updateShift"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateShift>>,
+    { id: number; data: BodyType<UpdateShiftBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateShift(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateShiftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateShift>>
+>;
+export type UpdateShiftMutationBody = BodyType<UpdateShiftBody>;
+export type UpdateShiftMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a shift
+ */
+export const useUpdateShift = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateShift>>,
+    TError,
+    { id: number; data: BodyType<UpdateShiftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateShift>>,
+  TError,
+  { id: number; data: BodyType<UpdateShiftBody> },
+  TContext
+> => {
+  return useMutation(getUpdateShiftMutationOptions(options));
+};
+
+/**
+ * @summary Delete a shift
+ */
+export const getDeleteShiftUrl = (id: number) => {
+  return `/api/shifts/${id}`;
+};
+
+export const deleteShift = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteShiftUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteShiftMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteShift>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteShift>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteShift"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteShift>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteShift(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteShiftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteShift>>
+>;
+
+export type DeleteShiftMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a shift
+ */
+export const useDeleteShift = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteShift>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteShift>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteShiftMutationOptions(options));
+};
+
+/**
+ * @summary List time entries with optional filters
+ */
+export const getGetTimeEntriesUrl = (params?: GetTimeEntriesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/time-entries?${stringifiedParams}`
+    : `/api/time-entries`;
+};
+
+export const getTimeEntries = async (
+  params?: GetTimeEntriesParams,
+  options?: RequestInit,
+): Promise<TimeEntry[]> => {
+  return customFetch<TimeEntry[]>(getGetTimeEntriesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTimeEntriesQueryKey = (params?: GetTimeEntriesParams) => {
+  return [`/api/time-entries`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetTimeEntriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetTimeEntriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTimeEntriesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTimeEntries>>> = ({
+    signal,
+  }) => getTimeEntries(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTimeEntries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTimeEntriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTimeEntries>>
+>;
+export type GetTimeEntriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List time entries with optional filters
+ */
+
+export function useGetTimeEntries<
+  TData = Awaited<ReturnType<typeof getTimeEntries>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetTimeEntriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTimeEntries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTimeEntriesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Clock in an employee
+ */
+export const getClockInUrl = () => {
+  return `/api/time-entries/clock-in`;
+};
+
+export const clockIn = async (
+  clockInBody: ClockInBody,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getClockInUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(clockInBody),
+  });
+};
+
+export const getClockInMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clockIn>>,
+    TError,
+    { data: BodyType<ClockInBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clockIn>>,
+  TError,
+  { data: BodyType<ClockInBody> },
+  TContext
+> => {
+  const mutationKey = ["clockIn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clockIn>>,
+    { data: BodyType<ClockInBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return clockIn(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClockInMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clockIn>>
+>;
+export type ClockInMutationBody = BodyType<ClockInBody>;
+export type ClockInMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Clock in an employee
+ */
+export const useClockIn = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clockIn>>,
+    TError,
+    { data: BodyType<ClockInBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof clockIn>>,
+  TError,
+  { data: BodyType<ClockInBody> },
+  TContext
+> => {
+  return useMutation(getClockInMutationOptions(options));
+};
+
+/**
+ * @summary Clock out an open time entry
+ */
+export const getClockOutUrl = (id: number) => {
+  return `/api/time-entries/${id}/clock-out`;
+};
+
+export const clockOut = async (
+  id: number,
+  clockOutBody?: ClockOutBody,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getClockOutUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(clockOutBody),
+  });
+};
+
+export const getClockOutMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clockOut>>,
+    TError,
+    { id: number; data: BodyType<ClockOutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clockOut>>,
+  TError,
+  { id: number; data: BodyType<ClockOutBody> },
+  TContext
+> => {
+  const mutationKey = ["clockOut"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clockOut>>,
+    { id: number; data: BodyType<ClockOutBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return clockOut(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClockOutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clockOut>>
+>;
+export type ClockOutMutationBody = BodyType<ClockOutBody>;
+export type ClockOutMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Clock out an open time entry
+ */
+export const useClockOut = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clockOut>>,
+    TError,
+    { id: number; data: BodyType<ClockOutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof clockOut>>,
+  TError,
+  { id: number; data: BodyType<ClockOutBody> },
+  TContext
+> => {
+  return useMutation(getClockOutMutationOptions(options));
+};
+
+/**
+ * @summary Approve a completed time entry
+ */
+export const getApproveTimeEntryUrl = (id: number) => {
+  return `/api/time-entries/${id}/approve`;
+};
+
+export const approveTimeEntry = async (
+  id: number,
+  approveTimeEntryBody?: ApproveTimeEntryBody,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getApproveTimeEntryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(approveTimeEntryBody),
+  });
+};
+
+export const getApproveTimeEntryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<ApproveTimeEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<ApproveTimeEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["approveTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveTimeEntry>>,
+    { id: number; data: BodyType<ApproveTimeEntryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return approveTimeEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveTimeEntry>>
+>;
+export type ApproveTimeEntryMutationBody = BodyType<ApproveTimeEntryBody>;
+export type ApproveTimeEntryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Approve a completed time entry
+ */
+export const useApproveTimeEntry = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<ApproveTimeEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<ApproveTimeEntryBody> },
+  TContext
+> => {
+  return useMutation(getApproveTimeEntryMutationOptions(options));
+};
+
+/**
+ * @summary Reject a time entry with a reason
+ */
+export const getRejectTimeEntryUrl = (id: number) => {
+  return `/api/time-entries/${id}/reject`;
+};
+
+export const rejectTimeEntry = async (
+  id: number,
+  rejectTimeEntryBody: RejectTimeEntryBody,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getRejectTimeEntryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rejectTimeEntryBody),
+  });
+};
+
+export const getRejectTimeEntryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<RejectTimeEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<RejectTimeEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["rejectTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectTimeEntry>>,
+    { id: number; data: BodyType<RejectTimeEntryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return rejectTimeEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RejectTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rejectTimeEntry>>
+>;
+export type RejectTimeEntryMutationBody = BodyType<RejectTimeEntryBody>;
+export type RejectTimeEntryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Reject a time entry with a reason
+ */
+export const useRejectTimeEntry = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<RejectTimeEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rejectTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<RejectTimeEntryBody> },
+  TContext
+> => {
+  return useMutation(getRejectTimeEntryMutationOptions(options));
 };
 
 /**

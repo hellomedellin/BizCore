@@ -20,6 +20,8 @@ import InventoryPage from "./pages/inventory";
 import OrdersPage from "./pages/orders";
 import CustomersPage from "./pages/customers";
 import EmployeesPage from "./pages/employees";
+import SchedulePage from "./pages/schedule";
+import TimeTrackingPage from "./pages/time-tracking";
 import StubPage from "./pages/stub";
 import { AppLayout } from "./components/layout/app-layout";
 import NotFound from "./pages/not-found";
@@ -193,8 +195,8 @@ function PortalRouter() {
       <LayoutRoute path="/items" component={ItemsPage} />
       <LayoutRoute path="/inventory" component={InventoryPage} />
       <LayoutRoute path="/employees" component={EmployeesPage} />
-      <LayoutRoute path="/schedule" component={() => <StubPage title="Schedule" description="Create and manage shift schedules." />} />
-      <LayoutRoute path="/time-tracking" component={() => <StubPage title="Time Tracking" description="Monitor employee timecards and approvals." />} />
+      <LayoutRoute path="/schedule" component={SchedulePage} />
+      <LayoutRoute path="/time-tracking" component={TimeTrackingPage} />
       <LayoutRoute path="/reports" component={() => <StubPage title="Reports" description="View detailed business analytics and insights." />} />
       <Route path="*">
         <NotFound />

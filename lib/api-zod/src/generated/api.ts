@@ -1083,6 +1083,198 @@ export const DeleteOrderLineResponse = zod
   );
 
 /**
+ * @summary List shifts with optional filters
+ */
+export const GetShiftsQueryParams = zod.object({
+  locationId: zod.coerce.number().optional(),
+  employeeId: zod.coerce.number().optional(),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+});
+
+export const GetShiftsResponseItem = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number(),
+  locationName: zod.string().nullish(),
+  startTime: zod.coerce.date(),
+  endTime: zod.coerce.date(),
+  notes: zod.string().nullish(),
+  hasConflict: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const GetShiftsResponse = zod.array(GetShiftsResponseItem);
+
+/**
+ * @summary Create a shift
+ */
+export const CreateShiftBody = zod.object({
+  employeeId: zod.number(),
+  locationId: zod.number(),
+  startTime: zod.coerce.date(),
+  endTime: zod.coerce.date(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a shift
+ */
+export const UpdateShiftParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateShiftBody = zod.object({
+  employeeId: zod.number().optional(),
+  locationId: zod.number().optional(),
+  startTime: zod.coerce.date().optional(),
+  endTime: zod.coerce.date().optional(),
+  notes: zod.string().nullish(),
+});
+
+export const UpdateShiftResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number(),
+  locationName: zod.string().nullish(),
+  startTime: zod.coerce.date(),
+  endTime: zod.coerce.date(),
+  notes: zod.string().nullish(),
+  hasConflict: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a shift
+ */
+export const DeleteShiftParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List time entries with optional filters
+ */
+export const GetTimeEntriesQueryParams = zod.object({
+  employeeId: zod.coerce.number().optional(),
+  locationId: zod.coerce.number().optional(),
+  status: zod.enum(["pending", "approved", "rejected"]).optional(),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+});
+
+export const GetTimeEntriesResponseItem = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  clockIn: zod.coerce.date(),
+  clockOut: zod.coerce.date().nullish(),
+  status: zod.enum(["pending", "approved", "rejected"]),
+  approvedBy: zod.string().nullish(),
+  rejectionReason: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const GetTimeEntriesResponse = zod.array(GetTimeEntriesResponseItem);
+
+/**
+ * @summary Clock in an employee
+ */
+export const ClockInBody = zod.object({
+  employeeId: zod.number(),
+  locationId: zod.number().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Clock out an open time entry
+ */
+export const ClockOutParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ClockOutBody = zod.object({
+  notes: zod.string().nullish(),
+});
+
+export const ClockOutResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  clockIn: zod.coerce.date(),
+  clockOut: zod.coerce.date().nullish(),
+  status: zod.enum(["pending", "approved", "rejected"]),
+  approvedBy: zod.string().nullish(),
+  rejectionReason: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Approve a completed time entry
+ */
+export const ApproveTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ApproveTimeEntryBody = zod.object({
+  notes: zod.string().nullish(),
+});
+
+export const ApproveTimeEntryResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  clockIn: zod.coerce.date(),
+  clockOut: zod.coerce.date().nullish(),
+  status: zod.enum(["pending", "approved", "rejected"]),
+  approvedBy: zod.string().nullish(),
+  rejectionReason: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reject a time entry with a reason
+ */
+export const RejectTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RejectTimeEntryBody = zod.object({
+  reason: zod.string(),
+});
+
+export const RejectTimeEntryResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  clockIn: zod.coerce.date(),
+  clockOut: zod.coerce.date().nullish(),
+  status: zod.enum(["pending", "approved", "rejected"]),
+  approvedBy: zod.string().nullish(),
+  rejectionReason: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
  * @summary List all business-defined employee roles
  */
 export const GetEmployeeRolesResponseItem = zod.object({
