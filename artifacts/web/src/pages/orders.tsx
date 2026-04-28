@@ -867,12 +867,16 @@ function CreateOrderDialog({
       onOpenChange(false);
       setForm({ locationId: "none", orderType: "dine_in", tableNumber: "", notes: "" });
       setCustomerId(null);
-      cfReset();
-      // Save custom fields after closing — non-fatal if it fails
+      // Save custom fields BEFORE resetting (cfReset clears touchedFieldIds)
       if (cfFields.length > 0) {
-        cfSave(result.id).catch(() => {
-          toast({ title: "Order created, but custom field values could not be saved", variant: "destructive" });
-        });
+        cfSave(result.id)
+          .then(() => cfReset())
+          .catch(() => {
+            cfReset();
+            toast({ title: "Order created, but custom field values could not be saved", variant: "destructive" });
+          });
+      } else {
+        cfReset();
       }
     } catch {
       toast({ title: "Failed to create order", variant: "destructive" });
