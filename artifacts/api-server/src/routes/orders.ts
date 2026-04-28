@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, orderLinesTable, customersTable, locationsTable } from "@workspace/db/schema";
+import { ordersTable, orderLinesTable, customersTable, locationsTable, orderStatusHistoryTable } from "@workspace/db/schema";
 import { eq, and, ilike, gte, lte, sql, SQL, desc, count } from "drizzle-orm";
 import {
   requireAuth,
@@ -121,6 +121,12 @@ async function getOrderDetail(orderId: number) {
     .where(eq(orderLinesTable.orderId, orderId))
     .orderBy(orderLinesTable.createdAt);
 
+  const statusHistory = await db
+    .select()
+    .from(orderStatusHistoryTable)
+    .where(eq(orderStatusHistoryTable.orderId, orderId))
+    .orderBy(orderStatusHistoryTable.changedAt);
+
   return {
     ...order,
     subtotal: String(order.subtotal),
@@ -132,6 +138,7 @@ async function getOrderDetail(orderId: number) {
       quantity: String(l.quantity),
       price: String(l.price),
     })),
+    statusHistory,
   };
 }
 
@@ -258,6 +265,13 @@ router.post("/orders", requireAuth, loadBusiness, requireRole("admin", "manager"
       })
       .returning();
 
+    await db.insert(orderStatusHistoryTable).values({
+      orderId: order.id,
+      fromStatus: null,
+      toStatus: "pending",
+      changedBy: authedReq.userId ?? null,
+    });
+
     if (lines && lines.length > 0) {
       await db.insert(orderLinesTable).values(
         lines.map((l) => ({
@@ -350,6 +364,15 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
       await db.update(ordersTable).set(updates).where(eq(ordersTable.id, id));
     }
 
+    if (body.data.status !== undefined && body.data.status !== existing.status) {
+      await db.insert(orderStatusHistoryTable).values({
+        orderId: id,
+        fromStatus: existing.status,
+        toStatus: body.data.status,
+        changedBy: authedReq.userId ?? null,
+      });
+    }
+
     if (body.data.discount !== undefined) {
       await recalcOrder(id);
     }
@@ -437,10 +460,14 @@ router.patch("/orders/:orderId/lines/:lineId", requireAuth, loadBusiness, requir
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const [order] = await db
-      .select({ id: ordersTable.id })
+      .select({ id: ordersTable.id, status: ordersTable.status })
       .from(ordersTable)
       .where(and(eq(ordersTable.id, orderId), tenantWhere(ordersTable.businessId, businessId!)));
     if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (["completed", "cancelled", "refunded"].includes(order.status)) {
+      res.status(400).json({ error: "Cannot modify lines on a completed/cancelled/refunded order" });
+      return;
+    }
 
     const [line] = await db
       .select({ id: orderLinesTable.id })
@@ -477,10 +504,14 @@ router.delete("/orders/:orderId/lines/:lineId", requireAuth, loadBusiness, requi
     if (isNaN(orderId) || isNaN(lineId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const [order] = await db
-      .select({ id: ordersTable.id })
+      .select({ id: ordersTable.id, status: ordersTable.status })
       .from(ordersTable)
       .where(and(eq(ordersTable.id, orderId), tenantWhere(ordersTable.businessId, businessId!)));
     if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    if (["completed", "cancelled", "refunded"].includes(order.status)) {
+      res.status(400).json({ error: "Cannot remove lines from a completed/cancelled/refunded order" });
+      return;
+    }
 
     await db.delete(orderLinesTable).where(
       and(eq(orderLinesTable.id, lineId), eq(orderLinesTable.orderId, orderId))

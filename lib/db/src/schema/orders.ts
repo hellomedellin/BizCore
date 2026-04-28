@@ -64,3 +64,16 @@ export const orderLinesTable = pgTable("order_lines", {
 export const insertOrderLineSchema = createInsertSchema(orderLinesTable).omit({ id: true, createdAt: true });
 export type InsertOrderLine = z.infer<typeof insertOrderLineSchema>;
 export type OrderLine = typeof orderLinesTable.$inferSelect;
+
+export const orderStatusHistoryTable = pgTable("order_status_history", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => ordersTable.id, { onDelete: "cascade" }),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  changedBy: text("changed_by"),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("order_status_history_order_id_idx").on(t.orderId),
+]);
+
+export type OrderStatusHistory = typeof orderStatusHistoryTable.$inferSelect;

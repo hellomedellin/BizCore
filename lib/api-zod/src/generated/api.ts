@@ -857,6 +857,16 @@ export const GetOrderResponse = zod
           createdAt: zod.coerce.date(),
         }),
       ),
+      statusHistory: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          fromStatus: zod.string().nullish(),
+          toStatus: zod.string(),
+          changedBy: zod.string().nullish(),
+          changedAt: zod.coerce.date(),
+        }),
+      ),
     }),
   );
 
@@ -916,6 +926,16 @@ export const UpdateOrderResponse = zod
           notes: zod.string().nullish(),
           modifiers: zod.object({}).passthrough().nullish(),
           createdAt: zod.coerce.date(),
+        }),
+      ),
+      statusHistory: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          fromStatus: zod.string().nullish(),
+          toStatus: zod.string(),
+          changedBy: zod.string().nullish(),
+          changedAt: zod.coerce.date(),
         }),
       ),
     }),
@@ -993,6 +1013,16 @@ export const UpdateOrderLineResponse = zod
           createdAt: zod.coerce.date(),
         }),
       ),
+      statusHistory: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          fromStatus: zod.string().nullish(),
+          toStatus: zod.string(),
+          changedBy: zod.string().nullish(),
+          changedAt: zod.coerce.date(),
+        }),
+      ),
     }),
   );
 
@@ -1036,6 +1066,16 @@ export const DeleteOrderLineResponse = zod
           notes: zod.string().nullish(),
           modifiers: zod.object({}).passthrough().nullish(),
           createdAt: zod.coerce.date(),
+        }),
+      ),
+      statusHistory: zod.array(
+        zod.object({
+          id: zod.number(),
+          orderId: zod.number(),
+          fromStatus: zod.string().nullish(),
+          toStatus: zod.string(),
+          changedBy: zod.string().nullish(),
+          changedAt: zod.coerce.date(),
         }),
       ),
     }),

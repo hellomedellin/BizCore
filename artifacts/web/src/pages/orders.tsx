@@ -22,6 +22,7 @@ import type {
   Order,
   OrderDetail,
   OrderLine,
+  OrderStatusHistory,
   Customer,
   GetOrdersParams,
   GetOrdersStatus,
@@ -707,17 +708,64 @@ function OrderDetailSheet({
                   Mark as {STATUS_LABELS[nextStatus]}
                 </Button>
               )}
+              {canCancel && order.status === "completed" && (
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const result = await updateOrder.mutateAsync({
+                        id: order.id,
+                        data: { status: "refunded" as UpdateOrderBodyStatus },
+                      });
+                      setLocalOrder(result);
+                      invalidate();
+                      toast({ title: "Order refunded" });
+                    } catch {
+                      toast({ title: "Failed to refund order", variant: "destructive" });
+                    }
+                  }}
+                  disabled={updateOrder.isPending}
+                  className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                >
+                  Refund Order
+                </Button>
+              )}
               {isEditable && canCancel && (
                 <Button variant="outline" onClick={handleCancel} disabled={updateOrder.isPending} className="border-destructive text-destructive hover:bg-destructive/10">
                   Cancel Order
                 </Button>
               )}
-              {canDelete && order.status === "cancelled" && (
+              {canDelete && (order.status === "cancelled" || order.status === "refunded") && (
                 <Button variant="destructive" onClick={handleDelete} disabled={deleteOrder.isPending}>
                   Delete
                 </Button>
               )}
             </div>
+
+            {order.statusHistory && order.statusHistory.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Status History</h3>
+                  <div className="space-y-1.5">
+                    {order.statusHistory.map((h: OrderStatusHistory) => (
+                      <div key={h.id} className="flex items-center gap-2 text-sm">
+                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground text-xs shrink-0">
+                          {format(new Date(h.changedAt), "MMM d, h:mm a")}
+                        </span>
+                        <span>
+                          {h.fromStatus
+                            ? <>{STATUS_LABELS[h.fromStatus] ?? h.fromStatus} → </>
+                            : null}
+                          <span className="font-medium">{STATUS_LABELS[h.toStatus] ?? h.toStatus}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </SheetContent>

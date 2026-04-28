@@ -497,8 +497,20 @@ export interface Order {
   updatedAt: string;
 }
 
+export interface OrderStatusHistory {
+  id: number;
+  orderId: number;
+  /** @nullable */
+  fromStatus?: string | null;
+  toStatus: string;
+  /** @nullable */
+  changedBy?: string | null;
+  changedAt: string;
+}
+
 export type OrderDetail = Order & {
   lines: OrderLine[];
+  statusHistory: OrderStatusHistory[];
 };
 
 export interface OrdersPage {

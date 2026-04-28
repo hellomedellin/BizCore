@@ -1815,6 +1815,28 @@ components:
         - createdAt
         - updatedAt
 
+    OrderStatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        fromStatus:
+          type: ["string", "null"]
+        toStatus:
+          type: string
+        changedBy:
+          type: ["string", "null"]
+        changedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - orderId
+        - toStatus
+        - changedAt
+
     OrderDetail:
       allOf:
         - $ref: "#/components/schemas/Order"
@@ -1824,8 +1846,13 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/OrderLine"
+            statusHistory:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrderStatusHistory"
           required:
             - lines
+            - statusHistory
 
     OrdersPage:
       type: object
