@@ -165,9 +165,14 @@ function EmployeeFormDialog({
         entityId = created.id;
         toast({ title: "Employee created" });
       }
-      if (cfFields.length > 0) await cfSave(entityId);
       onSuccess();
       onOpenChange(false);
+      // Save custom fields after closing — non-fatal if it fails
+      if (cfFields.length > 0) {
+        cfSave(entityId).catch(() => {
+          toast({ title: "Employee saved, but custom field values could not be saved", variant: "destructive" });
+        });
+      }
     } catch {
       toast({ title: "Error saving employee", variant: "destructive" });
     }
