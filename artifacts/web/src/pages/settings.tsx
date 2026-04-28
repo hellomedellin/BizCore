@@ -11,17 +11,26 @@ import {
   useUpsertBusinessUser,
   useDeactivateBusinessUser,
   useGetLocations,
+  useGetCustomFields,
+  useCreateCustomField,
+  useUpdateCustomField,
+  useDeleteCustomField,
   getGetMyBusinessQueryKey,
   getGetModulesQueryKey,
   getGetBusinessUsersQueryKey,
+  getGetCustomFieldsQueryKey,
   type Business,
   type UpsertBusinessUserBodyRole,
+  type CustomFieldDef,
+  type CreateCustomFieldBodyEntityType,
+  type CreateCustomFieldBodyType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save, Building2, Blocks, Loader2, Users, UserMinus, UserPlus } from "lucide-react";
+import { Save, Building2, Blocks, Loader2, Users, UserMinus, UserPlus, LayoutList, Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +41,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
 
 const businessSchema = z.object({
   name: z.string().min(2, "Business name must be at least 2 characters"),
@@ -55,6 +66,391 @@ const ALL_MODULES = [
   { id: "time_tracking", name: "Time Tracking", description: "Clock in/out and timesheet approvals" },
   { id: "reports", name: "Reports", description: "Business analytics and performance metrics" },
 ];
+
+const ENTITY_TYPES = [
+  { value: "item", label: "Items" },
+  { value: "order", label: "Orders" },
+  { value: "employee", label: "Employees" },
+] as const;
+
+const FIELD_TYPES = [
+  { value: "text", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
+  { value: "select", label: "Select (dropdown)" },
+  { value: "checkbox", label: "Checkbox" },
+];
+
+const EMPTY_CF_FORM = {
+  name: "",
+  type: "text" as CreateCustomFieldBodyType,
+  options: "",
+  sortOrder: "0",
+  required: false,
+};
+
+function CustomFieldsManagerCard() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"item" | "order" | "employee">("item");
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    field?: CustomFieldDef;
+    form: typeof EMPTY_CF_FORM;
+  }>({ open: false, form: { ...EMPTY_CF_FORM } });
+
+  const { data: fields, isLoading } = useGetCustomFields({ entityType: activeTab });
+
+  const createField = useCreateCustomField();
+  const updateField = useUpdateCustomField();
+  const deleteField = useDeleteCustomField();
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getGetCustomFieldsQueryKey({ entityType: activeTab }) });
+    queryClient.invalidateQueries({ queryKey: getGetCustomFieldsQueryKey({}) });
+  };
+
+  const openCreate = () =>
+    setDialog({ open: true, form: { ...EMPTY_CF_FORM } });
+
+  const openEdit = (field: CustomFieldDef) =>
+    setDialog({
+      open: true,
+      field,
+      form: {
+        name: field.name,
+        type: field.type as CreateCustomFieldBodyType,
+        options: Array.isArray(field.options)
+          ? (field.options as string[]).join("\n")
+          : "",
+        sortOrder: String(field.sortOrder ?? 0),
+        required: field.required,
+      },
+    });
+
+  const handleSave = async () => {
+    const { form, field } = dialog;
+    if (!form.name.trim()) {
+      toast({ title: "Field name is required", variant: "destructive" });
+      return;
+    }
+    const options =
+      form.type === "select"
+        ? form.options
+            .split("\n")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : null;
+
+    try {
+      if (field) {
+        await updateField.mutateAsync({
+          id: field.id,
+          data: {
+            name: form.name.trim(),
+            type: form.type,
+            options,
+            sortOrder: parseInt(form.sortOrder) || 0,
+            required: form.required,
+          },
+        });
+        toast({ title: "Field updated" });
+      } else {
+        await createField.mutateAsync({
+          data: {
+            entityType: activeTab as CreateCustomFieldBodyEntityType,
+            name: form.name.trim(),
+            type: form.type,
+            options,
+            sortOrder: parseInt(form.sortOrder) || 0,
+            required: form.required,
+          },
+        });
+        toast({ title: "Field created" });
+      }
+      invalidate();
+      setDialog({ open: false, form: { ...EMPTY_CF_FORM } });
+    } catch {
+      toast({ title: "Error saving field", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (field: CustomFieldDef) => {
+    try {
+      await deleteField.mutateAsync({ id: field.id });
+      toast({ title: `"${field.name}" deleted` });
+      invalidate();
+    } catch {
+      toast({ title: "Error deleting field", variant: "destructive" });
+    }
+  };
+
+  const fieldTypeBadge = (type: string) => {
+    const colors: Record<string, string> = {
+      text: "bg-blue-100 text-blue-800",
+      number: "bg-purple-100 text-purple-800",
+      date: "bg-green-100 text-green-800",
+      select: "bg-orange-100 text-orange-800",
+      checkbox: "bg-gray-100 text-gray-800",
+    };
+    return (
+      <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${colors[type] ?? "bg-gray-100 text-gray-800"}`}>
+        {type}
+      </span>
+    );
+  };
+
+  return (
+    <>
+      <Card data-testid="card-custom-fields">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <LayoutList className="h-5 w-5" /> Custom Fields
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Define extra fields that appear on items, orders, and employees.
+            </CardDescription>
+          </div>
+          <Button size="sm" onClick={openCreate} data-testid="btn-add-custom-field">
+            <Plus className="mr-1 h-4 w-4" /> Add Field
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+            <TabsList className="mb-4">
+              {ENTITY_TYPES.map((et) => (
+                <TabsTrigger key={et.value} value={et.value} data-testid={`tab-cf-${et.value}`}>
+                  {et.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {ENTITY_TYPES.map((et) => (
+              <TabsContent key={et.value} value={et.value}>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : !fields || fields.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">
+                    <LayoutList className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      No custom fields for {et.label.toLowerCase()} yet
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={openCreate}
+                    >
+                      <Plus className="mr-1 h-4 w-4" /> Add first field
+                    </Button>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Required</TableHead>
+                        <TableHead>Order</TableHead>
+                        <TableHead className="w-[80px]" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fields.map((f) => (
+                        <TableRow key={f.id} data-testid={`row-cf-${f.id}`}>
+                          <TableCell className="font-medium">{f.name}</TableCell>
+                          <TableCell>{fieldTypeBadge(f.type)}</TableCell>
+                          <TableCell>
+                            {f.required ? (
+                              <Badge variant="default" className="text-xs">Required</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">Optional</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{f.sortOrder}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => openEdit(f)}
+                                data-testid={`btn-edit-cf-${f.id}`}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    data-testid={`btn-delete-cf-${f.id}`}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete "{f.name}"?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will delete the field definition and all its stored values. This cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      onClick={() => handleDelete(f)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={dialog.open}
+        onOpenChange={(v) =>
+          setDialog((d) => ({ ...d, open: v, form: v ? d.form : { ...EMPTY_CF_FORM } }))
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{dialog.field ? "Edit Custom Field" : "Add Custom Field"}</DialogTitle>
+            <DialogDescription>
+              Custom fields appear when creating or editing the entity.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            {!dialog.field && (
+              <div className="grid gap-1.5">
+                <Label>Entity Type</Label>
+                <Select
+                  value={activeTab}
+                  onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ENTITY_TYPES.map((et) => (
+                      <SelectItem key={et.value} value={et.value}>
+                        {et.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="grid gap-1.5">
+              <Label>Field Name *</Label>
+              <Input
+                value={dialog.form.name}
+                onChange={(e) =>
+                  setDialog((d) => ({ ...d, form: { ...d.form, name: e.target.value } }))
+                }
+                placeholder="e.g. Allergen Info"
+                data-testid="input-cf-name"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Field Type</Label>
+              <Select
+                value={dialog.form.type}
+                onValueChange={(v) =>
+                  setDialog((d) => ({
+                    ...d,
+                    form: { ...d.form, type: v as CreateCustomFieldBodyType },
+                  }))
+                }
+              >
+                <SelectTrigger data-testid="select-cf-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FIELD_TYPES.map((ft) => (
+                    <SelectItem key={ft.value} value={ft.value}>
+                      {ft.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {dialog.form.type === "select" && (
+              <div className="grid gap-1.5">
+                <Label>Options (one per line)</Label>
+                <Textarea
+                  value={dialog.form.options}
+                  onChange={(e) =>
+                    setDialog((d) => ({ ...d, form: { ...d.form, options: e.target.value } }))
+                  }
+                  placeholder={"Option A\nOption B\nOption C"}
+                  rows={4}
+                  data-testid="textarea-cf-options"
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label>Sort Order</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={dialog.form.sortOrder}
+                  onChange={(e) =>
+                    setDialog((d) => ({ ...d, form: { ...d.form, sortOrder: e.target.value } }))
+                  }
+                />
+              </div>
+              <div className="flex flex-col justify-end gap-1.5">
+                <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+                  <Label className="cursor-pointer">Required</Label>
+                  <Switch
+                    checked={dialog.form.required}
+                    onCheckedChange={(v) =>
+                      setDialog((d) => ({ ...d, form: { ...d.form, required: v } }))
+                    }
+                    data-testid="switch-cf-required"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialog({ open: false, form: { ...EMPTY_CF_FORM } })}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={createField.isPending || updateField.isPending}
+              data-testid="btn-save-cf"
+            >
+              {dialog.field ? "Save Changes" : "Create Field"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export default function Settings() {
   const { toast } = useToast();
@@ -427,6 +823,8 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      <CustomFieldsManagerCard />
     </div>
   );
 }

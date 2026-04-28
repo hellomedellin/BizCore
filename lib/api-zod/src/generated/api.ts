@@ -1464,3 +1464,113 @@ export const DeactivateEmployeeResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
+
+/**
+ * @summary List custom field definitions for the business
+ */
+export const GetCustomFieldsQueryParams = zod.object({
+  entityType: zod.enum(["item", "order", "employee"]).optional(),
+});
+
+export const GetCustomFieldsResponseItem = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  entityType: zod.enum(["item", "order", "employee"]),
+  name: zod.string(),
+  type: zod.enum(["text", "number", "date", "select", "checkbox"]),
+  options: zod.array(zod.string()).nullish(),
+  sortOrder: zod.number(),
+  required: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const GetCustomFieldsResponse = zod.array(GetCustomFieldsResponseItem);
+
+/**
+ * @summary Create a custom field definition (admin only)
+ */
+export const CreateCustomFieldBody = zod.object({
+  entityType: zod.enum(["item", "order", "employee"]),
+  name: zod.string(),
+  type: zod.enum(["text", "number", "date", "select", "checkbox"]),
+  options: zod.array(zod.string()).nullish(),
+  sortOrder: zod.number().optional(),
+  required: zod.boolean().optional(),
+});
+
+/**
+ * @summary Update a custom field definition (admin only)
+ */
+export const UpdateCustomFieldParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCustomFieldBody = zod.object({
+  name: zod.string().optional(),
+  type: zod.enum(["text", "number", "date", "select", "checkbox"]).optional(),
+  options: zod.array(zod.string()).nullish(),
+  sortOrder: zod.number().optional(),
+  required: zod.boolean().optional(),
+});
+
+export const UpdateCustomFieldResponse = zod.object({
+  id: zod.number(),
+  businessId: zod.number(),
+  entityType: zod.enum(["item", "order", "employee"]),
+  name: zod.string(),
+  type: zod.enum(["text", "number", "date", "select", "checkbox"]),
+  options: zod.array(zod.string()).nullish(),
+  sortOrder: zod.number(),
+  required: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a custom field definition (admin only)
+ */
+export const DeleteCustomFieldParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get custom field values for a specific entity
+ */
+export const GetCustomFieldValuesQueryParams = zod.object({
+  entityType: zod.enum(["item", "order", "employee"]),
+  entityId: zod.coerce.number(),
+});
+
+export const GetCustomFieldValuesResponseItem = zod.object({
+  id: zod.number(),
+  fieldId: zod.number(),
+  entityId: zod.number(),
+  value: zod.string().nullish(),
+  updatedAt: zod.coerce.date(),
+});
+export const GetCustomFieldValuesResponse = zod.array(
+  GetCustomFieldValuesResponseItem,
+);
+
+/**
+ * @summary Upsert custom field values for an entity
+ */
+export const UpsertCustomFieldValuesBody = zod.object({
+  entityType: zod.enum(["item", "order", "employee"]),
+  entityId: zod.number(),
+  values: zod.array(
+    zod.object({
+      fieldId: zod.number(),
+      value: zod.string().nullish(),
+    }),
+  ),
+});
+
+export const UpsertCustomFieldValuesResponseItem = zod.object({
+  id: zod.number(),
+  fieldId: zod.number(),
+  entityId: zod.number(),
+  value: zod.string().nullish(),
+  updatedAt: zod.coerce.date(),
+});
+export const UpsertCustomFieldValuesResponse = zod.array(
+  UpsertCustomFieldValuesResponseItem,
+);

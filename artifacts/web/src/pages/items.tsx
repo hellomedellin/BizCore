@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetItems,
@@ -72,6 +72,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, MoreHorizontal, Search, Package, Layers, BookOpen, FolderOpen, Trash2, Pencil, ChefHat } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEntityCustomFields } from "@/components/use-entity-custom-fields";
+import { CustomFieldsSection } from "@/components/custom-fields-section";
 
 const ITEM_TYPES = [
   { value: "product", label: "Product" },
@@ -483,6 +485,13 @@ function ItemFormDialog({
   const updateItem = useUpdateItem();
   const isEditing = !!item;
 
+  const { fields: cfFields, values: cfValues, setFieldValue: cfSet, save: cfSave, reset: cfReset } =
+    useEntityCustomFields("item", item?.id);
+
+  useEffect(() => {
+    if (!open) cfReset();
+  }, [open]);
+
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       toast({ title: "Name is required", variant: "destructive" });
@@ -499,13 +508,17 @@ function ItemFormDialog({
       hasVariants: form.hasVariants,
     };
     try {
+      let entityId: number;
       if (isEditing) {
         await updateItem.mutateAsync({ id: item!.id, data: payload as UpdateItemBody });
+        entityId = item!.id;
         toast({ title: "Item updated" });
       } else {
-        await createItem.mutateAsync({ data: payload });
+        const created = await createItem.mutateAsync({ data: payload });
+        entityId = created.id;
         toast({ title: "Item created" });
       }
+      if (cfFields.length > 0) await cfSave(entityId);
       onSuccess();
       onOpenChange(false);
     } catch {
@@ -615,6 +628,11 @@ function ItemFormDialog({
               onCheckedChange={(v) => setForm((f) => ({ ...f, hasVariants: v }))}
             />
           </div>
+          <CustomFieldsSection
+            fields={cfFields}
+            values={cfValues}
+            onChange={cfSet}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

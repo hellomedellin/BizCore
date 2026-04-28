@@ -57,6 +57,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useEntityCustomFields } from "@/components/use-entity-custom-fields";
+import { CustomFieldsSection } from "@/components/custom-fields-section";
 import {
   Users,
   Plus,
@@ -124,8 +126,15 @@ function EmployeeFormDialog({
   const updateEmployee = useUpdateEmployee();
   const isEditing = !!employee;
 
+  const { fields: cfFields, values: cfValues, setFieldValue: cfSet, save: cfSave, reset: cfReset } =
+    useEntityCustomFields("employee", employee?.id);
+
   useEffect(() => {
-    if (open) setForm(employee ? employeeToForm(employee) : EMPTY_FORM);
+    if (open) {
+      setForm(employee ? employeeToForm(employee) : EMPTY_FORM);
+    } else {
+      cfReset();
+    }
   }, [open]);
 
   const set = (key: keyof EmployeeFormData) =>
@@ -146,13 +155,17 @@ function EmployeeFormDialog({
       hourlyRate: form.hourlyRate.trim() || null,
     };
     try {
+      let entityId: number;
       if (isEditing) {
         await updateEmployee.mutateAsync({ id: employee!.id, data: payload as UpdateEmployeeBody });
+        entityId = employee!.id;
         toast({ title: "Employee updated" });
       } else {
-        await createEmployee.mutateAsync({ data: payload as CreateEmployeeBody });
+        const created = await createEmployee.mutateAsync({ data: payload as CreateEmployeeBody });
+        entityId = created.id;
         toast({ title: "Employee created" });
       }
+      if (cfFields.length > 0) await cfSave(entityId);
       onSuccess();
       onOpenChange(false);
     } catch {
@@ -245,6 +258,11 @@ function EmployeeFormDialog({
               placeholder="e.g. 15.00"
             />
           </div>
+          <CustomFieldsSection
+            fields={cfFields}
+            values={cfValues}
+            onChange={cfSet}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -38,6 +38,8 @@ tags:
     description: Shift scheduling
   - name: timeTracking
     description: Time entry tracking and approval
+  - name: customFields
+    description: Custom field definitions and values
 paths:
   /healthz:
     get:
@@ -1531,6 +1533,140 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /custom-fields:
+    get:
+      operationId: getCustomFields
+      tags: [customFields]
+      summary: List custom field definitions for the business
+      parameters:
+        - name: entityType
+          in: query
+          schema:
+            type: string
+            enum: [item, order, employee]
+      responses:
+        "200":
+          description: List of custom field definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomFieldDef"
+    post:
+      operationId: createCustomField
+      tags: [customFields]
+      summary: Create a custom field definition (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomFieldBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomFieldDef"
+
+  /custom-fields/{id}:
+    patch:
+      operationId: updateCustomField
+      tags: [customFields]
+      summary: Update a custom field definition (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomFieldBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomFieldDef"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteCustomField
+      tags: [customFields]
+      summary: Delete a custom field definition (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /custom-field-values:
+    get:
+      operationId: getCustomFieldValues
+      tags: [customFields]
+      summary: Get custom field values for a specific entity
+      parameters:
+        - name: entityType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [item, order, employee]
+        - name: entityId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of custom field values
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomFieldValue"
+    put:
+      operationId: upsertCustomFieldValues
+      tags: [customFields]
+      summary: Upsert custom field values for an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertCustomFieldValuesBody"
+      responses:
+        "200":
+          description: Values saved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomFieldValue"
+
 components:
   schemas:
     HealthStatus:
@@ -2709,6 +2845,128 @@ components:
       required:
         - clockIn
         - clockOut
+
+    CustomFieldDef:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        entityType:
+          type: string
+          enum: [item, order, employee]
+        name:
+          type: string
+        type:
+          type: string
+          enum: [text, number, date, select, checkbox]
+        options:
+          type: ["array", "null"]
+          items:
+            type: string
+        sortOrder:
+          type: integer
+        required:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - entityType
+        - name
+        - type
+        - sortOrder
+        - required
+        - createdAt
+
+    CreateCustomFieldBody:
+      type: object
+      properties:
+        entityType:
+          type: string
+          enum: [item, order, employee]
+        name:
+          type: string
+        type:
+          type: string
+          enum: [text, number, date, select, checkbox]
+        options:
+          type: ["array", "null"]
+          items:
+            type: string
+        sortOrder:
+          type: integer
+        required:
+          type: boolean
+      required:
+        - entityType
+        - name
+        - type
+
+    UpdateCustomFieldBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [text, number, date, select, checkbox]
+        options:
+          type: ["array", "null"]
+          items:
+            type: string
+        sortOrder:
+          type: integer
+        required:
+          type: boolean
+
+    CustomFieldValue:
+      type: object
+      properties:
+        id:
+          type: integer
+        fieldId:
+          type: integer
+        entityId:
+          type: integer
+        value:
+          type: ["string", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - fieldId
+        - entityId
+        - updatedAt
+
+    UpsertCustomFieldValuesBody:
+      type: object
+      properties:
+        entityType:
+          type: string
+          enum: [item, order, employee]
+        entityId:
+          type: integer
+        values:
+          type: array
+          items:
+            type: object
+            properties:
+              fieldId:
+                type: integer
+              value:
+                type: ["string", "null"]
+            required:
+              - fieldId
+      required:
+        - entityType
+        - entityId
+        - values
+
 
 
 

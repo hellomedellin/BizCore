@@ -13,6 +13,7 @@ import customersRouter from "./customers";
 import ordersRouter from "./orders";
 import employeesRouter from "./employees";
 import schedulingRouter from "./scheduling";
+import customFieldsRouter from "./custom-fields";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(customersRouter);
 router.use(ordersRouter);
 router.use(employeesRouter);
 router.use(schedulingRouter);
+router.use(customFieldsRouter);
 
 export default router;

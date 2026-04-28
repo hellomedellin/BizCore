@@ -77,6 +77,8 @@ import {
   X,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useEntityCustomFields } from "@/components/use-entity-custom-fields";
+import { CustomFieldsSection } from "@/components/custom-fields-section";
 
 const STATUS_FLOW: Record<string, string | null> = {
   pending: "preparing",
@@ -476,6 +478,19 @@ function OrderDetailSheet({
   const deleteOrder = useDeleteOrder();
   const deleteOrderLine = useDeleteOrderLine();
 
+  const { fields: cfFields, values: cfValues, setFieldValue: cfSet, save: cfSave, isSaving: cfSaving } =
+    useEntityCustomFields("order", open && orderId ? orderId : undefined);
+
+  const handleSaveCustomFields = async () => {
+    if (!orderId) return;
+    try {
+      await cfSave(orderId);
+      toast({ title: "Custom fields saved" });
+    } catch {
+      toast({ title: "Error saving custom fields", variant: "destructive" });
+    }
+  };
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getGetOrderQueryKey(orderId ?? 0) });
     onOrderUpdated();
@@ -771,6 +786,25 @@ function OrderDetailSheet({
                     ))}
                   </div>
                 </div>
+              </>
+            )}
+
+            {cfFields.length > 0 && (
+              <>
+                <CustomFieldsSection
+                  fields={cfFields}
+                  values={cfValues}
+                  onChange={cfSet}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSaveCustomFields}
+                  disabled={cfSaving}
+                  className="w-full"
+                >
+                  Save Custom Fields
+                </Button>
               </>
             )}
           </div>

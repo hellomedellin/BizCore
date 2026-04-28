@@ -27,6 +27,7 @@ import type {
   ClockOutBody,
   CreateBusinessBody,
   CreateCategoryBody,
+  CreateCustomFieldBody,
   CreateCustomerBody,
   CreateEmployeeBody,
   CreateEmployeeRoleBody,
@@ -36,11 +37,15 @@ import type {
   CreateLocationBody,
   CreateOrderBody,
   CreateShiftBody,
+  CustomFieldDef,
+  CustomFieldValue,
   Customer,
   DashboardSummary,
   Employee,
   EmployeeRole,
   ErrorResponse,
+  GetCustomFieldValuesParams,
+  GetCustomFieldsParams,
   GetCustomersParams,
   GetDashboardSummaryParams,
   GetEmployeesParams,
@@ -67,6 +72,7 @@ import type {
   TimeEntry,
   UpdateBusinessBody,
   UpdateCategoryBody,
+  UpdateCustomFieldBody,
   UpdateCustomerBody,
   UpdateEmployeeBody,
   UpdateEmployeeRoleBody,
@@ -79,6 +85,7 @@ import type {
   UpdateOrderLineBody,
   UpdateShiftBody,
   UpsertBusinessUserBody,
+  UpsertCustomFieldValuesBody,
   UpsertRecipeBody,
 } from "./api.schemas";
 
@@ -5779,4 +5786,542 @@ export const useDeactivateEmployee = <
   TContext
 > => {
   return useMutation(getDeactivateEmployeeMutationOptions(options));
+};
+
+/**
+ * @summary List custom field definitions for the business
+ */
+export const getGetCustomFieldsUrl = (params?: GetCustomFieldsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/custom-fields?${stringifiedParams}`
+    : `/api/custom-fields`;
+};
+
+export const getCustomFields = async (
+  params?: GetCustomFieldsParams,
+  options?: RequestInit,
+): Promise<CustomFieldDef[]> => {
+  return customFetch<CustomFieldDef[]>(getGetCustomFieldsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCustomFieldsQueryKey = (params?: GetCustomFieldsParams) => {
+  return [`/api/custom-fields`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCustomFieldsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCustomFields>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetCustomFieldsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCustomFields>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCustomFieldsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomFields>>> = ({
+    signal,
+  }) => getCustomFields(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCustomFields>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCustomFieldsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCustomFields>>
+>;
+export type GetCustomFieldsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List custom field definitions for the business
+ */
+
+export function useGetCustomFields<
+  TData = Awaited<ReturnType<typeof getCustomFields>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetCustomFieldsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCustomFields>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCustomFieldsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a custom field definition (admin only)
+ */
+export const getCreateCustomFieldUrl = () => {
+  return `/api/custom-fields`;
+};
+
+export const createCustomField = async (
+  createCustomFieldBody: CreateCustomFieldBody,
+  options?: RequestInit,
+): Promise<CustomFieldDef> => {
+  return customFetch<CustomFieldDef>(getCreateCustomFieldUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createCustomFieldBody),
+  });
+};
+
+export const getCreateCustomFieldMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCustomField>>,
+    TError,
+    { data: BodyType<CreateCustomFieldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCustomField>>,
+  TError,
+  { data: BodyType<CreateCustomFieldBody> },
+  TContext
+> => {
+  const mutationKey = ["createCustomField"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCustomField>>,
+    { data: BodyType<CreateCustomFieldBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createCustomField(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateCustomFieldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createCustomField>>
+>;
+export type CreateCustomFieldMutationBody = BodyType<CreateCustomFieldBody>;
+export type CreateCustomFieldMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a custom field definition (admin only)
+ */
+export const useCreateCustomField = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCustomField>>,
+    TError,
+    { data: BodyType<CreateCustomFieldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createCustomField>>,
+  TError,
+  { data: BodyType<CreateCustomFieldBody> },
+  TContext
+> => {
+  return useMutation(getCreateCustomFieldMutationOptions(options));
+};
+
+/**
+ * @summary Update a custom field definition (admin only)
+ */
+export const getUpdateCustomFieldUrl = (id: number) => {
+  return `/api/custom-fields/${id}`;
+};
+
+export const updateCustomField = async (
+  id: number,
+  updateCustomFieldBody: UpdateCustomFieldBody,
+  options?: RequestInit,
+): Promise<CustomFieldDef> => {
+  return customFetch<CustomFieldDef>(getUpdateCustomFieldUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateCustomFieldBody),
+  });
+};
+
+export const getUpdateCustomFieldMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCustomField>>,
+    TError,
+    { id: number; data: BodyType<UpdateCustomFieldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCustomField>>,
+  TError,
+  { id: number; data: BodyType<UpdateCustomFieldBody> },
+  TContext
+> => {
+  const mutationKey = ["updateCustomField"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCustomField>>,
+    { id: number; data: BodyType<UpdateCustomFieldBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateCustomField(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCustomFieldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCustomField>>
+>;
+export type UpdateCustomFieldMutationBody = BodyType<UpdateCustomFieldBody>;
+export type UpdateCustomFieldMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a custom field definition (admin only)
+ */
+export const useUpdateCustomField = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCustomField>>,
+    TError,
+    { id: number; data: BodyType<UpdateCustomFieldBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCustomField>>,
+  TError,
+  { id: number; data: BodyType<UpdateCustomFieldBody> },
+  TContext
+> => {
+  return useMutation(getUpdateCustomFieldMutationOptions(options));
+};
+
+/**
+ * @summary Delete a custom field definition (admin only)
+ */
+export const getDeleteCustomFieldUrl = (id: number) => {
+  return `/api/custom-fields/${id}`;
+};
+
+export const deleteCustomField = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteCustomFieldUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCustomFieldMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCustomField>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCustomField>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteCustomField"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCustomField>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteCustomField(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCustomFieldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteCustomField>>
+>;
+
+export type DeleteCustomFieldMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a custom field definition (admin only)
+ */
+export const useDeleteCustomField = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCustomField>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCustomField>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteCustomFieldMutationOptions(options));
+};
+
+/**
+ * @summary Get custom field values for a specific entity
+ */
+export const getGetCustomFieldValuesUrl = (
+  params: GetCustomFieldValuesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/custom-field-values?${stringifiedParams}`
+    : `/api/custom-field-values`;
+};
+
+export const getCustomFieldValues = async (
+  params: GetCustomFieldValuesParams,
+  options?: RequestInit,
+): Promise<CustomFieldValue[]> => {
+  return customFetch<CustomFieldValue[]>(getGetCustomFieldValuesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCustomFieldValuesQueryKey = (
+  params?: GetCustomFieldValuesParams,
+) => {
+  return [`/api/custom-field-values`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCustomFieldValuesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCustomFieldValues>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCustomFieldValuesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCustomFieldValues>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCustomFieldValuesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCustomFieldValues>>
+  > = ({ signal }) =>
+    getCustomFieldValues(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCustomFieldValues>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCustomFieldValuesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCustomFieldValues>>
+>;
+export type GetCustomFieldValuesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get custom field values for a specific entity
+ */
+
+export function useGetCustomFieldValues<
+  TData = Awaited<ReturnType<typeof getCustomFieldValues>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCustomFieldValuesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCustomFieldValues>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCustomFieldValuesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upsert custom field values for an entity
+ */
+export const getUpsertCustomFieldValuesUrl = () => {
+  return `/api/custom-field-values`;
+};
+
+export const upsertCustomFieldValues = async (
+  upsertCustomFieldValuesBody: UpsertCustomFieldValuesBody,
+  options?: RequestInit,
+): Promise<CustomFieldValue[]> => {
+  return customFetch<CustomFieldValue[]>(getUpsertCustomFieldValuesUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertCustomFieldValuesBody),
+  });
+};
+
+export const getUpsertCustomFieldValuesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertCustomFieldValues>>,
+    TError,
+    { data: BodyType<UpsertCustomFieldValuesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertCustomFieldValues>>,
+  TError,
+  { data: BodyType<UpsertCustomFieldValuesBody> },
+  TContext
+> => {
+  const mutationKey = ["upsertCustomFieldValues"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertCustomFieldValues>>,
+    { data: BodyType<UpsertCustomFieldValuesBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertCustomFieldValues(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertCustomFieldValuesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertCustomFieldValues>>
+>;
+export type UpsertCustomFieldValuesMutationBody =
+  BodyType<UpsertCustomFieldValuesBody>;
+export type UpsertCustomFieldValuesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upsert custom field values for an entity
+ */
+export const useUpsertCustomFieldValues = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertCustomFieldValues>>,
+    TError,
+    { data: BodyType<UpsertCustomFieldValuesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertCustomFieldValues>>,
+  TError,
+  { data: BodyType<UpsertCustomFieldValuesBody> },
+  TContext
+> => {
+  return useMutation(getUpsertCustomFieldValuesMutationOptions(options));
 };

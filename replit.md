@@ -24,7 +24,7 @@ pnpm workspace monorepo using TypeScript throughout.
 
 ### Packages
 
-- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes/employees/scheduling
+- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes/employees/scheduling/custom-fields
 - `artifacts/web` — React + Vite SPA, Clerk-authenticated, module-aware sidebar navigation
 - `lib/db` — Drizzle ORM schema + migrations (7 schema files)
 - `lib/api-spec` — OpenAPI 3.0 spec + Orval codegen config
@@ -96,6 +96,12 @@ pnpm workspace monorepo using TypeScript throughout.
 - `POST /api/time-entries/:id/approve` — Approve a completed time entry (admin/manager; sets approvedBy to Clerk userId)
 - `POST /api/time-entries/:id/reject` — Reject a time entry with required reason (admin/manager)
 - `POST /api/time-entries/:id/resubmit` — Resubmit a rejected entry with corrected clockIn/clockOut (any auth'd business member; resets status to pending; 400 if not rejected)
+- `GET /api/custom-fields?entityType=item|order|employee` — List custom field definitions (tenant-scoped, optional entityType filter)
+- `POST /api/custom-fields` — Create a custom field definition (admin only; entityType, name, type required)
+- `PATCH /api/custom-fields/:id` — Update a custom field definition (admin only; name, type, options, sortOrder, required)
+- `DELETE /api/custom-fields/:id` — Delete a custom field definition (admin only)
+- `GET /api/custom-field-values?entityType=...&entityId=...` — Get field values for a specific entity
+- `PUT /api/custom-field-values` — Upsert field values for an entity ({ entityType, entityId, values: [{fieldId, value}] })
 
 ### Tenant Isolation
 
@@ -119,7 +125,7 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/sign-up/*?` — Clerk SignUp component
 - `/onboarding` — Business setup wizard (shown when no business exists)
 - `/dashboard` — Metrics dashboard with recent orders and low stock count
-- `/settings` — Business profile + module configuration + Team Members management
+- `/settings` — Business profile + module configuration + Team Members management + Custom Fields manager (create/edit/delete field definitions per entity type: item/order/employee)
 - `/locations` — Location CRUD management
 - `/items` — Items management: products/ingredients/menu items CRUD with search/filter; CategoryManagerSheet for category CRUD; VariantsSheet with Variants tab + Recipe tab (for menu items) including recipe editor
 - `/inventory` — Inventory management: location-scoped stock table with type/category/low-stock filters; record transactions; set low stock thresholds; transaction log tab

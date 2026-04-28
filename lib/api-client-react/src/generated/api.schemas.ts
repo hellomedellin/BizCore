@@ -754,6 +754,119 @@ export interface ResubmitTimeEntryBody {
   notes?: string | null;
 }
 
+export type CustomFieldDefEntityType =
+  (typeof CustomFieldDefEntityType)[keyof typeof CustomFieldDefEntityType];
+
+export const CustomFieldDefEntityType = {
+  item: "item",
+  order: "order",
+  employee: "employee",
+} as const;
+
+export type CustomFieldDefType =
+  (typeof CustomFieldDefType)[keyof typeof CustomFieldDefType];
+
+export const CustomFieldDefType = {
+  text: "text",
+  number: "number",
+  date: "date",
+  select: "select",
+  checkbox: "checkbox",
+} as const;
+
+export interface CustomFieldDef {
+  id: number;
+  businessId: number;
+  entityType: CustomFieldDefEntityType;
+  name: string;
+  type: CustomFieldDefType;
+  /** @nullable */
+  options?: string[] | null;
+  sortOrder: number;
+  required: boolean;
+  createdAt: string;
+}
+
+export type CreateCustomFieldBodyEntityType =
+  (typeof CreateCustomFieldBodyEntityType)[keyof typeof CreateCustomFieldBodyEntityType];
+
+export const CreateCustomFieldBodyEntityType = {
+  item: "item",
+  order: "order",
+  employee: "employee",
+} as const;
+
+export type CreateCustomFieldBodyType =
+  (typeof CreateCustomFieldBodyType)[keyof typeof CreateCustomFieldBodyType];
+
+export const CreateCustomFieldBodyType = {
+  text: "text",
+  number: "number",
+  date: "date",
+  select: "select",
+  checkbox: "checkbox",
+} as const;
+
+export interface CreateCustomFieldBody {
+  entityType: CreateCustomFieldBodyEntityType;
+  name: string;
+  type: CreateCustomFieldBodyType;
+  /** @nullable */
+  options?: string[] | null;
+  sortOrder?: number;
+  required?: boolean;
+}
+
+export type UpdateCustomFieldBodyType =
+  (typeof UpdateCustomFieldBodyType)[keyof typeof UpdateCustomFieldBodyType];
+
+export const UpdateCustomFieldBodyType = {
+  text: "text",
+  number: "number",
+  date: "date",
+  select: "select",
+  checkbox: "checkbox",
+} as const;
+
+export interface UpdateCustomFieldBody {
+  name?: string;
+  type?: UpdateCustomFieldBodyType;
+  /** @nullable */
+  options?: string[] | null;
+  sortOrder?: number;
+  required?: boolean;
+}
+
+export interface CustomFieldValue {
+  id: number;
+  fieldId: number;
+  entityId: number;
+  /** @nullable */
+  value?: string | null;
+  updatedAt: string;
+}
+
+export type UpsertCustomFieldValuesBodyEntityType =
+  (typeof UpsertCustomFieldValuesBodyEntityType)[keyof typeof UpsertCustomFieldValuesBodyEntityType];
+
+export const UpsertCustomFieldValuesBodyEntityType = {
+  item: "item",
+  order: "order",
+  employee: "employee",
+} as const;
+
+export type UpsertCustomFieldValuesBodyValuesItem = {
+  fieldId: number;
+  /** @nullable */
+  value?: string | null;
+};
+
+export interface UpsertCustomFieldValuesBody {
+  entityType: UpsertCustomFieldValuesBodyEntityType;
+  entityId: number;
+  values: UpsertCustomFieldValuesBodyValuesItem[];
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable
@@ -872,3 +985,30 @@ export type GetEmployeesParams = {
   roleId?: number;
   active?: boolean;
 };
+
+export type GetCustomFieldsParams = {
+  entityType?: GetCustomFieldsEntityType;
+};
+
+export type GetCustomFieldsEntityType =
+  (typeof GetCustomFieldsEntityType)[keyof typeof GetCustomFieldsEntityType];
+
+export const GetCustomFieldsEntityType = {
+  item: "item",
+  order: "order",
+  employee: "employee",
+} as const;
+
+export type GetCustomFieldValuesParams = {
+  entityType: GetCustomFieldValuesEntityType;
+  entityId: number;
+};
+
+export type GetCustomFieldValuesEntityType =
+  (typeof GetCustomFieldValuesEntityType)[keyof typeof GetCustomFieldValuesEntityType];
+
+export const GetCustomFieldValuesEntityType = {
+  item: "item",
+  order: "order",
+  employee: "employee",
+} as const;
