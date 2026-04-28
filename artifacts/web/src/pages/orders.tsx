@@ -873,8 +873,6 @@ export default function OrdersPage() {
     ...filters,
     locationId: locationFilter !== "all" ? parseInt(locationFilter) : undefined,
     search: search.trim() || undefined,
-    limit: 50,
-    offset: 0,
   };
 
   const { data: ordersPage, isLoading } = useGetOrders(queryParams, {
@@ -915,10 +913,10 @@ export default function OrdersPage() {
             placeholder="Search by customer..."
             className="pl-9"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setFilters((f) => ({ ...f, offset: 0 })); }}
           />
         </div>
-        <Select value={locationFilter} onValueChange={setLocationFilter}>
+        <Select value={locationFilter} onValueChange={(v) => { setLocationFilter(v); setFilters((f) => ({ ...f, offset: 0 })); }}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="All Locations" />
           </SelectTrigger>
@@ -931,7 +929,7 @@ export default function OrdersPage() {
         </Select>
         <Select
           value={filters.status ?? "all"}
-          onValueChange={(v) => setFilters((f) => ({ ...f, status: v === "all" ? undefined : (v as GetOrdersStatus) }))}
+          onValueChange={(v) => setFilters((f) => ({ ...f, offset: 0, status: v === "all" ? undefined : (v as GetOrdersStatus) }))}
         >
           <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="All Statuses" />
@@ -945,7 +943,7 @@ export default function OrdersPage() {
         </Select>
         <Select
           value={filters.orderType ?? "all"}
-          onValueChange={(v) => setFilters((f) => ({ ...f, orderType: v === "all" ? undefined : (v as GetOrdersParams["orderType"]) }))}
+          onValueChange={(v) => setFilters((f) => ({ ...f, offset: 0, orderType: v === "all" ? undefined : (v as GetOrdersParams["orderType"]) }))}
         >
           <SelectTrigger className="w-full sm:w-[140px]">
             <SelectValue placeholder="All Types" />
@@ -957,6 +955,37 @@ export default function OrdersPage() {
             <SelectItem value="delivery">Delivery</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-3 items-center">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="shrink-0">Date range:</span>
+          <Input
+            type="date"
+            className="w-[150px]"
+            value={filters.dateFrom ?? ""}
+            onChange={(e) => setFilters((f) => ({ ...f, offset: 0, dateFrom: e.target.value || undefined }))}
+          />
+          <span className="shrink-0">to</span>
+          <Input
+            type="date"
+            className="w-[150px]"
+            value={filters.dateTo ?? ""}
+            onChange={(e) => setFilters((f) => ({ ...f, offset: 0, dateTo: e.target.value || undefined }))}
+          />
+        </div>
+        {(filters.dateFrom || filters.dateTo || filters.status || filters.orderType || locationFilter !== "all" || search) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setFilters({ status: undefined, orderType: undefined, dateFrom: undefined, dateTo: undefined, limit: 50, offset: 0 });
+              setLocationFilter("all");
+              setSearch("");
+            }}
+          >
+            <X className="h-4 w-4 mr-1" /> Clear filters
+          </Button>
+        )}
       </div>
 
       <Card>

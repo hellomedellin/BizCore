@@ -324,6 +324,11 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
       return;
     }
 
+    if (body.data.discount !== undefined && authedReq.userRole === "cashier") {
+      res.status(403).json({ error: "Cashier cannot modify discounts" });
+      return;
+    }
+
     if (body.data.customerId) {
       const [customer] = await db
         .select({ id: customersTable.id })
