@@ -10,7 +10,7 @@ export type EntityType = "item" | "order" | "employee";
 
 export function useEntityCustomFields(entityType: EntityType, entityId?: number) {
   const [values, setValues] = useState<Record<number, string | null>>({});
-  const [initialized, setInitialized] = useState(false);
+  const [initializedForId, setInitializedForId] = useState<number | null>(null);
 
   const { data: fields } = useGetCustomFields({ entityType });
 
@@ -27,23 +27,23 @@ export function useEntityCustomFields(entityType: EntityType, entityId?: number)
   const upsertValues = useUpsertCustomFieldValues();
 
   useEffect(() => {
-    if (entityId && existingValues && !initialized) {
+    if (entityId && existingValues && initializedForId !== entityId) {
       const map: Record<number, string | null> = {};
       for (const v of existingValues) {
         map[v.fieldId] = v.value ?? null;
       }
       setValues(map);
-      setInitialized(true);
+      setInitializedForId(entityId);
     }
     if (!entityId) {
       setValues({});
-      setInitialized(false);
+      setInitializedForId(null);
     }
   }, [entityId, existingValues]);
 
   const reset = () => {
     setValues({});
-    setInitialized(false);
+    setInitializedForId(null);
   };
 
   const setFieldValue = (fieldId: number, value: string | null) => {
