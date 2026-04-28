@@ -63,19 +63,26 @@ router.get(
 
     const businessId = authedReq.businessId;
     const period = req.query.period as string | undefined;
-    const locationIdParam = req.query.locationId ? parseInt(req.query.locationId as string) : undefined;
+    const rawLocationId = req.query.locationId ? parseInt(req.query.locationId as string) : undefined;
 
     const { start: periodStart, end: periodEnd } = getPeriodDates(period);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Get all location IDs for this business
+    // Get all location IDs for this business (used to validate incoming locationId)
     const businessLocations = await db
       .select({ id: locationsTable.id })
       .from(locationsTable)
       .where(eq(locationsTable.businessId, businessId));
     const locationIds = businessLocations.map((l) => l.id);
+
+    // Validate that the requested locationId belongs to this business
+    if (rawLocationId !== undefined && !locationIds.includes(rawLocationId)) {
+      res.status(403).json({ error: "Location not found or not owned by this business" });
+      return;
+    }
+    const locationIdParam = rawLocationId;
 
     // Build location filter for orders
     const orderLocationCondition = locationIdParam
