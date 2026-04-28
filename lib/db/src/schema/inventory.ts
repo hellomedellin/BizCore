@@ -31,6 +31,7 @@ export const inventoryTransactionsTable = pgTable("inventory_transactions", {
   referenceType: text("reference_type"),
   referenceId: integer("reference_id"),
   batchId: text("batch_id"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
   notes: text("notes"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

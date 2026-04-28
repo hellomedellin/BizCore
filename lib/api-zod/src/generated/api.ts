@@ -554,6 +554,7 @@ export const GetInventoryTransactionsResponseItem = zod.object({
   referenceType: zod.string().nullish(),
   referenceId: zod.number().nullish(),
   batchId: zod.string().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
   createdBy: zod.string().nullish(),
   createdAt: zod.coerce.date(),
@@ -581,6 +582,7 @@ export const CreateInventoryTransactionBody = zod.object({
   quantityChange: zod.string(),
   notes: zod.string().nullish(),
   batchId: zod.string().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -1302,6 +1304,31 @@ export const ResubmitTimeEntryResponse = zod.object({
   durationMinutes: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Calculate gross pay per employee for a date range using approved time entries
+ */
+export const GetPayrollQueryParams = zod.object({
+  startDate: zod.date(),
+  endDate: zod.date(),
+  employeeId: zod.coerce.number().optional(),
+});
+
+export const GetPayrollResponse = zod.object({
+  startDate: zod.string(),
+  endDate: zod.string(),
+  entries: zod.array(
+    zod.object({
+      employeeId: zod.number(),
+      employeeName: zod.string(),
+      hourlyRate: zod.string(),
+      totalMinutes: zod.number(),
+      totalHours: zod.number(),
+      grossPay: zod.number(),
+      entryCount: zod.number(),
+    }),
+  ),
 });
 
 /**

@@ -10,6 +10,8 @@ import {
   Calendar, 
   Clock, 
   BarChart3,
+  DollarSign,
+  Monitor,
   Loader2
 } from "lucide-react";
 import { useGetModules } from "@workspace/api-client-react";
@@ -33,6 +35,7 @@ export function Sidebar() {
 
   const navItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard, alwaysVisible: true },
+    { name: "POS", path: "/pos", icon: Monitor, module: "orders" },
     { name: "Orders", path: "/orders", icon: ShoppingBag, module: "orders" },
     { name: "Customers", path: "/customers", icon: Users, module: "orders" },
     { name: "Items", path: "/items", icon: Tag, module: "inventory" },
@@ -40,6 +43,7 @@ export function Sidebar() {
     { name: "Employees", path: "/employees", icon: Users, module: "employees" },
     { name: "Schedule", path: "/schedule", icon: Calendar, module: "scheduling" },
     { name: "Time Tracking", path: "/time-tracking", icon: Clock, module: "time_tracking" },
+    { name: "Payroll", path: "/payroll", icon: DollarSign, module: "time_tracking" },
     { name: "Reports", path: "/reports", icon: BarChart3, module: "reports" },
     { name: "Locations", path: "/locations", icon: MapPin, alwaysVisible: true },
     { name: "Settings", path: "/settings", icon: Settings, alwaysVisible: true },

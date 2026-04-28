@@ -54,6 +54,7 @@ import type {
   GetItemsParams,
   GetLowStockItemsParams,
   GetOrdersParams,
+  GetPayrollParams,
   GetShiftsParams,
   GetTimeEntriesParams,
   HealthStatus,
@@ -65,6 +66,7 @@ import type {
   Location,
   OrderDetail,
   OrdersPage,
+  PayrollReport,
   RecipeDetail,
   RejectTimeEntryBody,
   ResubmitTimeEntryBody,
@@ -5017,6 +5019,100 @@ export const useResubmitTimeEntry = <
 > => {
   return useMutation(getResubmitTimeEntryMutationOptions(options));
 };
+
+/**
+ * @summary Calculate gross pay per employee for a date range using approved time entries
+ */
+export const getGetPayrollUrl = (params: GetPayrollParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/payroll?${stringifiedParams}`
+    : `/api/payroll`;
+};
+
+export const getPayroll = async (
+  params: GetPayrollParams,
+  options?: RequestInit,
+): Promise<PayrollReport> => {
+  return customFetch<PayrollReport>(getGetPayrollUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPayrollQueryKey = (params?: GetPayrollParams) => {
+  return [`/api/payroll`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPayrollQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPayroll>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetPayrollParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPayroll>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPayrollQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayroll>>> = ({
+    signal,
+  }) => getPayroll(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPayroll>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPayrollQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPayroll>>
+>;
+export type GetPayrollQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Calculate gross pay per employee for a date range using approved time entries
+ */
+
+export function useGetPayroll<
+  TData = Awaited<ReturnType<typeof getPayroll>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetPayrollParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPayroll>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPayrollQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all business-defined employee roles

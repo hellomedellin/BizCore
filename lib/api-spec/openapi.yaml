@@ -38,6 +38,8 @@ tags:
     description: Shift scheduling
   - name: timeTracking
     description: Time entry tracking and approval
+  - name: payroll
+    description: Payroll calculation from approved time entries
   - name: customFields
     description: Custom field definitions and values
 paths:
@@ -1337,6 +1339,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /payroll:
+    get:
+      operationId: getPayroll
+      tags: [payroll]
+      summary: Calculate gross pay per employee for a date range using approved time entries
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payroll report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollReport"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /employee-roles:
     get:
       operationId: getEmployeeRoles
@@ -2203,6 +2241,9 @@ components:
           type: ["integer", "null"]
         batchId:
           type: ["string", "null"]
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
         notes:
           type: ["string", "null"]
         createdBy:
@@ -2238,6 +2279,9 @@ components:
           type: ["string", "null"]
         batchId:
           type: ["string", "null"]
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
       required:
         - variantId
         - locationId
@@ -2966,6 +3010,48 @@ components:
         - entityType
         - entityId
         - values
+
+    PayrollEntry:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        employeeName:
+          type: string
+        hourlyRate:
+          type: string
+        totalMinutes:
+          type: integer
+        totalHours:
+          type: number
+        grossPay:
+          type: number
+        entryCount:
+          type: integer
+      required:
+        - employeeId
+        - employeeName
+        - hourlyRate
+        - totalMinutes
+        - totalHours
+        - grossPay
+        - entryCount
+
+    PayrollReport:
+      type: object
+      properties:
+        startDate:
+          type: string
+        endDate:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayrollEntry"
+      required:
+        - startDate
+        - endDate
+        - entries
 
 
 

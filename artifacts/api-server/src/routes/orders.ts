@@ -1,7 +1,18 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { ordersTable, orderLinesTable, customersTable, locationsTable, orderStatusHistoryTable } from "@workspace/db/schema";
-import { eq, and, ilike, gte, lte, sql, SQL, desc, count } from "drizzle-orm";
+import {
+  ordersTable,
+  orderLinesTable,
+  customersTable,
+  locationsTable,
+  orderStatusHistoryTable,
+  recipesTable,
+  recipeItemsTable,
+  itemVariantsTable,
+  inventoryTable,
+  inventoryTransactionsTable,
+} from "@workspace/db/schema";
+import { eq, and, ilike, gte, lte, sql, SQL, desc, count, inArray } from "drizzle-orm";
 import {
   requireAuth,
   loadBusiness,
@@ -390,6 +401,99 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
         toStatus: body.data.status,
         changedBy: authedReq.userId ?? null,
       });
+    }
+
+    // Recipe enforcement: deduct ingredients from inventory when order is completed
+    if (body.data.status === "completed" && existing.status !== "completed") {
+      const [order] = await db
+        .select({ locationId: ordersTable.locationId })
+        .from(ordersTable)
+        .where(eq(ordersTable.id, id));
+
+      if (order) {
+        // Get all order lines that have a variantId
+        const lines = await db
+          .select({ variantId: orderLinesTable.variantId, quantity: orderLinesTable.quantity })
+          .from(orderLinesTable)
+          .where(and(eq(orderLinesTable.orderId, id)));
+
+        const linesWithVariant = lines.filter((l) => l.variantId !== null);
+        if (linesWithVariant.length > 0) {
+          // Get item IDs for all variants
+          const variantIds = linesWithVariant.map((l) => l.variantId!);
+          const variants = await db
+            .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
+            .from(itemVariantsTable)
+            .where(inArray(itemVariantsTable.id, variantIds));
+
+          const variantToItemMap = new Map(variants.map((v) => [v.id, v.itemId]));
+          const itemIds = [...new Set(variants.map((v) => v.itemId))];
+
+          if (itemIds.length > 0) {
+            // Get recipes for these items
+            const recipes = await db
+              .select({ id: recipesTable.id, menuItemId: recipesTable.menuItemId })
+              .from(recipesTable)
+              .where(inArray(recipesTable.menuItemId, itemIds));
+
+            if (recipes.length > 0) {
+              const recipeIds = recipes.map((r) => r.id);
+              const itemToRecipeMap = new Map(recipes.map((r) => [r.menuItemId, r.id]));
+
+              // Get all recipe items (ingredients)
+              const recipeItems = await db
+                .select({
+                  recipeId: recipeItemsTable.recipeId,
+                  ingredientVariantId: recipeItemsTable.ingredientVariantId,
+                  quantity: recipeItemsTable.quantity,
+                })
+                .from(recipeItemsTable)
+                .where(inArray(recipeItemsTable.recipeId, recipeIds));
+
+              // Build deduction map: ingredientVariantId → total quantity to deduct
+              const deductions = new Map<number, number>();
+              for (const line of linesWithVariant) {
+                const itemId = variantToItemMap.get(line.variantId!);
+                if (!itemId) continue;
+                const recipeId = itemToRecipeMap.get(itemId);
+                if (!recipeId) continue;
+                const ingredients = recipeItems.filter((ri) => ri.recipeId === recipeId);
+                for (const ingredient of ingredients) {
+                  const qty = parseFloat(line.quantity) * parseFloat(ingredient.quantity);
+                  deductions.set(ingredient.ingredientVariantId, (deductions.get(ingredient.ingredientVariantId) ?? 0) + qty);
+                }
+              }
+
+              // Insert inventory transactions and update inventory levels
+              for (const [ingredientVariantId, totalQty] of deductions) {
+                await db.insert(inventoryTransactionsTable).values({
+                  variantId: ingredientVariantId,
+                  locationId: order.locationId,
+                  type: "sale",
+                  quantityChange: (-totalQty).toFixed(3),
+                  referenceType: "order",
+                  referenceId: id,
+                  notes: `Recipe deduction for order #${id}`,
+                  createdBy: authedReq.userId ?? null,
+                });
+                // Update inventory table if entry exists
+                await db
+                  .update(inventoryTable)
+                  .set({
+                    quantity: sql`${inventoryTable.quantity} - ${totalQty.toFixed(3)}`,
+                    updatedAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      eq(inventoryTable.variantId, ingredientVariantId),
+                      eq(inventoryTable.locationId, order.locationId)
+                    )
+                  );
+              }
+            }
+          }
+        }
+      }
     }
 
     if (body.data.discount !== undefined) {

@@ -254,6 +254,7 @@ const createTransactionSchema = z.object({
   quantityChange: z.string(),
   notes: z.string().nullable().optional(),
   batchId: z.string().nullable().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 
 router.post("/inventory/transactions", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
@@ -298,7 +299,11 @@ router.post("/inventory/transactions", requireAuth, loadBusiness, requireRole("a
 
     const [txn] = await db
       .insert(inventoryTransactionsTable)
-      .values({ ...body.data, createdBy: userId ?? null })
+      .values({
+        ...body.data,
+        expiresAt: body.data.expiresAt ? new Date(body.data.expiresAt) : null,
+        createdBy: userId ?? null,
+      })
       .returning();
 
     await db

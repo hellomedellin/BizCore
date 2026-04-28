@@ -24,8 +24,8 @@ pnpm workspace monorepo using TypeScript throughout.
 
 ### Packages
 
-- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes/employees/scheduling/custom-fields
-- `artifacts/web` — React + Vite SPA, Clerk-authenticated, module-aware sidebar navigation
+- `artifacts/api-server` — Express REST API, Clerk auth middleware, routes for businesses/locations/modules/dashboard/items/categories/inventory/recipes/employees/scheduling/custom-fields/payroll/orders
+- `artifacts/web` — React + Vite SPA, Clerk-authenticated, module-aware sidebar navigation (includes POS full-screen route at /pos)
 - `lib/db` — Drizzle ORM schema + migrations (7 schema files)
 - `lib/api-spec` — OpenAPI 3.0 spec + Orval codegen config
 - `lib/api-client-react` — Generated React Query hooks (from Orval)
@@ -102,6 +102,7 @@ pnpm workspace monorepo using TypeScript throughout.
 - `DELETE /api/custom-fields/:id` — Delete a custom field definition (admin only)
 - `GET /api/custom-field-values?entityType=...&entityId=...` — Get field values for a specific entity
 - `PUT /api/custom-field-values` — Upsert field values for an entity ({ entityType, entityId, values: [{fieldId, value}] })
+- `GET /api/payroll` — Payroll report: per-employee breakdown of hours × rate = grossPay for approved time entries in date range (startDate, endDate, employeeId optional params)
 
 ### Tenant Isolation
 
@@ -134,7 +135,15 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/employees` — Employee management: searchable/filterable table by role, location, active status; create/edit dialogs; RolesManagerSheet for CRUD on job roles; EmployeeDetailSheet; active/deactivate toggle
 - `/schedule` — Shift calendar with Week/Day view toggle: week view is a 7-column day grid (click a day header to jump to day view); day view groups shifts by employee with time/location/notes; shared add/edit/delete dialogs; location filter; conflict badges; nav arrows + today button
 - `/time-tracking` — Time entry management: 3 tabs (All/Pending/Open), clock-in dialog, clock-out action, approve/reject with required reason, resubmit dialog for rejected entries (shows rejection reason, editable clockIn/clockOut/notes); stat cards for open/pending/total counts
+- `/payroll` — Payroll calculation report: date range + employee filter, table of hours×rate=grossPay per employee sourced from approved time entries, CSV export
+- `/pos` — Full-screen Point of Sale interface (no sidebar): category tabs, item tile grid, cart panel with quantities + line notes + order type selector, checkout creates order + order lines
 - `/reports` — Stub page (Coming soon)
+
+### Advanced Features (Task #7)
+- **Recipe enforcement**: Completing an order (status→completed) auto-deducts recipe ingredients from inventory via `inventory_transactions` (type='sale', referenceType='order')
+- **Batch/expiry tracking**: Inventory transactions can record `batchId` and `expiresAt`; transaction history table shows Batch and Expiry columns with color-coded badges (red=expired, amber=≤30 days, outline=ok)
+- **Payroll**: `GET /api/payroll` computes gross pay from approved time entries; frontend supports date-range filter + CSV export
+- **POS**: `/pos` is a standalone full-screen route outside the `AppLayout` wrapper (no sidebar)
 
 ## Key Commands
 

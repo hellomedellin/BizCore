@@ -88,6 +88,8 @@ function RecordTransactionDialog({
     type: "purchase",
     quantity: "",
     notes: "",
+    batchId: "",
+    expiresAt: "",
   });
 
   const { toast } = useToast();
@@ -133,13 +135,15 @@ function RecordTransactionDialog({
           type: form.type as "purchase" | "adjustment" | "waste" | "return" | "transfer" | "sale",
           quantityChange,
           notes: form.notes || null,
+          batchId: form.batchId.trim() || null,
+          expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
         },
       });
       toast({ title: "Transaction recorded" });
       onSuccess();
       onOpenChange(false);
       setSelectedItemId("none");
-      setForm({ variantId: "none", type: "purchase", quantity: "", notes: "" });
+      setForm({ variantId: "none", type: "purchase", quantity: "", notes: "", batchId: "", expiresAt: "" });
     } catch {
       toast({ title: "Error recording transaction", variant: "destructive" });
     }
@@ -228,6 +232,24 @@ function RecordTransactionDialog({
             <p className="text-xs text-muted-foreground">
               Enter the amount to add or remove. Waste and sales will automatically be deducted.
             </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Batch / Lot ID</Label>
+              <Input
+                value={form.batchId}
+                onChange={(e) => setForm((f) => ({ ...f, batchId: e.target.value }))}
+                placeholder="e.g. LOT-2024-001"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Expiry Date</Label>
+              <Input
+                type="date"
+                value={form.expiresAt}
+                onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
+              />
+            </div>
           </div>
           <div className="grid gap-1.5">
             <Label>Notes</Label>
@@ -486,12 +508,19 @@ function TransactionLog({ locationId }: { locationId: number }) {
           <TableHead>Item</TableHead>
           <TableHead>Type</TableHead>
           <TableHead className="text-right">Change</TableHead>
+          <TableHead>Batch</TableHead>
+          <TableHead>Expiry</TableHead>
           <TableHead>Notes</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {txns.map((txn) => {
           const change = parseFloat(txn.quantityChange);
+          const expiresAt = txn.expiresAt ? new Date(txn.expiresAt) : null;
+          const now = new Date();
+          const daysUntilExpiry = expiresAt
+            ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+            : null;
           return (
             <TableRow key={txn.id}>
               <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -513,6 +542,33 @@ function TransactionLog({ locationId }: { locationId: number }) {
               >
                 {change >= 0 ? "+" : ""}
                 {change.toFixed(3)}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {txn.batchId || "—"}
+              </TableCell>
+              <TableCell>
+                {expiresAt ? (
+                  <Badge
+                    variant={
+                      daysUntilExpiry !== null && daysUntilExpiry < 0
+                        ? "destructive"
+                        : daysUntilExpiry !== null && daysUntilExpiry <= 30
+                        ? "secondary"
+                        : "outline"
+                    }
+                    className={
+                      daysUntilExpiry !== null && daysUntilExpiry <= 30 && daysUntilExpiry >= 0
+                        ? "bg-amber-100 text-amber-800 border-amber-300"
+                        : ""
+                    }
+                  >
+                    {daysUntilExpiry !== null && daysUntilExpiry < 0
+                      ? "Expired"
+                      : format(expiresAt, "MMM d, yyyy")}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground text-sm">—</span>
+                )}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                 {txn.notes || "—"}

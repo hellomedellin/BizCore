@@ -343,6 +343,8 @@ export interface InventoryTransaction {
   /** @nullable */
   batchId?: string | null;
   /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
   notes?: string | null;
   /** @nullable */
   createdBy?: string | null;
@@ -374,6 +376,8 @@ export interface CreateInventoryTransactionBody {
   notes?: string | null;
   /** @nullable */
   batchId?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
 }
 
 export interface UpdateInventoryEntryBody {
@@ -867,6 +871,22 @@ export interface UpsertCustomFieldValuesBody {
   values: UpsertCustomFieldValuesBodyValuesItem[];
 }
 
+export interface PayrollEntry {
+  employeeId: number;
+  employeeName: string;
+  hourlyRate: string;
+  totalMinutes: number;
+  totalHours: number;
+  grossPay: number;
+  entryCount: number;
+}
+
+export interface PayrollReport {
+  startDate: string;
+  endDate: string;
+  entries: PayrollEntry[];
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable
@@ -978,6 +998,12 @@ export const GetTimeEntriesStatus = {
   approved: "approved",
   rejected: "rejected",
 } as const;
+
+export type GetPayrollParams = {
+  startDate: string;
+  endDate: string;
+  employeeId?: number;
+};
 
 export type GetEmployeesParams = {
   search?: string;
