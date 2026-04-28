@@ -265,6 +265,13 @@ function AddLineDialog({
   const { toast } = useToast();
   const addLine = useAddOrderLine();
 
+  useEffect(() => {
+    if (!open) {
+      setSelectedItemId("none");
+      setForm({ variantId: "none", quantity: "1", price: "", notes: "", modifiers: "" });
+    }
+  }, [open]);
+
   const activeItemsParams = { active: true };
   const { data: items } = useGetItems(activeItemsParams, {
     query: { enabled: open, queryKey: ["items-for-order", activeItemsParams] },

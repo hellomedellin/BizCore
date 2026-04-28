@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetCustomers,
@@ -58,6 +58,10 @@ function CustomerFormDialog({
   saving: boolean;
 }) {
   const [form, setForm] = useState<CustomerFormData>(initial);
+
+  useEffect(() => {
+    if (open) setForm(initial);
+  }, [open]);
 
   const set = (key: keyof CustomerFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));

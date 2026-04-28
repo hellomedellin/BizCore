@@ -13,6 +13,8 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
+const numericString = z.string().regex(/^\d+(\.\d{1,4})?$/, "Must be a non-negative number");
+
 const CreateOrderBodySchema = z.object({
   locationId: z.number().int(),
   orderType: z.enum(["dine_in", "pickup", "delivery"]).default("dine_in"),
@@ -24,8 +26,8 @@ const CreateOrderBodySchema = z.object({
       z.object({
         variantId: z.number().int().nullable().optional(),
         name: z.string().min(1),
-        quantity: z.string(),
-        price: z.string(),
+        quantity: numericString,
+        price: numericString,
         notes: z.string().nullable().optional(),
         modifiers: z.record(z.unknown()).nullable().optional(),
       })
@@ -41,21 +43,21 @@ const UpdateOrderBodySchema = z.object({
   customerId: z.number().int().nullable().optional(),
   tableNumber: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-  discount: z.string().optional(),
+  discount: numericString.optional(),
 });
 
 const AddOrderLineBodySchema = z.object({
   variantId: z.number().int().nullable().optional(),
   name: z.string().min(1),
-  quantity: z.string(),
-  price: z.string(),
+  quantity: numericString,
+  price: numericString,
   notes: z.string().nullable().optional(),
   modifiers: z.record(z.unknown()).nullable().optional(),
 });
 
 const UpdateOrderLineBodySchema = z.object({
-  quantity: z.string().optional(),
-  price: z.string().optional(),
+  quantity: numericString.optional(),
+  price: numericString.optional(),
   notes: z.string().nullable().optional(),
   modifiers: z.record(z.unknown()).nullable().optional(),
 });
@@ -332,10 +334,27 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
       .where(and(eq(ordersTable.id, id), tenantWhere(ordersTable.businessId, businessId!)));
     if (!existing) { res.status(404).json({ error: "Order not found" }); return; }
 
-    const protectedStatuses = ["cancelled", "refunded"];
-    if (body.data.status && protectedStatuses.includes(body.data.status) && authedReq.userRole === "cashier") {
-      res.status(403).json({ error: "Cashier cannot cancel or refund orders" });
-      return;
+    if (body.data.status !== undefined) {
+      const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+        pending: ["preparing", "cancelled"],
+        preparing: ["ready", "cancelled"],
+        ready: ["completed", "cancelled"],
+        completed: ["refunded"],
+        cancelled: [],
+        refunded: [],
+      };
+      const allowed = ALLOWED_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(body.data.status)) {
+        res.status(400).json({
+          error: `Cannot transition from '${existing.status}' to '${body.data.status}'`,
+        });
+        return;
+      }
+      const managerOnlyStatuses = ["cancelled", "refunded"];
+      if (managerOnlyStatuses.includes(body.data.status) && authedReq.userRole === "cashier") {
+        res.status(403).json({ error: "Cashier cannot cancel or refund orders" });
+        return;
+      }
     }
 
     if (body.data.discount !== undefined && authedReq.userRole === "cashier") {
