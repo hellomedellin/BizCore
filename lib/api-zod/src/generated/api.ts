@@ -164,6 +164,7 @@ export const UpdateModulesResponse = zod.array(UpdateModulesResponseItem);
  */
 export const GetDashboardSummaryQueryParams = zod.object({
   locationId: zod.coerce.number().nullish(),
+  period: zod.enum(["today", "week", "month"]).optional(),
 });
 
 export const GetDashboardSummaryResponse = zod.object({

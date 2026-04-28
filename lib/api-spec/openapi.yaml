@@ -223,6 +223,11 @@ paths:
           in: query
           schema:
             type: ["integer", "null"]
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, week, month]
       responses:
         "200":
           description: Dashboard summary

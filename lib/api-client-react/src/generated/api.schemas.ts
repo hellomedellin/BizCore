@@ -598,7 +598,17 @@ export type GetDashboardSummaryParams = {
    * @nullable
    */
   locationId?: number | null;
+  period?: GetDashboardSummaryPeriod;
 };
+
+export type GetDashboardSummaryPeriod =
+  (typeof GetDashboardSummaryPeriod)[keyof typeof GetDashboardSummaryPeriod];
+
+export const GetDashboardSummaryPeriod = {
+  today: "today",
+  week: "week",
+  month: "month",
+} as const;
 
 export type GetItemsParams = {
   search?: string;

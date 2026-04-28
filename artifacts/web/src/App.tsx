@@ -18,6 +18,7 @@ import Locations from "./pages/locations";
 import ItemsPage from "./pages/items";
 import InventoryPage from "./pages/inventory";
 import OrdersPage from "./pages/orders";
+import CustomersPage from "./pages/customers";
 import StubPage from "./pages/stub";
 import { AppLayout } from "./components/layout/app-layout";
 import NotFound from "./pages/not-found";
@@ -187,6 +188,7 @@ function PortalRouter() {
       <LayoutRoute path="/settings" component={Settings} />
       <LayoutRoute path="/locations" component={Locations} />
       <LayoutRoute path="/orders" component={OrdersPage} />
+      <LayoutRoute path="/customers" component={CustomersPage} />
       <LayoutRoute path="/items" component={ItemsPage} />
       <LayoutRoute path="/inventory" component={InventoryPage} />
       <LayoutRoute path="/employees" component={() => <StubPage title="Employees" description="Manage your staff, roles, and payroll information." />} />

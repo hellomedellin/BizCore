@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   ordersTable,
@@ -12,6 +12,32 @@ import { requireAuth, loadBusiness, type AuthedRequest } from "../middlewares/au
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+function getPeriodDates(period: string | undefined): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  switch (period) {
+    case "week": {
+      const start = new Date(now);
+      const day = start.getDay();
+      start.setDate(start.getDate() - day);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+    case "month": {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      return { start, end };
+    }
+    case "today":
+    default: {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+  }
+}
 
 router.get(
   "/dashboard/summary",
@@ -36,37 +62,50 @@ router.get(
     }
 
     const businessId = authedReq.businessId;
+    const period = req.query.period as string | undefined;
+    const locationIdParam = req.query.locationId ? parseInt(req.query.locationId as string) : undefined;
+
+    const { start: periodStart, end: periodEnd } = getPeriodDates(period);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Get all location IDs for this business (used to scope inventory/time entries)
+    // Get all location IDs for this business
     const businessLocations = await db
       .select({ id: locationsTable.id })
       .from(locationsTable)
       .where(eq(locationsTable.businessId, businessId));
     const locationIds = businessLocations.map((l) => l.id);
 
-    // Get all employee IDs for this business (used to scope time entries)
-    const businessEmployees = await db
-      .select({ id: employeesTable.id })
-      .from(employeesTable)
-      .where(eq(employeesTable.businessId, businessId));
-    const employeeIds = businessEmployees.map((e) => e.id);
+    // Build location filter for orders
+    const orderLocationCondition = locationIdParam
+      ? eq(ordersTable.locationId, locationIdParam)
+      : undefined;
 
-    const [todayOrders] = await db
+    // Period-scoped order metrics (replaces "today" slot when a period is selected)
+    const periodConditions = [
+      eq(ordersTable.businessId, businessId),
+      gte(ordersTable.createdAt, periodStart),
+      lte(ordersTable.createdAt, periodEnd),
+      sql`${ordersTable.status} != 'cancelled'`,
+      ...(orderLocationCondition ? [orderLocationCondition] : []),
+    ];
+
+    const [periodOrders] = await db
       .select({
         count: sql<number>`count(*)::int`,
         total: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
       })
       .from(ordersTable)
-      .where(
-        and(
-          eq(ordersTable.businessId, businessId),
-          gte(ordersTable.createdAt, today),
-          sql`${ordersTable.status} != 'cancelled'`,
-        ),
-      );
+      .where(and(...periodConditions));
+
+    // Always compute month totals for comparison (business-wide unless filtered by location)
+    const monthConditions = [
+      eq(ordersTable.businessId, businessId),
+      gte(ordersTable.createdAt, firstOfMonth),
+      sql`${ordersTable.status} != 'cancelled'`,
+      ...(orderLocationCondition ? [orderLocationCondition] : []),
+    ];
 
     const [monthOrders] = await db
       .select({
@@ -74,13 +113,14 @@ router.get(
         total: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
       })
       .from(ordersTable)
-      .where(
-        and(
-          eq(ordersTable.businessId, businessId),
-          gte(ordersTable.createdAt, firstOfMonth),
-          sql`${ordersTable.status} != 'cancelled'`,
-        ),
-      );
+      .where(and(...monthConditions));
+
+    // Get all employee IDs for this business
+    const businessEmployees = await db
+      .select({ id: employeesTable.id })
+      .from(employeesTable)
+      .where(eq(employeesTable.businessId, businessId));
+    const employeeIds = businessEmployees.map((e) => e.id);
 
     const [activeEmployeesResult] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -92,15 +132,16 @@ router.get(
         ),
       );
 
-    // Scope low stock items by locations belonging to this business
+    // Low stock: scope by location if filter applied
+    const stockLocationIds = locationIdParam ? [locationIdParam] : locationIds;
     let lowStockCount = 0;
-    if (locationIds.length > 0) {
+    if (stockLocationIds.length > 0) {
       const [lowStockResult] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(inventoryTable)
         .where(
           and(
-            inArray(inventoryTable.locationId, locationIds),
+            inArray(inventoryTable.locationId, stockLocationIds),
             sql`${inventoryTable.quantity}::numeric <= ${inventoryTable.lowStockThreshold}::numeric`,
             sql`${inventoryTable.lowStockThreshold} IS NOT NULL`,
           ),
@@ -108,7 +149,7 @@ router.get(
       lowStockCount = lowStockResult?.count ?? 0;
     }
 
-    // Scope pending time entries by employees belonging to this business
+    // Pending time entries
     let pendingTimeCount = 0;
     if (employeeIds.length > 0) {
       const [pendingTimeResult] = await db
@@ -124,6 +165,12 @@ router.get(
       pendingTimeCount = pendingTimeResult?.count ?? 0;
     }
 
+    // Recent orders (scoped to location if filter applied)
+    const recentOrdersConditions = [
+      eq(ordersTable.businessId, businessId),
+      ...(orderLocationCondition ? [orderLocationCondition] : []),
+    ];
+
     const recentOrders = await db
       .select({
         id: ordersTable.id,
@@ -133,14 +180,14 @@ router.get(
         createdAt: ordersTable.createdAt,
       })
       .from(ordersTable)
-      .where(eq(ordersTable.businessId, businessId))
+      .where(and(...recentOrdersConditions))
       .orderBy(sql`${ordersTable.createdAt} DESC`)
       .limit(5);
 
     res.json(
       GetDashboardSummaryResponse.parse({
-        totalOrdersToday: todayOrders?.count ?? 0,
-        totalSalesToday: Number(todayOrders?.total ?? 0),
+        totalOrdersToday: periodOrders?.count ?? 0,
+        totalSalesToday: Number(periodOrders?.total ?? 0),
         totalOrdersMonth: monthOrders?.count ?? 0,
         totalSalesMonth: Number(monthOrders?.total ?? 0),
         activeEmployees: activeEmployeesResult?.count ?? 0,
