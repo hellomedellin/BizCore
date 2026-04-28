@@ -367,6 +367,13 @@ router.post("/time-entries/clock-in", requireAuth, loadBusiness, async (req, res
       .where(and(eq(employeesTable.id, employeeId), tenantWhere(employeesTable.businessId, businessId!)));
     if (!emp) { res.status(400).json({ error: "Employee not found" }); return; }
 
+    if (locationId != null) {
+      const [loc] = await db.select({ id: locationsTable.id })
+        .from(locationsTable)
+        .where(and(eq(locationsTable.id, locationId), tenantWhere(locationsTable.businessId, businessId!)));
+      if (!loc) { res.status(400).json({ error: "Location not found" }); return; }
+    }
+
     const [open] = await db.select({ id: timeEntriesTable.id })
       .from(timeEntriesTable)
       .where(and(
@@ -487,6 +494,57 @@ router.post("/time-entries/:id/reject", requireAuth, loadBusiness, requireRole("
       status: "rejected",
       rejectionReason: body.data.reason,
       approvedBy: null,
+    }).where(eq(timeEntriesTable.id, id));
+
+    const row = await enrichTimeEntry(id);
+    res.json(row);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+const resubmitSchema = z.object({
+  clockIn: z.string().datetime(),
+  clockOut: z.string().datetime(),
+  notes: z.string().nullable().optional(),
+});
+
+router.post("/time-entries/:id/resubmit", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+  const authedReq = req as AuthedRequest;
+  try {
+    const businessId = authedReq.businessId;
+    assertBusinessId(businessId);
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+    const body = resubmitSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const [existing] = await db
+      .select({ id: timeEntriesTable.id, status: timeEntriesTable.status })
+      .from(timeEntriesTable)
+      .innerJoin(employeesTable, eq(timeEntriesTable.employeeId, employeesTable.id))
+      .where(and(eq(timeEntriesTable.id, id), tenantWhere(employeesTable.businessId, businessId!)));
+    if (!existing) { res.status(404).json({ error: "Time entry not found" }); return; }
+    if (existing.status !== "rejected") {
+      res.status(400).json({ error: "Only rejected entries can be resubmitted" });
+      return;
+    }
+
+    const clockIn = new Date(body.data.clockIn);
+    const clockOut = new Date(body.data.clockOut);
+    if (clockIn >= clockOut) {
+      res.status(400).json({ error: "Clock-in must be before clock-out" });
+      return;
+    }
+
+    await db.update(timeEntriesTable).set({
+      clockIn,
+      clockOut,
+      status: "pending",
+      rejectionReason: null,
+      approvedBy: null,
+      ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
     }).where(eq(timeEntriesTable.id, id));
 
     const row = await enrichTimeEntry(id);

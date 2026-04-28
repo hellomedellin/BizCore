@@ -1275,6 +1275,36 @@ export const RejectTimeEntryResponse = zod.object({
 });
 
 /**
+ * @summary Resubmit a rejected time entry with corrected times
+ */
+export const ResubmitTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ResubmitTimeEntryBody = zod.object({
+  clockIn: zod.coerce.date(),
+  clockOut: zod.coerce.date(),
+  notes: zod.string().nullish(),
+});
+
+export const ResubmitTimeEntryResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.number(),
+  employeeName: zod.string(),
+  locationId: zod.number().nullish(),
+  locationName: zod.string().nullish(),
+  clockIn: zod.coerce.date(),
+  clockOut: zod.coerce.date().nullish(),
+  status: zod.enum(["pending", "approved", "rejected"]),
+  approvedBy: zod.string().nullish(),
+  rejectionReason: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  durationMinutes: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
  * @summary List all business-defined employee roles
  */
 export const GetEmployeeRolesResponseItem = zod.object({

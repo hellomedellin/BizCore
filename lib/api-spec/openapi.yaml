@@ -1298,6 +1298,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /time-entries/{id}/resubmit:
+    post:
+      operationId: resubmitTimeEntry
+      tags: [timeTracking]
+      summary: Resubmit a rejected time entry with corrected times
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResubmitTimeEntryBody"
+      responses:
+        "200":
+          description: Time entry resubmitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "400":
+          description: Invalid request or entry not in rejected state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /employee-roles:
     get:
       operationId: getEmployeeRoles
@@ -2656,6 +2693,22 @@ components:
           type: string
       required:
         - reason
+
+    ResubmitTimeEntryBody:
+      type: object
+      properties:
+        clockIn:
+          type: string
+          format: date-time
+        clockOut:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+      required:
+        - clockIn
+        - clockOut
 
 
 

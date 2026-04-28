@@ -748,6 +748,12 @@ export interface RejectTimeEntryBody {
   reason: string;
 }
 
+export interface ResubmitTimeEntryBody {
+  clockIn: string;
+  clockOut: string;
+  notes?: string | null;
+}
+
 export type GetDashboardSummaryParams = {
   /**
    * @nullable

@@ -8,6 +8,7 @@ import {
   useClockOut,
   useApproveTimeEntry,
   useRejectTimeEntry,
+  useResubmitTimeEntry,
   getGetTimeEntriesQueryKey,
 } from "@workspace/api-client-react";
 import type { TimeEntry } from "@workspace/api-client-react";
@@ -52,6 +53,7 @@ import {
   Users,
   MapPin,
   AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 
 function formatDateTime(dt: string | Date | null | undefined): string {
@@ -235,16 +237,127 @@ function RejectDialog({
   );
 }
 
+function toLocalDatetimeValue(dt: string | Date | null | undefined): string {
+  if (!dt) return "";
+  const d = new Date(dt);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function ResubmitDialog({
+  open,
+  onOpenChange,
+  entry,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  entry?: TimeEntry;
+  onSuccess: () => void;
+}) {
+  const [clockIn, setClockIn] = useState("");
+  const [clockOut, setClockOut] = useState("");
+  const [notes, setNotes] = useState("");
+  const resubmit = useResubmitTimeEntry();
+  const { toast } = useToast();
+
+  const resetForm = (e?: TimeEntry) => {
+    setClockIn(toLocalDatetimeValue(e?.clockIn));
+    setClockOut(toLocalDatetimeValue(e?.clockOut));
+    setNotes(e?.notes ?? "");
+  };
+
+  if (open && entry && !clockIn) {
+    resetForm(entry);
+  }
+
+  const handleSubmit = async () => {
+    if (!clockIn || !clockOut) {
+      toast({ title: "Both clock-in and clock-out times are required", variant: "destructive" });
+      return;
+    }
+    if (!entry) return;
+    try {
+      await resubmit.mutateAsync({
+        id: entry.id,
+        data: {
+          clockIn: new Date(clockIn).toISOString(),
+          clockOut: new Date(clockOut).toISOString(),
+          notes: notes || null,
+        },
+      });
+      toast({ title: "Entry resubmitted for approval" });
+      onSuccess();
+      onOpenChange(false);
+      setClockIn(""); setClockOut(""); setNotes("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("before clock-out")) {
+        toast({ title: "Clock-in must be before clock-out", variant: "destructive" });
+      } else {
+        toast({ title: "Error resubmitting entry", variant: "destructive" });
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setClockIn(""); setClockOut(""); setNotes(""); } onOpenChange(v); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RotateCcw className="h-4 w-4" /> Resubmit Time Entry
+          </DialogTitle>
+        </DialogHeader>
+        {entry?.rejectionReason && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+            <strong>Rejection reason:</strong> {entry.rejectionReason}
+          </div>
+        )}
+        <div className="grid gap-3 py-1">
+          <div className="grid gap-1.5">
+            <Label>Clock In *</Label>
+            <Input
+              type="datetime-local"
+              value={clockIn}
+              onChange={(e) => setClockIn(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Clock Out *</Label>
+            <Input
+              type="datetime-local"
+              value={clockOut}
+              onChange={(e) => setClockOut(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Notes</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={resubmit.isPending}>
+            Resubmit
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TimeEntryRow({
   entry,
   onClockOut,
   onApprove,
   onReject,
+  onResubmit,
 }: {
   entry: TimeEntry;
   onClockOut: (entry: TimeEntry) => void;
   onApprove: (entry: TimeEntry) => void;
   onReject: (entry: TimeEntry) => void;
+  onResubmit: (entry: TimeEntry) => void;
 }) {
   const isOpen = !entry.clockOut;
   const isPending = entry.status === "pending" && !!entry.clockOut;
@@ -299,6 +412,11 @@ function TimeEntryRow({
               </Button>
             </>
           )}
+          {entry.status === "rejected" && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => onResubmit(entry)}>
+              <RotateCcw className="h-3 w-3" /> Resubmit
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -311,6 +429,7 @@ function EntriesTable({
   onClockOut,
   onApprove,
   onReject,
+  onResubmit,
   emptyMessage,
 }: {
   entries: TimeEntry[] | undefined;
@@ -318,6 +437,7 @@ function EntriesTable({
   onClockOut: (e: TimeEntry) => void;
   onApprove: (e: TimeEntry) => void;
   onReject: (e: TimeEntry) => void;
+  onResubmit: (e: TimeEntry) => void;
   emptyMessage: string;
 }) {
   if (isLoading) {
@@ -356,6 +476,7 @@ function EntriesTable({
             onClockOut={onClockOut}
             onApprove={onApprove}
             onReject={onReject}
+            onResubmit={onResubmit}
           />
         ))}
       </TableBody>
@@ -373,6 +494,7 @@ export default function TimeTrackingPage() {
 
   const [clockInDialog, setClockInDialog] = useState(false);
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean; entry?: TimeEntry }>({ open: false });
+  const [resubmitDialog, setResubmitDialog] = useState<{ open: boolean; entry?: TimeEntry }>({ open: false });
 
   const { data: employees } = useGetEmployees({ active: true });
   const { data: locations } = useGetLocations();
@@ -518,6 +640,7 @@ export default function TimeTrackingPage() {
                 onClockOut={handleClockOut}
                 onApprove={handleApprove}
                 onReject={(e) => setRejectDialog({ open: true, entry: e })}
+                onResubmit={(e) => setResubmitDialog({ open: true, entry: e })}
                 emptyMessage="No time entries yet"
               />
             </TabsContent>
@@ -528,6 +651,7 @@ export default function TimeTrackingPage() {
                 onClockOut={handleClockOut}
                 onApprove={handleApprove}
                 onReject={(e) => setRejectDialog({ open: true, entry: e })}
+                onResubmit={(e) => setResubmitDialog({ open: true, entry: e })}
                 emptyMessage="No entries pending approval"
               />
             </TabsContent>
@@ -538,6 +662,7 @@ export default function TimeTrackingPage() {
                 onClockOut={handleClockOut}
                 onApprove={handleApprove}
                 onReject={(e) => setRejectDialog({ open: true, entry: e })}
+                onResubmit={(e) => setResubmitDialog({ open: true, entry: e })}
                 emptyMessage="No employees currently clocked in"
               />
             </TabsContent>
@@ -557,6 +682,13 @@ export default function TimeTrackingPage() {
         open={rejectDialog.open}
         onOpenChange={(v) => setRejectDialog((d) => ({ ...d, open: v }))}
         entry={rejectDialog.entry}
+        onSuccess={invalidate}
+      />
+
+      <ResubmitDialog
+        open={resubmitDialog.open}
+        onOpenChange={(v) => setResubmitDialog((d) => ({ ...d, open: v }))}
+        entry={resubmitDialog.entry}
         onSuccess={invalidate}
       />
     </div>

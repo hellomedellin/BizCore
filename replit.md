@@ -95,6 +95,7 @@ pnpm workspace monorepo using TypeScript throughout.
 - `POST /api/time-entries/:id/clock-out` — Clock out an open entry (sets clockOut timestamp)
 - `POST /api/time-entries/:id/approve` — Approve a completed time entry (admin/manager; sets approvedBy to Clerk userId)
 - `POST /api/time-entries/:id/reject` — Reject a time entry with required reason (admin/manager)
+- `POST /api/time-entries/:id/resubmit` — Resubmit a rejected entry with corrected clockIn/clockOut (resets status to pending; 400 if not rejected)
 
 ### Tenant Isolation
 
@@ -126,7 +127,7 @@ pnpm workspace monorepo using TypeScript throughout.
 - `/orders` — Order management: state machine (pending→confirmed→preparing→ready→completed/cancelled), status history, role-based permissions
 - `/employees` — Employee management: searchable/filterable table by role, location, active status; create/edit dialogs; RolesManagerSheet for CRUD on job roles; EmployeeDetailSheet; active/deactivate toggle
 - `/schedule` — Weekly shift calendar: week navigation, location filter, 7-column day grid, color-coded shift cards per employee, conflict detection badges, add/edit/delete shifts via dialog
-- `/time-tracking` — Time entry management: 3 tabs (All/Pending/Open), clock-in dialog, clock-out action, approve/reject with required reason; stat cards for open/pending/total counts
+- `/time-tracking` — Time entry management: 3 tabs (All/Pending/Open), clock-in dialog, clock-out action, approve/reject with required reason, resubmit dialog for rejected entries (shows rejection reason, editable clockIn/clockOut/notes); stat cards for open/pending/total counts
 - `/reports` — Stub page (Coming soon)
 
 ## Key Commands

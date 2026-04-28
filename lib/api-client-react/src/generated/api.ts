@@ -62,6 +62,7 @@ import type {
   OrdersPage,
   RecipeDetail,
   RejectTimeEntryBody,
+  ResubmitTimeEntryBody,
   Shift,
   TimeEntry,
   UpdateBusinessBody,
@@ -4921,6 +4922,93 @@ export const useRejectTimeEntry = <
   TContext
 > => {
   return useMutation(getRejectTimeEntryMutationOptions(options));
+};
+
+/**
+ * @summary Resubmit a rejected time entry with corrected times
+ */
+export const getResubmitTimeEntryUrl = (id: number) => {
+  return `/api/time-entries/${id}/resubmit`;
+};
+
+export const resubmitTimeEntry = async (
+  id: number,
+  resubmitTimeEntryBody: ResubmitTimeEntryBody,
+  options?: RequestInit,
+): Promise<TimeEntry> => {
+  return customFetch<TimeEntry>(getResubmitTimeEntryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resubmitTimeEntryBody),
+  });
+};
+
+export const getResubmitTimeEntryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resubmitTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<ResubmitTimeEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resubmitTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<ResubmitTimeEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["resubmitTimeEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resubmitTimeEntry>>,
+    { id: number; data: BodyType<ResubmitTimeEntryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return resubmitTimeEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResubmitTimeEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resubmitTimeEntry>>
+>;
+export type ResubmitTimeEntryMutationBody = BodyType<ResubmitTimeEntryBody>;
+export type ResubmitTimeEntryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Resubmit a rejected time entry with corrected times
+ */
+export const useResubmitTimeEntry = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resubmitTimeEntry>>,
+    TError,
+    { id: number; data: BodyType<ResubmitTimeEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resubmitTimeEntry>>,
+  TError,
+  { id: number; data: BodyType<ResubmitTimeEntryBody> },
+  TContext
+> => {
+  return useMutation(getResubmitTimeEntryMutationOptions(options));
 };
 
 /**
