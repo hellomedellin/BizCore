@@ -24,11 +24,17 @@ router.get("/custom-fields", requireAuth, loadBusiness, async (req, res): Promis
   try {
     const businessId = assertBusinessId(authedReq.businessId);
     const { entityType } = req.query;
+    const validEntityTypes = ["item", "order", "employee"];
+
+    if (entityType !== undefined && (typeof entityType !== "string" || !validEntityTypes.includes(entityType))) {
+      res.status(400).json({ error: "entityType must be one of: item, order, employee" });
+      return;
+    }
 
     const conditions: ReturnType<typeof eq>[] = [
       eq(customFieldsTable.businessId, businessId),
     ];
-    if (entityType && typeof entityType === "string") {
+    if (entityType) {
       conditions.push(eq(customFieldsTable.entityType, entityType));
     }
 
