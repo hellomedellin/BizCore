@@ -252,8 +252,10 @@ router.get("/custom-field-values", requireAuth, loadBusiness, async (req, res): 
   }
 });
 
-// PUT /custom-field-values (upsert) — any authenticated business member
-// Business-scoping via fieldId validation prevents cross-tenant writes
+// PUT /custom-field-values (upsert)
+// Role requirements are per entityType:
+//   item / employee => admin or manager
+//   order           => admin, manager, or cashier
 router.put("/custom-field-values", requireAuth, loadBusiness, async (req, res): Promise<void> => {
   const authedReq = req as AuthedRequest;
   try {
@@ -262,6 +264,17 @@ router.put("/custom-field-values", requireAuth, loadBusiness, async (req, res): 
 
     if (!entityType || !entityId || !Array.isArray(values)) {
       res.status(400).json({ error: "entityType, entityId, and values array are required" });
+      return;
+    }
+
+    // Enforce role based on which entity type is being modified
+    const role = authedReq.userRole;
+    const allowedRoles =
+      entityType === "order"
+        ? ["admin", "manager", "cashier"]
+        : ["admin", "manager"];
+    if (!role || !allowedRoles.includes(role)) {
+      res.status(403).json({ error: "Insufficient permissions to update custom field values" });
       return;
     }
 
