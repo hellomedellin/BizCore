@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetShifts,
@@ -118,24 +118,31 @@ function ShiftDialog({
   const updateShift = useUpdateShift();
   const isEditing = !!shift;
 
-  const defaultStart = prefillDay
-    ? formatDateTimeLocal(new Date(prefillDay.getFullYear(), prefillDay.getMonth(), prefillDay.getDate(), 9, 0))
-    : "";
-  const defaultEnd = prefillDay
-    ? formatDateTimeLocal(new Date(prefillDay.getFullYear(), prefillDay.getMonth(), prefillDay.getDate(), 17, 0))
-    : "";
+  const buildForm = (s: typeof shift, pd: typeof prefillDay): ShiftFormData => {
+    if (s) {
+      return {
+        employeeId: String(s.employeeId),
+        locationId: String(s.locationId),
+        startTime: formatDateTimeLocal(new Date(s.startTime)),
+        endTime: formatDateTimeLocal(new Date(s.endTime)),
+        notes: s.notes ?? "",
+      };
+    }
+    if (pd) {
+      return {
+        ...EMPTY_FORM,
+        startTime: formatDateTimeLocal(new Date(pd.getFullYear(), pd.getMonth(), pd.getDate(), 9, 0)),
+        endTime: formatDateTimeLocal(new Date(pd.getFullYear(), pd.getMonth(), pd.getDate(), 17, 0)),
+      };
+    }
+    return { ...EMPTY_FORM };
+  };
 
-  const [form, setForm] = useState<ShiftFormData>(
-    shift
-      ? {
-          employeeId: String(shift.employeeId),
-          locationId: String(shift.locationId),
-          startTime: formatDateTimeLocal(new Date(shift.startTime)),
-          endTime: formatDateTimeLocal(new Date(shift.endTime)),
-          notes: shift.notes ?? "",
-        }
-      : { ...EMPTY_FORM, startTime: defaultStart, endTime: defaultEnd }
-  );
+  const [form, setForm] = useState<ShiftFormData>(() => buildForm(shift, prefillDay));
+
+  useEffect(() => {
+    if (open) setForm(buildForm(shift, prefillDay));
+  }, [open, shift?.id, prefillDay?.toDateString()]);
 
   const set = (key: keyof ShiftFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
