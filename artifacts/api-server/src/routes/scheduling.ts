@@ -224,6 +224,19 @@ router.patch("/shifts/:id", requireAuth, loadBusiness, requireRole("admin", "man
       .where(and(eq(shiftsTable.id, id), tenantWhere(employeesTable.businessId, businessId!)));
     if (!existing) { res.status(404).json({ error: "Shift not found" }); return; }
 
+    if (body.data.employeeId !== undefined) {
+      const [emp] = await db.select({ id: employeesTable.id })
+        .from(employeesTable)
+        .where(and(eq(employeesTable.id, body.data.employeeId), tenantWhere(employeesTable.businessId, businessId!)));
+      if (!emp) { res.status(400).json({ error: "Employee not found" }); return; }
+    }
+    if (body.data.locationId !== undefined) {
+      const [loc] = await db.select({ id: locationsTable.id })
+        .from(locationsTable)
+        .where(and(eq(locationsTable.id, body.data.locationId), tenantWhere(locationsTable.businessId, businessId!)));
+      if (!loc) { res.status(400).json({ error: "Location not found" }); return; }
+    }
+
     const updates: Partial<{ employeeId: number; locationId: number; startTime: Date; endTime: Date; notes: string | null }> = {};
     if (body.data.employeeId !== undefined) updates.employeeId = body.data.employeeId;
     if (body.data.locationId !== undefined) updates.locationId = body.data.locationId;
