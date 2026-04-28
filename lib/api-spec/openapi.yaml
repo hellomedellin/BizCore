@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: BizCore Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: businesses
+    description: Business management
+  - name: locations
+    description: Location management
+  - name: modules
+    description: Business module management
+  - name: dashboard
+    description: Dashboard analytics
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,192 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /businesses/me:
+    get:
+      operationId: getMyBusiness
+      tags: [businesses]
+      summary: Get the current user's business
+      responses:
+        "200":
+          description: Business found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+        "404":
+          description: No business found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /businesses:
+    post:
+      operationId: createBusiness
+      tags: [businesses]
+      summary: Create a new business
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBusinessBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+
+  /businesses/{id}:
+    patch:
+      operationId: updateBusiness
+      tags: [businesses]
+      summary: Update a business
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Business"
+
+  /locations:
+    get:
+      operationId: getLocations
+      tags: [locations]
+      summary: Get all locations for the business
+      responses:
+        "200":
+          description: List of locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Location"
+    post:
+      operationId: createLocation
+      tags: [locations]
+      summary: Create a location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+
+  /locations/{id}:
+    patch:
+      operationId: updateLocation
+      tags: [locations]
+      summary: Update a location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+    delete:
+      operationId: deleteLocation
+      tags: [locations]
+      summary: Delete a location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /modules:
+    get:
+      operationId: getModules
+      tags: [modules]
+      summary: Get enabled modules for the business
+      responses:
+        "200":
+          description: List of modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BusinessModule"
+    put:
+      operationId: updateModules
+      tags: [modules]
+      summary: Update module configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateModulesBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BusinessModule"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +227,217 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Business:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        ownerUserId:
+          type: string
+        industry:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - ownerUserId
+        - createdAt
+        - updatedAt
+
+    CreateBusinessBody:
+      type: object
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+      required:
+        - name
+
+    UpdateBusinessBody:
+      type: object
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+
+    Location:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - businessId
+        - name
+        - type
+        - active
+        - createdAt
+
+    CreateLocationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+      required:
+        - name
+
+    UpdateLocationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        active:
+          type: boolean
+
+    BusinessModule:
+      type: object
+      properties:
+        id:
+          type: integer
+        businessId:
+          type: integer
+        module:
+          type: string
+        enabled:
+          type: boolean
+      required:
+        - id
+        - businessId
+        - module
+        - enabled
+
+    UpdateModulesBody:
+      type: object
+      properties:
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              module:
+                type: string
+              enabled:
+                type: boolean
+            required:
+              - module
+              - enabled
+      required:
+        - modules
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalOrdersToday:
+          type: integer
+        totalSalesToday:
+          type: number
+        totalOrdersMonth:
+          type: integer
+        totalSalesMonth:
+          type: number
+        activeEmployees:
+          type: integer
+        lowStockItems:
+          type: integer
+        pendingTimeEntries:
+          type: integer
+        recentOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecentOrder"
+      required:
+        - totalOrdersToday
+        - totalSalesToday
+        - totalOrdersMonth
+        - totalSalesMonth
+        - activeEmployees
+        - lowStockItems
+        - pendingTimeEntries
+        - recentOrders
+
+    RecentOrder:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        total:
+          type: string
+        orderType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - status
+        - total
+        - orderType
+        - createdAt
