@@ -390,159 +390,172 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
       updates.discount = body.data.discount;
     }
 
-    if (Object.keys(updates).length > 0) {
-      await db.update(ordersTable).set(updates).where(eq(ordersTable.id, id));
-    }
+    // Wrap status update + status history + recipe deductions in a single transaction
+    await db.transaction(async (tx) => {
+      if (Object.keys(updates).length > 0) {
+        await tx.update(ordersTable).set(updates).where(eq(ordersTable.id, id));
+      }
 
-    if (body.data.status !== undefined && body.data.status !== existing.status) {
-      await db.insert(orderStatusHistoryTable).values({
-        orderId: id,
-        fromStatus: existing.status,
-        toStatus: body.data.status,
-        changedBy: authedReq.userId ?? null,
-      });
-    }
+      if (body.data.status !== undefined && body.data.status !== existing.status) {
+        await tx.insert(orderStatusHistoryTable).values({
+          orderId: id,
+          fromStatus: existing.status,
+          toStatus: body.data.status,
+          changedBy: authedReq.userId ?? null,
+        });
+      }
 
-    // Recipe enforcement: deduct ingredients from inventory when order is completed
-    if (body.data.status === "completed" && existing.status !== "completed") {
-      const [order] = await db
-        .select({ locationId: ordersTable.locationId })
-        .from(ordersTable)
-        .where(eq(ordersTable.id, id));
+      // Recipe enforcement: deduct ingredients from inventory when order is completed
+      if (body.data.status === "completed" && existing.status !== "completed") {
+        // Idempotency guard: if deductions already exist for this order, skip
+        const existingDeductions = await tx
+          .select({ id: inventoryTransactionsTable.id })
+          .from(inventoryTransactionsTable)
+          .where(
+            and(
+              eq(inventoryTransactionsTable.referenceType, "order"),
+              eq(inventoryTransactionsTable.referenceId, id)
+            )
+          )
+          .limit(1);
 
-      if (order) {
-        // Get all order lines that have a variantId
-        const lines = await db
-          .select({ variantId: orderLinesTable.variantId, quantity: orderLinesTable.quantity })
-          .from(orderLinesTable)
-          .where(and(eq(orderLinesTable.orderId, id)));
+        if (existingDeductions.length === 0) {
+          const [order] = await tx
+            .select({ locationId: ordersTable.locationId })
+            .from(ordersTable)
+            .where(eq(ordersTable.id, id));
 
-        const linesWithVariant = lines.filter((l) => l.variantId !== null);
-        if (linesWithVariant.length > 0) {
-          // Get item IDs for all variants
-          const variantIds = linesWithVariant.map((l) => l.variantId!);
-          const variants = await db
-            .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
-            .from(itemVariantsTable)
-            .where(inArray(itemVariantsTable.id, variantIds));
+          if (order) {
+            const lines = await tx
+              .select({ variantId: orderLinesTable.variantId, quantity: orderLinesTable.quantity })
+              .from(orderLinesTable)
+              .where(eq(orderLinesTable.orderId, id));
 
-          const variantToItemMap = new Map(variants.map((v) => [v.id, v.itemId]));
-          const itemIds = [...new Set(variants.map((v) => v.itemId))];
+            const linesWithVariant = lines.filter((l) => l.variantId !== null);
+            if (linesWithVariant.length > 0) {
+              const variantIds = linesWithVariant.map((l) => l.variantId!);
+              const variants = await tx
+                .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
+                .from(itemVariantsTable)
+                .where(inArray(itemVariantsTable.id, variantIds));
 
-          if (itemIds.length > 0) {
-            // Get recipes for these items
-            const recipes = await db
-              .select({ id: recipesTable.id, menuItemId: recipesTable.menuItemId })
-              .from(recipesTable)
-              .where(inArray(recipesTable.menuItemId, itemIds));
+              const variantToItemMap = new Map(variants.map((v) => [v.id, v.itemId]));
+              const itemIds = [...new Set(variants.map((v) => v.itemId))];
 
-            if (recipes.length > 0) {
-              const recipeIds = recipes.map((r) => r.id);
-              const itemToRecipeMap = new Map(recipes.map((r) => [r.menuItemId, r.id]));
+              if (itemIds.length > 0) {
+                const recipes = await tx
+                  .select({ id: recipesTable.id, menuItemId: recipesTable.menuItemId })
+                  .from(recipesTable)
+                  .where(inArray(recipesTable.menuItemId, itemIds));
 
-              // Get all recipe items (ingredients)
-              const recipeItems = await db
-                .select({
-                  recipeId: recipeItemsTable.recipeId,
-                  ingredientVariantId: recipeItemsTable.ingredientVariantId,
-                  quantity: recipeItemsTable.quantity,
-                })
-                .from(recipeItemsTable)
-                .where(inArray(recipeItemsTable.recipeId, recipeIds));
+                if (recipes.length > 0) {
+                  const recipeIds = recipes.map((r) => r.id);
+                  const itemToRecipeMap = new Map(recipes.map((r) => [r.menuItemId, r.id]));
 
-              // Build deduction map: ingredientVariantId → total quantity to deduct
-              const deductions = new Map<number, number>();
-              for (const line of linesWithVariant) {
-                const itemId = variantToItemMap.get(line.variantId!);
-                if (!itemId) continue;
-                const recipeId = itemToRecipeMap.get(itemId);
-                if (!recipeId) continue;
-                const ingredients = recipeItems.filter((ri) => ri.recipeId === recipeId);
-                for (const ingredient of ingredients) {
-                  const qty = parseFloat(line.quantity) * parseFloat(ingredient.quantity);
-                  deductions.set(ingredient.ingredientVariantId, (deductions.get(ingredient.ingredientVariantId) ?? 0) + qty);
+                  const recipeItems = await tx
+                    .select({
+                      recipeId: recipeItemsTable.recipeId,
+                      ingredientVariantId: recipeItemsTable.ingredientVariantId,
+                      quantity: recipeItemsTable.quantity,
+                    })
+                    .from(recipeItemsTable)
+                    .where(inArray(recipeItemsTable.recipeId, recipeIds));
+
+                  // Build deduction map: ingredientVariantId → total quantity to deduct
+                  const deductions = new Map<number, number>();
+                  for (const line of linesWithVariant) {
+                    const itemId = variantToItemMap.get(line.variantId!);
+                    if (!itemId) continue;
+                    const recipeId = itemToRecipeMap.get(itemId);
+                    if (!recipeId) continue;
+                    const ingredients = recipeItems.filter((ri) => ri.recipeId === recipeId);
+                    for (const ingredient of ingredients) {
+                      const qty = parseFloat(line.quantity) * parseFloat(ingredient.quantity);
+                      deductions.set(ingredient.ingredientVariantId, (deductions.get(ingredient.ingredientVariantId) ?? 0) + qty);
+                    }
+                  }
+
+                  // FIFO batch-aware inventory deduction
+                  for (const [ingredientVariantId, totalQty] of deductions) {
+                    let remaining = totalQty;
+
+                    // FIFO: find batches ordered by expiresAt ASC with net positive remaining qty
+                    const batches = await tx
+                      .select({
+                        batchId: inventoryTransactionsTable.batchId,
+                        expiresAt: inventoryTransactionsTable.expiresAt,
+                        remaining: sum(inventoryTransactionsTable.quantityChange),
+                      })
+                      .from(inventoryTransactionsTable)
+                      .where(
+                        and(
+                          eq(inventoryTransactionsTable.variantId, ingredientVariantId),
+                          eq(inventoryTransactionsTable.locationId, order.locationId),
+                          isNotNull(inventoryTransactionsTable.batchId)
+                        )
+                      )
+                      .groupBy(
+                        inventoryTransactionsTable.batchId,
+                        inventoryTransactionsTable.expiresAt
+                      )
+                      .orderBy(asc(inventoryTransactionsTable.expiresAt));
+
+                    // Consume oldest batches first
+                    for (const batch of batches) {
+                      if (remaining <= 0) break;
+                      const batchRemaining = parseFloat(batch.remaining ?? "0");
+                      if (batchRemaining <= 0) continue;
+                      const consume = Math.min(remaining, batchRemaining);
+                      await tx.insert(inventoryTransactionsTable).values({
+                        variantId: ingredientVariantId,
+                        locationId: order.locationId,
+                        type: "sale",
+                        quantityChange: (-consume).toFixed(3),
+                        batchId: batch.batchId,
+                        expiresAt: batch.expiresAt,
+                        referenceType: "order",
+                        referenceId: id,
+                        notes: `Recipe deduction (batch ${batch.batchId}) for order #${id}`,
+                        createdBy: authedReq.userId ?? null,
+                      });
+                      remaining -= consume;
+                    }
+
+                    // Remaining qty not covered by named batches
+                    if (remaining > 0.0001) {
+                      await tx.insert(inventoryTransactionsTable).values({
+                        variantId: ingredientVariantId,
+                        locationId: order.locationId,
+                        type: "sale",
+                        quantityChange: (-remaining).toFixed(3),
+                        referenceType: "order",
+                        referenceId: id,
+                        notes: `Recipe deduction for order #${id}`,
+                        createdBy: authedReq.userId ?? null,
+                      });
+                    }
+
+                    // Update inventory aggregate quantity
+                    await tx
+                      .update(inventoryTable)
+                      .set({
+                        quantity: sql`${inventoryTable.quantity} - ${totalQty.toFixed(3)}`,
+                        updatedAt: new Date(),
+                      })
+                      .where(
+                        and(
+                          eq(inventoryTable.variantId, ingredientVariantId),
+                          eq(inventoryTable.locationId, order.locationId)
+                        )
+                      );
+                  }
                 }
-              }
-
-              // Insert inventory transactions with FIFO batch consumption
-              for (const [ingredientVariantId, totalQty] of deductions) {
-                let remaining = totalQty;
-
-                // FIFO: find batches with remaining positive qty, ordered by expiresAt ASC
-                const batches = await db
-                  .select({
-                    batchId: inventoryTransactionsTable.batchId,
-                    expiresAt: inventoryTransactionsTable.expiresAt,
-                    remaining: sum(inventoryTransactionsTable.quantityChange),
-                  })
-                  .from(inventoryTransactionsTable)
-                  .where(
-                    and(
-                      eq(inventoryTransactionsTable.variantId, ingredientVariantId),
-                      eq(inventoryTransactionsTable.locationId, order.locationId),
-                      isNotNull(inventoryTransactionsTable.batchId)
-                    )
-                  )
-                  .groupBy(
-                    inventoryTransactionsTable.batchId,
-                    inventoryTransactionsTable.expiresAt
-                  )
-                  .orderBy(asc(inventoryTransactionsTable.expiresAt));
-
-                // Consume batches FIFO (oldest expiresAt first)
-                for (const batch of batches) {
-                  if (remaining <= 0) break;
-                  const batchRemaining = parseFloat(batch.remaining ?? "0");
-                  if (batchRemaining <= 0) continue;
-                  const consume = Math.min(remaining, batchRemaining);
-                  await db.insert(inventoryTransactionsTable).values({
-                    variantId: ingredientVariantId,
-                    locationId: order.locationId,
-                    type: "sale",
-                    quantityChange: (-consume).toFixed(3),
-                    batchId: batch.batchId,
-                    expiresAt: batch.expiresAt,
-                    referenceType: "order",
-                    referenceId: id,
-                    notes: `Recipe deduction (batch ${batch.batchId}) for order #${id}`,
-                    createdBy: authedReq.userId ?? null,
-                  });
-                  remaining -= consume;
-                }
-
-                // Any remaining qty not covered by batches gets a generic deduction
-                if (remaining > 0.0001) {
-                  await db.insert(inventoryTransactionsTable).values({
-                    variantId: ingredientVariantId,
-                    locationId: order.locationId,
-                    type: "sale",
-                    quantityChange: (-remaining).toFixed(3),
-                    referenceType: "order",
-                    referenceId: id,
-                    notes: `Recipe deduction for order #${id}`,
-                    createdBy: authedReq.userId ?? null,
-                  });
-                }
-
-                // Update inventory table aggregate quantity
-                await db
-                  .update(inventoryTable)
-                  .set({
-                    quantity: sql`${inventoryTable.quantity} - ${totalQty.toFixed(3)}`,
-                    updatedAt: new Date(),
-                  })
-                  .where(
-                    and(
-                      eq(inventoryTable.variantId, ingredientVariantId),
-                      eq(inventoryTable.locationId, order.locationId)
-                    )
-                  );
               }
             }
           }
         }
       }
-    }
+    });
 
     if (body.data.discount !== undefined) {
       await recalcOrder(id);
