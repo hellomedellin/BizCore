@@ -535,19 +535,21 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
                       });
                     }
 
-                    // Update inventory aggregate quantity
+                    // Upsert inventory aggregate: create row if missing, decrement if exists
                     await tx
-                      .update(inventoryTable)
-                      .set({
-                        quantity: sql`${inventoryTable.quantity} - ${totalQty.toFixed(3)}`,
-                        updatedAt: new Date(),
+                      .insert(inventoryTable)
+                      .values({
+                        variantId: ingredientVariantId,
+                        locationId: order.locationId,
+                        quantity: (-totalQty).toFixed(3),
                       })
-                      .where(
-                        and(
-                          eq(inventoryTable.variantId, ingredientVariantId),
-                          eq(inventoryTable.locationId, order.locationId)
-                        )
-                      );
+                      .onConflictDoUpdate({
+                        target: [inventoryTable.variantId, inventoryTable.locationId],
+                        set: {
+                          quantity: sql`${inventoryTable.quantity} - CAST(${totalQty.toFixed(3)} AS NUMERIC)`,
+                          updatedAt: new Date(),
+                        },
+                      });
                   }
                 }
               }
