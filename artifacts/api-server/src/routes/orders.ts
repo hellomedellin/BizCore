@@ -12,7 +12,7 @@ import {
   inventoryTable,
   inventoryTransactionsTable,
 } from "@workspace/db/schema";
-import { eq, and, ilike, gte, lte, sql, SQL, desc, count, inArray } from "drizzle-orm";
+import { eq, and, ilike, gte, lte, sql, SQL, desc, count, inArray, sum, asc, isNotNull } from "drizzle-orm";
 import {
   requireAuth,
   loadBusiness,
@@ -464,19 +464,67 @@ router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "man
                 }
               }
 
-              // Insert inventory transactions and update inventory levels
+              // Insert inventory transactions with FIFO batch consumption
               for (const [ingredientVariantId, totalQty] of deductions) {
-                await db.insert(inventoryTransactionsTable).values({
-                  variantId: ingredientVariantId,
-                  locationId: order.locationId,
-                  type: "sale",
-                  quantityChange: (-totalQty).toFixed(3),
-                  referenceType: "order",
-                  referenceId: id,
-                  notes: `Recipe deduction for order #${id}`,
-                  createdBy: authedReq.userId ?? null,
-                });
-                // Update inventory table if entry exists
+                let remaining = totalQty;
+
+                // FIFO: find batches with remaining positive qty, ordered by expiresAt ASC
+                const batches = await db
+                  .select({
+                    batchId: inventoryTransactionsTable.batchId,
+                    expiresAt: inventoryTransactionsTable.expiresAt,
+                    remaining: sum(inventoryTransactionsTable.quantityChange),
+                  })
+                  .from(inventoryTransactionsTable)
+                  .where(
+                    and(
+                      eq(inventoryTransactionsTable.variantId, ingredientVariantId),
+                      eq(inventoryTransactionsTable.locationId, order.locationId),
+                      isNotNull(inventoryTransactionsTable.batchId)
+                    )
+                  )
+                  .groupBy(
+                    inventoryTransactionsTable.batchId,
+                    inventoryTransactionsTable.expiresAt
+                  )
+                  .orderBy(asc(inventoryTransactionsTable.expiresAt));
+
+                // Consume batches FIFO (oldest expiresAt first)
+                for (const batch of batches) {
+                  if (remaining <= 0) break;
+                  const batchRemaining = parseFloat(batch.remaining ?? "0");
+                  if (batchRemaining <= 0) continue;
+                  const consume = Math.min(remaining, batchRemaining);
+                  await db.insert(inventoryTransactionsTable).values({
+                    variantId: ingredientVariantId,
+                    locationId: order.locationId,
+                    type: "sale",
+                    quantityChange: (-consume).toFixed(3),
+                    batchId: batch.batchId,
+                    expiresAt: batch.expiresAt,
+                    referenceType: "order",
+                    referenceId: id,
+                    notes: `Recipe deduction (batch ${batch.batchId}) for order #${id}`,
+                    createdBy: authedReq.userId ?? null,
+                  });
+                  remaining -= consume;
+                }
+
+                // Any remaining qty not covered by batches gets a generic deduction
+                if (remaining > 0.0001) {
+                  await db.insert(inventoryTransactionsTable).values({
+                    variantId: ingredientVariantId,
+                    locationId: order.locationId,
+                    type: "sale",
+                    quantityChange: (-remaining).toFixed(3),
+                    referenceType: "order",
+                    referenceId: id,
+                    notes: `Recipe deduction for order #${id}`,
+                    createdBy: authedReq.userId ?? null,
+                  });
+                }
+
+                // Update inventory table aggregate quantity
                 await db
                   .update(inventoryTable)
                   .set({

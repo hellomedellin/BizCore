@@ -16,6 +16,8 @@ import {
 import type { Item, ItemVariant, Category } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -35,6 +37,7 @@ type CartLine = {
   name: string;
   price: string;
   quantity: number;
+  modifiers?: { specialRequest?: string };
 };
 
 function formatPrice(price: string | null | undefined) {
@@ -57,38 +60,83 @@ function ItemTile({ item, onSelect }: { item: Item; onSelect: (item: Item) => vo
   );
 }
 
-function VariantPicker({
+function AddToCartDialog({
   item,
   variants,
-  onPick,
+  onConfirm,
   onClose,
 }: {
   item: Item;
   variants: ItemVariant[];
-  onPick: (variant: ItemVariant) => void;
+  onConfirm: (variant: ItemVariant | null, specialRequest: string) => void;
   onClose: () => void;
 }) {
+  const [selectedVariant, setSelectedVariant] = useState<ItemVariant | null>(
+    variants.length === 1 ? variants[0] : null
+  );
+  const [specialRequest, setSpecialRequest] = useState("");
+
+  const hasVariantChoice = variants.length > 1;
+  const canAdd = !hasVariantChoice || selectedVariant !== null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-2xl shadow-xl p-6 w-[340px] max-w-full">
+      <div className="bg-background rounded-2xl shadow-xl p-6 w-[380px] max-w-full">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">{item.name}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">Select a variant:</p>
-        <div className="grid gap-2">
-          {variants.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => onPick(v)}
-              className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm hover:border-primary hover:bg-accent transition-colors"
-            >
-              <span className="font-medium">{v.name ?? item.name}</span>
-              <span className="text-muted-foreground">{formatPrice(v.price ?? item.basePrice)}</span>
-            </button>
-          ))}
+
+        {hasVariantChoice && (
+          <div className="mb-4">
+            <p className="text-sm font-medium mb-2">Select a variant:</p>
+            <div className="grid gap-2">
+              {variants.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setSelectedVariant(v)}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition-colors",
+                    selectedVariant?.id === v.id
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "hover:border-primary hover:bg-accent"
+                  )}
+                >
+                  <span className="font-medium">{v.name ?? item.name}</span>
+                  <span className="text-muted-foreground">{formatPrice(v.price ?? item.basePrice)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <Label htmlFor="special-request" className="text-sm font-medium mb-1 block">
+            Special instructions <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Textarea
+            id="special-request"
+            placeholder="e.g. No onions, extra sauce, allergies…"
+            value={specialRequest}
+            onChange={(e) => setSpecialRequest(e.target.value)}
+            rows={2}
+            className="resize-none text-sm"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={!canAdd}
+            onClick={() => onConfirm(selectedVariant, specialRequest)}
+          >
+            Add to Cart
+          </Button>
         </div>
       </div>
     </div>
@@ -102,7 +150,7 @@ export default function POSPage() {
   const [locationId, setLocationId] = useState<string>("none");
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [variantPickerItem, setVariantPickerItem] = useState<Item | null>(null);
+  const [pendingItem, setPendingItem] = useState<Item | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const { data: locations } = useGetLocations({
@@ -122,12 +170,12 @@ export default function POSPage() {
     query: { queryKey: getGetItemsQueryKey(itemsParams) },
   });
 
-  const { data: variantPickerVariants } = useGetItemVariants(
-    variantPickerItem?.id ?? 0,
+  const { data: pendingItemVariants } = useGetItemVariants(
+    pendingItem?.id ?? 0,
     {
       query: {
-        enabled: variantPickerItem !== null,
-        queryKey: getGetItemVariantsQueryKey(variantPickerItem?.id ?? 0),
+        enabled: pendingItem !== null,
+        queryKey: getGetItemVariantsQueryKey(pendingItem?.id ?? 0),
       },
     }
   );
@@ -139,31 +187,39 @@ export default function POSPage() {
     return cart.reduce((sum, l) => sum + parseFloat(l.price) * l.quantity, 0);
   }, [cart]);
 
-  function addToCart(name: string, price: string, itemId: number, variantId: number | null) {
-    const key = `${itemId}-${variantId ?? "none"}`;
+  function addToCart(
+    name: string,
+    price: string,
+    itemId: number,
+    variantId: number | null,
+    modifiers?: { specialRequest?: string }
+  ) {
+    const specialKey = modifiers?.specialRequest ? `-${modifiers.specialRequest.slice(0, 20)}` : "";
+    const key = `${itemId}-${variantId ?? "none"}${specialKey}`;
     setCart((prev) => {
       const existing = prev.find((l) => l.key === key);
       if (existing) {
         return prev.map((l) => l.key === key ? { ...l, quantity: l.quantity + 1 } : l);
       }
-      return [...prev, { key, itemId, variantId, name, price, quantity: 1 }];
+      return [...prev, { key, itemId, variantId, name, price, quantity: 1, modifiers }];
     });
   }
 
   function handleItemSelect(item: Item) {
-    if (!item.hasVariants) {
-      addToCart(item.name, item.basePrice ?? "0", item.id, null);
-      return;
-    }
-    setVariantPickerItem(item);
+    setPendingItem(item);
   }
 
-  function handleVariantPick(variant: ItemVariant) {
-    if (!variantPickerItem) return;
-    const price = variant.price ?? variantPickerItem.basePrice ?? "0";
-    const name = variant.name ? `${variantPickerItem.name} - ${variant.name}` : variantPickerItem.name;
-    addToCart(name, price, variantPickerItem.id, variant.id);
-    setVariantPickerItem(null);
+  function handleConfirmAdd(variant: ItemVariant | null, specialRequest: string) {
+    if (!pendingItem) return;
+    const modifiers = specialRequest.trim() ? { specialRequest: specialRequest.trim() } : undefined;
+    if (variant) {
+      const price = variant.price ?? pendingItem.basePrice ?? "0";
+      const name = variant.name ? `${pendingItem.name} - ${variant.name}` : pendingItem.name;
+      addToCart(name, price, pendingItem.id, variant.id, modifiers);
+    } else {
+      addToCart(pendingItem.name, pendingItem.basePrice ?? "0", pendingItem.id, null, modifiers);
+    }
+    setPendingItem(null);
   }
 
   function updateQty(key: string, delta: number) {
@@ -200,6 +256,9 @@ export default function POSPage() {
             quantity: String(line.quantity),
             price: line.price,
             variantId: line.variantId ?? undefined,
+            modifiers: line.modifiers && Object.keys(line.modifiers).length > 0
+              ? line.modifiers
+              : null,
           },
         });
       }
@@ -310,6 +369,11 @@ export default function POSPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatPrice(line.price)} each
                       </p>
+                      {line.modifiers?.specialRequest && (
+                        <p className="text-xs text-amber-700 italic mt-0.5 truncate">
+                          "{line.modifiers.specialRequest}"
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
@@ -368,13 +432,13 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Variant Picker Modal */}
-      {variantPickerItem && variantPickerVariants && (
-        <VariantPicker
-          item={variantPickerItem}
-          variants={variantPickerVariants}
-          onPick={handleVariantPick}
-          onClose={() => setVariantPickerItem(null)}
+      {/* Add to Cart Dialog */}
+      {pendingItem && (
+        <AddToCartDialog
+          item={pendingItem}
+          variants={pendingItemVariants ?? []}
+          onConfirm={handleConfirmAdd}
+          onClose={() => setPendingItem(null)}
         />
       )}
     </div>

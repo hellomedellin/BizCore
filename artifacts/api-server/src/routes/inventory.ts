@@ -166,6 +166,7 @@ router.get("/inventory/transactions", requireAuth, loadBusiness, async (req, res
         referenceType: inventoryTransactionsTable.referenceType,
         referenceId: inventoryTransactionsTable.referenceId,
         batchId: inventoryTransactionsTable.batchId,
+        expiresAt: inventoryTransactionsTable.expiresAt,
         notes: inventoryTransactionsTable.notes,
         createdBy: inventoryTransactionsTable.createdBy,
         createdAt: inventoryTransactionsTable.createdAt,
