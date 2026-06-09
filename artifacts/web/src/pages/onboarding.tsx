@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCreateBusiness, useCreateLocation, getGetMyBusinessQueryKey, getGetLocationsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useClerk } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -22,9 +23,15 @@ const formSchema = z.object({
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { signOut } = useClerk();
   const queryClient = useQueryClient();
   const createBusiness = useCreateBusiness();
   const createLocation = useCreateLocation();
+
+  const handleCancel = async () => {
+    await signOut();
+    setLocation("/");
+  };
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -143,6 +150,9 @@ export default function Onboarding() {
               <Button type="submit" className="w-full" disabled={isPending} data-testid="button-complete-setup">
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Complete Setup
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" disabled={isPending} onClick={handleCancel}>
+                Cancel
               </Button>
             </form>
           </Form>
