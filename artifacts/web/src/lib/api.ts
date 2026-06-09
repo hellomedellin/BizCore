@@ -1,7 +1,13 @@
 import axios from "axios";
 
+// VITE_API_URL is set at build time on Railway (e.g. https://api-xxx.railway.app)
+// Falls back to /api/v1 for local dev (Vite proxy forwards to localhost:3001)
+const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : "/api/v1";
+
 export const api = axios.create({
-  baseURL: "/api/v1",
+  baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 
