@@ -7,7 +7,6 @@ import {
   useUpdateOrder,
   useDeleteOrder,
   useAddOrderLine,
-  useUpdateOrderLine,
   useDeleteOrderLine,
   useGetCustomers,
   useCreateCustomer,
@@ -65,16 +64,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@clerk/react";
 import {
   Plus,
+  Minus,
   Search,
   ShoppingCart,
   Trash2,
   ChevronRight,
   UserPlus,
   X,
+  PackageOpen,
+  ArrowRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useEntityCustomFields } from "@/components/use-entity-custom-fields";
@@ -251,6 +254,304 @@ function CustomerPicker({
   );
 }
 
+type CartEntry = {
+  itemId: number;
+  itemName: string;
+  variantId: number | null;
+  variantName: string | null;
+  price: string;
+  quantity: number;
+  notes: string;
+};
+
+function ItemPickerStep({
+  orderId,
+  onDone,
+}: {
+  orderId: number;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const addLine = useAddOrderLine();
+  const [search, setSearch] = useState("");
+  const [cart, setCart] = useState<CartEntry[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string>("none");
+  const [quickQty, setQuickQty] = useState("1");
+  const [quickNotes, setQuickNotes] = useState("");
+
+  const { data: items } = useGetItems({ active: true }, {
+    query: { queryKey: ["items-for-order-picker"] },
+  });
+
+  const { data: variants } = useGetItemVariants(selectedItemId ?? 0, {
+    query: {
+      enabled: !!selectedItemId,
+      queryKey: getGetItemVariantsQueryKey(selectedItemId ?? 0),
+    },
+  });
+
+  const selectedVariant = variants?.find((v) => v.id.toString() === selectedVariantId);
+
+  useEffect(() => {
+    setSelectedVariantId("none");
+    setQuickQty("1");
+    setQuickNotes("");
+  }, [selectedItemId]);
+
+  const filteredItems = items?.filter((i) =>
+    i.name.toLowerCase().includes(search.toLowerCase())
+  ) ?? [];
+
+  const getPrice = () => {
+    if (selectedVariant?.price) return selectedVariant.price;
+    const item = items?.find((i) => i.id === selectedItemId);
+    return item?.basePrice ?? "0.00";
+  };
+
+  const handleAddToCart = () => {
+    if (!selectedItemId) return;
+    const item = items?.find((i) => i.id === selectedItemId);
+    if (!item) return;
+    const qty = parseFloat(quickQty);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: "Enter a valid quantity", variant: "destructive" });
+      return;
+    }
+    const price = getPrice();
+    const existingIdx = cart.findIndex(
+      (c) => c.itemId === selectedItemId && c.variantId === (selectedVariant?.id ?? null)
+    );
+    if (existingIdx >= 0) {
+      setCart((prev) =>
+        prev.map((c, i) =>
+          i === existingIdx ? { ...c, quantity: c.quantity + qty } : c
+        )
+      );
+    } else {
+      setCart((prev) => [
+        ...prev,
+        {
+          itemId: item.id,
+          itemName: item.name,
+          variantId: selectedVariant?.id ?? null,
+          variantName: selectedVariant?.name ?? null,
+          price,
+          quantity: qty,
+          notes: quickNotes,
+        },
+      ]);
+    }
+    setSelectedItemId(null);
+    setSelectedVariantId("none");
+    setQuickQty("1");
+    setQuickNotes("");
+  };
+
+  const handleRemoveFromCart = (idx: number) => {
+    setCart((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleDone = async () => {
+    if (cart.length === 0) {
+      onDone();
+      return;
+    }
+    setSaving(true);
+    try {
+      for (const entry of cart) {
+        const name = entry.variantName
+          ? `${entry.itemName} — ${entry.variantName}`
+          : entry.itemName;
+        await addLine.mutateAsync({
+          orderId,
+          data: {
+            variantId: entry.variantId,
+            name,
+            quantity: entry.quantity.toString(),
+            price: parseFloat(entry.price).toFixed(2),
+            notes: entry.notes || null,
+            modifiers: null,
+          },
+        });
+      }
+      toast({ title: `${cart.length} item${cart.length > 1 ? "s" : ""} added to order` });
+      onDone();
+    } catch {
+      toast({ title: "Failed to add some items", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cartTotal = cart.reduce((sum, c) => sum + parseFloat(c.price) * c.quantity, 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <ScrollArea className="h-52 border rounded-md">
+            {filteredItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No items found</p>
+            ) : (
+              <div className="divide-y">
+                {filteredItems.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted transition-colors flex items-center justify-between ${
+                      selectedItemId === item.id ? "bg-muted font-medium" : ""
+                    }`}
+                    onClick={() => setSelectedItemId(item.id)}
+                  >
+                    <span>{item.name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {item.basePrice ? formatMoney(item.basePrice) : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+
+          {selectedItemId && (
+            <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+              <p className="text-sm font-medium">
+                {items?.find((i) => i.id === selectedItemId)?.name}
+              </p>
+              {variants && variants.length > 0 && (
+                <Select value={selectedVariantId} onValueChange={setSelectedVariantId}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select variant..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Default</SelectItem>
+                    {variants.map((v) => (
+                      <SelectItem key={v.id} value={v.id.toString()}>
+                        {v.name}{v.price ? ` — ${formatMoney(v.price)}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="flex gap-2">
+                <div className="flex items-center border rounded-md">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => setQuickQty((q) => String(Math.max(1, parseFloat(q) - 1)))}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="h-8 w-12 border-0 text-center p-0"
+                    value={quickQty}
+                    onChange={(e) => setQuickQty(e.target.value)}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => setQuickQty((q) => String(parseFloat(q) + 1))}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                <Input
+                  className="h-8 text-sm flex-1"
+                  placeholder="Note (optional)"
+                  value={quickNotes}
+                  onChange={(e) => setQuickNotes(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">{formatMoney(getPrice())} each</span>
+                <Button size="sm" onClick={handleAddToCart}>
+                  <Plus className="h-3 w-3 mr-1" /> Add to Order
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-muted-foreground">Order Summary</p>
+          {cart.length === 0 ? (
+            <div className="border rounded-md flex flex-col items-center justify-center h-52 text-center p-4">
+              <ShoppingCart className="h-8 w-8 text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">Select items on the left to add them here</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-52 border rounded-md">
+              <div className="divide-y">
+                {cart.map((entry, idx) => (
+                  <div key={idx} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {entry.variantName
+                          ? `${entry.itemName} — ${entry.variantName}`
+                          : entry.itemName}
+                      </p>
+                      {entry.notes && (
+                        <p className="text-xs text-muted-foreground">{entry.notes}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {entry.quantity} × {formatMoney(entry.price)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-medium">
+                        {formatMoney(parseFloat(entry.price) * entry.quantity)}
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveFromCart(idx)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+          {cart.length > 0 && (
+            <div className="flex justify-between text-sm font-semibold border-t pt-2">
+              <span>Total</span>
+              <span>{formatMoney(cartTotal)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <DialogFooter className="gap-2">
+        <p className="text-xs text-muted-foreground flex-1 self-center">
+          {cart.length === 0 ? "You can also add items later from the order detail." : `${cart.length} item${cart.length !== 1 ? "s" : ""} ready to add`}
+        </p>
+        <Button onClick={handleDone} disabled={saving}>
+          {saving ? "Saving..." : cart.length === 0 ? "Done (skip)" : "Confirm & Save"}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
 function AddLineDialog({
   open,
   onOpenChange,
@@ -263,14 +564,14 @@ function AddLineDialog({
   onSuccess: (detail: OrderDetail) => void;
 }) {
   const [selectedItemId, setSelectedItemId] = useState("none");
-  const [form, setForm] = useState({ variantId: "none", quantity: "1", price: "", notes: "", modifiers: "" });
+  const [form, setForm] = useState({ variantId: "none", quantity: "1", price: "", notes: "" });
   const { toast } = useToast();
   const addLine = useAddOrderLine();
 
   useEffect(() => {
     if (!open) {
       setSelectedItemId("none");
-      setForm({ variantId: "none", quantity: "1", price: "", notes: "", modifiers: "" });
+      setForm({ variantId: "none", quantity: "1", price: "", notes: "" });
     }
   }, [open]);
 
@@ -313,16 +614,6 @@ function AddLineDialog({
       ? `${selectedItem?.name ?? "Item"} — ${selectedVariant.name}`
       : selectedItem?.name ?? "Item";
 
-    let parsedModifiers: Record<string, unknown> | null = null;
-    if (form.modifiers.trim()) {
-      try {
-        parsedModifiers = JSON.parse(form.modifiers.trim());
-      } catch {
-        toast({ title: "Modifiers contain invalid JSON", variant: "destructive" });
-        return;
-      }
-    }
-
     try {
       const result = await addLine.mutateAsync({
         orderId,
@@ -332,16 +623,16 @@ function AddLineDialog({
           quantity: qty.toString(),
           price: parseFloat(form.price).toFixed(2),
           notes: form.notes || null,
-          modifiers: parsedModifiers,
+          modifiers: null,
         },
       });
-      toast({ title: "Line item added" });
+      toast({ title: "Item added" });
       onSuccess(result);
       onOpenChange(false);
       setSelectedItemId("none");
-      setForm({ variantId: "none", quantity: "1", price: "", notes: "", modifiers: "" });
+      setForm({ variantId: "none", quantity: "1", price: "", notes: "" });
     } catch {
-      toast({ title: "Failed to add line item", variant: "destructive" });
+      toast({ title: "Failed to add item", variant: "destructive" });
     }
   };
 
@@ -349,7 +640,7 @@ function AddLineDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Line Item</DialogTitle>
+          <DialogTitle>Add Item</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-1.5">
@@ -363,7 +654,7 @@ function AddLineDialog({
                 {items?.map((item) => (
                   <SelectItem key={item.id} value={item.id.toString()}>
                     {item.name}
-                    <span className="ml-1 text-xs text-muted-foreground capitalize">({item.type?.replace("_", " ")})</span>
+                    {item.basePrice && <span className="ml-1 text-xs text-muted-foreground">{formatMoney(item.basePrice)}</span>}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -380,7 +671,7 @@ function AddLineDialog({
                   <SelectItem value="none">Default</SelectItem>
                   {variants.map((v) => (
                     <SelectItem key={v.id} value={v.id.toString()}>
-                      {v.name}{v.price ? ` — $${v.price}` : ""}
+                      {v.name}{v.price ? ` — ${formatMoney(v.price)}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -415,24 +706,15 @@ function AddLineDialog({
             <Input
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              placeholder="e.g. no onions"
+              placeholder="e.g. no onions, extra sauce"
             />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Modifiers (JSON)</Label>
-            <Textarea
-              value={form.modifiers}
-              onChange={(e) => setForm((f) => ({ ...f, modifiers: e.target.value }))}
-              placeholder={'{"add": ["extra cheese"], "remove": ["onions"]}'}
-              rows={2}
-              className="font-mono text-sm"
-            />
-            <p className="text-xs text-muted-foreground">Optional JSON for add-ons, removals, substitutions</p>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={addLine.isPending}>Add Item</Button>
+          <Button onClick={handleSubmit} disabled={addLine.isPending || selectedItemId === "none"}>
+            Add Item
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -563,7 +845,7 @@ function OrderDetailSheet({
       setLocalOrder(result);
       invalidate();
     } catch {
-      toast({ title: "Failed to remove line", variant: "destructive" });
+      toast({ title: "Failed to remove item", variant: "destructive" });
     }
   };
 
@@ -620,10 +902,10 @@ function OrderDetailSheet({
 
             <Separator />
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm">Line Items</h3>
-                {isEditable && (
+                <h3 className="font-semibold text-sm">Items</h3>
+                {isEditable && order.lines.length > 0 && (
                   <Button size="sm" variant="outline" onClick={() => setAddLineOpen(true)}>
                     <Plus className="h-4 w-4 mr-1" /> Add Item
                   </Button>
@@ -631,7 +913,18 @@ function OrderDetailSheet({
               </div>
 
               {order.lines.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No items yet</p>
+                <div className="border-2 border-dashed rounded-lg flex flex-col items-center justify-center py-10 text-center gap-3">
+                  <PackageOpen className="h-10 w-10 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium text-sm">No items in this order yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Add items so this order has something to charge for</p>
+                  </div>
+                  {isEditable && (
+                    <Button onClick={() => setAddLineOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" /> Add Items Now
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -644,7 +937,7 @@ function OrderDetailSheet({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {order.lines.map((line) => {
+                    {order.lines.map((line: OrderLine) => {
                       const lineTotal = parseFloat(line.quantity) * parseFloat(line.price);
                       return (
                         <TableRow key={line.id}>
@@ -652,11 +945,6 @@ function OrderDetailSheet({
                             <div>
                               <p className="font-medium text-sm">{line.name}</p>
                               {line.notes && <p className="text-xs text-muted-foreground">{line.notes}</p>}
-                              {line.modifiers && (
-                                <p className="text-xs text-muted-foreground font-mono">
-                                  {JSON.stringify(line.modifiers)}
-                                </p>
-                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-sm">{parseFloat(line.quantity)}</TableCell>
@@ -691,7 +979,7 @@ function OrderDetailSheet({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Discount</span>
-                {editDiscount && (canCancel) ? (
+                {editDiscount && canCancel ? (
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
@@ -816,7 +1104,10 @@ function OrderDetailSheet({
           open={addLineOpen}
           onOpenChange={setAddLineOpen}
           orderId={order.id}
-          onSuccess={(detail) => setLocalOrder(detail)}
+          onSuccess={(detail) => {
+            setLocalOrder(detail);
+            invalidate();
+          }}
         />
       )}
     </Sheet>
@@ -836,6 +1127,9 @@ function CreateOrderDialog({
   const createOrder = useCreateOrder();
   const { data: locations } = useGetLocations();
 
+  const [step, setStep] = useState<"details" | "items">("details");
+  const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
+
   const [form, setForm] = useState({
     locationId: "none",
     orderType: "dine_in" as CreateOrderBodyOrderType,
@@ -847,7 +1141,18 @@ function CreateOrderDialog({
   const { fields: cfFields, values: cfValues, setFieldValue: cfSet, save: cfSave, reset: cfReset } =
     useEntityCustomFields("order");
 
-  const handleSubmit = async () => {
+  const handleClose = (v: boolean) => {
+    if (!v) {
+      setStep("details");
+      setCreatedOrderId(null);
+      setForm({ locationId: "none", orderType: "dine_in", tableNumber: "", notes: "" });
+      setCustomerId(null);
+      cfReset();
+    }
+    onOpenChange(v);
+  };
+
+  const handleContinue = async () => {
     if (form.locationId === "none") {
       toast({ title: "Select a location", variant: "destructive" });
       return;
@@ -862,90 +1167,135 @@ function CreateOrderDialog({
           notes: form.notes || null,
         },
       });
-      toast({ title: `Order #${result.id} created` });
-      onCreated(result.id);
-      onOpenChange(false);
-      setForm({ locationId: "none", orderType: "dine_in", tableNumber: "", notes: "" });
-      setCustomerId(null);
-      // Save custom fields BEFORE resetting (cfReset clears touchedFieldIds)
       if (cfFields.length > 0) {
-        cfSave(result.id)
-          .then(() => cfReset())
-          .catch(() => {
-            cfReset();
-            toast({ title: "Order created, but custom field values could not be saved", variant: "destructive" });
-          });
-      } else {
-        cfReset();
+        cfSave(result.id).catch(() => {});
       }
+      setCreatedOrderId(result.id);
+      setStep("items");
+      toast({ title: `Order #${result.id} created — now add items` });
     } catch {
       toast({ title: "Failed to create order", variant: "destructive" });
     }
   };
 
+  const handleItemsDone = () => {
+    if (createdOrderId) {
+      onCreated(createdOrderId);
+    }
+    handleClose(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className={step === "items" ? "sm:max-w-2xl" : "sm:max-w-md"}>
         <DialogHeader>
-          <DialogTitle>New Order</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-2">
-          <div className="grid gap-1.5">
-            <Label>Location *</Label>
-            <Select value={form.locationId} onValueChange={(v) => setForm((f) => ({ ...f, locationId: v }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select location..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Select location...</SelectItem>
-                {locations?.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id.toString()}>{loc.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Order Type</Label>
-            <Select value={form.orderType} onValueChange={(v) => setForm((f) => ({ ...f, orderType: v as CreateOrderBodyOrderType }))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dine_in">Dine In</SelectItem>
-                <SelectItem value="pickup">Pickup</SelectItem>
-                <SelectItem value="delivery">Delivery</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {form.orderType === "dine_in" && (
-            <div className="grid gap-1.5">
-              <Label>Table Number</Label>
-              <Input
-                value={form.tableNumber}
-                onChange={(e) => setForm((f) => ({ ...f, tableNumber: e.target.value }))}
-                placeholder="e.g. 12"
-              />
+          <DialogTitle className="flex items-center gap-2">
+            {step === "details" ? (
+              "New Order"
+            ) : (
+              <>
+                <span className="text-muted-foreground font-normal">Order #{createdOrderId}</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                Add Items
+              </>
+            )}
+          </DialogTitle>
+          {step === "details" && (
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
+                <span className="font-medium text-foreground">Order Details</span>
+              </div>
+              <div className="h-px flex-1 bg-border" />
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-bold">2</span>
+                Add Items
+              </div>
             </div>
           )}
-          <div className="grid gap-1.5">
-            <Label>Customer (Optional)</Label>
-            <CustomerPicker value={customerId} onChange={(id) => setCustomerId(id)} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Notes</Label>
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              placeholder="Any special notes for this order"
-              rows={2}
-            />
-          </div>
-          <CustomFieldsSection fields={cfFields} values={cfValues} onChange={cfSet} />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={createOrder.isPending}>Create Order</Button>
-        </DialogFooter>
+          {step === "items" && (
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-bold">✓</span>
+                Order Details
+              </div>
+              <div className="h-px flex-1 bg-border" />
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
+                <span className="font-medium text-foreground">Add Items</span>
+              </div>
+            </div>
+          )}
+        </DialogHeader>
+
+        {step === "details" && (
+          <>
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-1.5">
+                <Label>Location *</Label>
+                <Select value={form.locationId} onValueChange={(v) => setForm((f) => ({ ...f, locationId: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select location...</SelectItem>
+                    {locations?.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id.toString()}>{loc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Order Type</Label>
+                <Select value={form.orderType} onValueChange={(v) => setForm((f) => ({ ...f, orderType: v as CreateOrderBodyOrderType }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dine_in">Dine In</SelectItem>
+                    <SelectItem value="pickup">Pickup</SelectItem>
+                    <SelectItem value="delivery">Delivery</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.orderType === "dine_in" && (
+                <div className="grid gap-1.5">
+                  <Label>Table Number</Label>
+                  <Input
+                    value={form.tableNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, tableNumber: e.target.value }))}
+                    placeholder="e.g. 12"
+                  />
+                </div>
+              )}
+              <div className="grid gap-1.5">
+                <Label>Customer (Optional)</Label>
+                <CustomerPicker value={customerId} onChange={(id) => setCustomerId(id)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Notes</Label>
+                <Textarea
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Any special notes for this order"
+                  rows={2}
+                />
+              </div>
+              <CustomFieldsSection fields={cfFields} values={cfValues} onChange={cfSet} />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+              <Button onClick={handleContinue} disabled={createOrder.isPending}>
+                {createOrder.isPending ? "Creating..." : "Continue — Add Items"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {step === "items" && createdOrderId && (
+          <ItemPickerStep orderId={createdOrderId} onDone={handleItemsDone} />
+        )}
       </DialogContent>
     </Dialog>
   );
