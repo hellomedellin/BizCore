@@ -1,209 +1,103 @@
-import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
-import { db } from "@workspace/db";
-import { usersTable, businessUsersTable, businessesTable, locationsTable } from "@workspace/db";
-import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
-import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
+import { Router } from "express";
+import { db } from "@bizcore/db";
+import { usersTable, businessUsersTable, businessUserLocationsTable } from "@bizcore/db/schema";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
 
-const SyncUserBody = z.object({
-  email: z.string().email(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  imageUrl: z.string().optional(),
-});
-
-const UpsertBusinessUserBody = z.object({
-  userId: z.string().min(1),
-  role: z.enum(["admin", "manager", "cashier", "hr"]),
-  locationId: z.number().int().optional(),
-});
-
-// Sync Clerk user data to local users table (called on sign-in)
-router.post(
-  "/users/sync",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const parsed = SyncUserBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
-
-    const [user] = await db
-      .insert(usersTable)
-      .values({
-        id: authedReq.userId,
-        ...parsed.data,
-      })
-      .onConflictDoUpdate({
-        target: usersTable.id,
-        set: {
-          email: parsed.data.email,
-          firstName: parsed.data.firstName,
-          lastName: parsed.data.lastName,
-          imageUrl: parsed.data.imageUrl,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-
+// Get current user profile
+router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
     res.json(user);
-  },
-);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-// List all users in the business (admin/manager) — scoped by tenant via tenantWhere
-router.get(
-  "/business-users",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin", "manager"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const businessId = assertBusinessId(authedReq.businessId);
-
-    const members = await db
+// List team members for a business
+router.get("/team", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const rows = await db
       .select({
-        membershipId: businessUsersTable.id,
+        id: businessUsersTable.id,
         userId: businessUsersTable.userId,
         role: businessUsersTable.role,
-        locationId: businessUsersTable.locationId,
         active: businessUsersTable.active,
         email: usersTable.email,
-        firstName: usersTable.firstName,
-        lastName: usersTable.lastName,
-        imageUrl: usersTable.imageUrl,
+        name: usersTable.name,
       })
       .from(businessUsersTable)
       .leftJoin(usersTable, eq(businessUsersTable.userId, usersTable.id))
       .where(tenantWhere(businessUsersTable.businessId, businessId));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    res.json(members);
-  },
-);
+// Update team member role
+const updateRoleSchema = z.object({
+  role: z.enum(["admin", "manager", "staff", "viewer"]),
+});
 
-// Assign or update a user's role in the business (admin only)
-router.post(
-  "/business-users",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const businessId = assertBusinessId(authedReq.businessId);
+router.patch("/team/:businessUserId", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = updateRoleSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const parsed = UpsertBusinessUserBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
-
-    // Don't allow assigning roles to the owner (they're always admin)
-    const business = await db
-      .select()
-      .from(businessesTable)
-      .where(eq(businessesTable.id, businessId))
-      .limit(1);
-
-    if (business[0]?.ownerUserId === parsed.data.userId) {
-      res.status(400).json({ error: "Cannot assign a role to the business owner" });
-      return;
-    }
-
-    // Validate that locationId (if provided) belongs to this business — prevents cross-tenant FK association
-    if (parsed.data.locationId !== undefined) {
-      const loc = await db
-        .select({ id: locationsTable.id })
-        .from(locationsTable)
-        .where(tenantWhere(locationsTable.businessId, businessId, eq(locationsTable.id, parsed.data.locationId)))
-        .limit(1);
-      if (loc.length === 0) {
-        res.status(400).json({ error: "Location not found or does not belong to this business" });
-        return;
-      }
-    }
-
-    // Scope the existing membership check to this business only (prevent cross-tenant IDOR)
-    const existing = await db
-      .select()
-      .from(businessUsersTable)
-      .where(
-        tenantWhere(
-          businessUsersTable.businessId,
-          businessId,
-          eq(businessUsersTable.userId, parsed.data.userId),
-        ),
-      )
-      .limit(1);
-
-    if (existing.length > 0) {
-      const [updated] = await db
-        .update(businessUsersTable)
-        .set({
-          role: parsed.data.role,
-          locationId: parsed.data.locationId ?? null,
-          active: true,
-        })
-        .where(
-          tenantWhere(
-            businessUsersTable.businessId,
-            businessId,
-            eq(businessUsersTable.id, existing[0].id),
-          ),
-        )
-        .returning();
-      res.json(updated);
-      return;
-    }
-
-    const [created] = await db
-      .insert(businessUsersTable)
-      .values({
-        businessId,
-        userId: parsed.data.userId,
-        role: parsed.data.role,
-        locationId: parsed.data.locationId ?? null,
-        active: true,
-      })
-      .returning();
-
-    res.status(201).json(created);
-  },
-);
-
-// Deactivate a business user (admin only) — scoped by businessId via tenantWhere to prevent cross-tenant IDOR
-router.delete(
-  "/business-users/:id",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const businessId = assertBusinessId(authedReq.businessId);
-
-    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const id = parseInt(rawId ?? "", 10);
-    if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid ID" });
-      return;
-    }
-
-    const [deactivated] = await db
+    const [row] = await db
       .update(businessUsersTable)
-      .set({ active: false })
-      .where(tenantWhere(businessUsersTable.businessId, businessId, eq(businessUsersTable.id, id)))
+      .set(body.data)
+      .where(and(
+        eq(businessUsersTable.id, req.params["businessUserId"]!),
+        tenantWhere(businessUsersTable.businessId, businessId),
+      ))
       .returning();
 
-    if (!deactivated) {
-      res.status(404).json({ error: "Business user not found" });
-      return;
+    if (!row) { res.status(404).json({ error: "Team member not found" }); return; }
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Set location access for a team member
+router.put("/team/:businessUserId/locations", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = z.object({ locationIds: z.array(z.string().uuid()) }).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const [bu] = await db
+      .select({ id: businessUsersTable.id })
+      .from(businessUsersTable)
+      .where(and(
+        eq(businessUsersTable.id, req.params["businessUserId"]!),
+        tenantWhere(businessUsersTable.businessId, businessId),
+      ));
+    if (!bu) { res.status(404).json({ error: "Team member not found" }); return; }
+
+    // Replace all location access rows
+    await db.delete(businessUserLocationsTable).where(eq(businessUserLocationsTable.businessUserId, bu.id));
+
+    if (body.data.locationIds.length > 0) {
+      await db.insert(businessUserLocationsTable).values(
+        body.data.locationIds.map((locationId) => ({ businessUserId: bu.id, locationId }))
+      );
     }
 
-    res.sendStatus(204);
-  },
-);
+    res.json({ message: "Location access updated" });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
 export default router;

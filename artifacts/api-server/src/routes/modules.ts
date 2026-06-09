@@ -1,91 +1,73 @@
-import { Router, type IRouter } from "express";
+import { Router } from "express";
+import { db } from "@bizcore/db";
+import { businessModulesTable } from "@bizcore/db/schema";
 import { eq, and } from "drizzle-orm";
-import { db } from "@workspace/db";
-import { businessModulesTable } from "@workspace/db";
-import {
-  requireAuth,
-  loadBusiness,
-  requireRole,
-  type AuthedRequest,
-} from "../middlewares/auth";
-import { UpdateModulesBody } from "@workspace/api-zod";
+import { z } from "zod";
+import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
 
-// All authenticated users can view modules
-router.get(
-  "/modules",
-  requireAuth,
-  loadBusiness,
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.json([]);
-      return;
-    }
+router.get("/modules", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const rows = await db.select().from(businessModulesTable).where(tenantWhere(businessModulesTable.businessId, businessId));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    const modules = await db
-      .select()
-      .from(businessModulesTable)
-      .where(eq(businessModulesTable.businessId, authedReq.businessId));
+const upsertModuleSchema = z.object({
+  module: z.enum([
+    "inventory", "consumption_profiles", "orders", "customers", "employees",
+    "time_tracking", "scheduling", "purchasing", "invoice_ai", "reporting", "api_access",
+  ]),
+  enabled: z.boolean(),
+  configuration: z.record(z.unknown()).optional(),
+});
 
-    res.json(modules);
-  },
-);
+router.put("/modules", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = upsertModuleSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-// Only admin can toggle module configuration
-router.put(
-  "/modules",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.status(400).json({ error: "No business found" });
-      return;
-    }
+    const [row] = await db
+      .insert(businessModulesTable)
+      .values({ businessId, ...body.data })
+      .onConflictDoUpdate({
+        target: [businessModulesTable.businessId, businessModulesTable.module],
+        set: { enabled: body.data.enabled, configuration: body.data.configuration ?? null },
+      })
+      .returning();
 
-    const parsed = UpdateModulesBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    const businessId = authedReq.businessId;
+// Bulk upsert — used during onboarding
+router.put("/modules/bulk", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = z.array(upsertModuleSchema).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const updates = await Promise.all(
-      parsed.data.modules.map(async ({ module, enabled }) => {
-        const existing = await db
-          .select()
-          .from(businessModulesTable)
-          .where(
-            and(
-              eq(businessModulesTable.businessId, businessId),
-              eq(businessModulesTable.module, module),
-            ),
-          )
-          .limit(1);
+    const rows = await db
+      .insert(businessModulesTable)
+      .values(body.data.map((m) => ({ businessId, ...m })))
+      .onConflictDoUpdate({
+        target: [businessModulesTable.businessId, businessModulesTable.module],
+        set: { enabled: businessModulesTable.enabled },
+      })
+      .returning();
 
-        if (existing.length === 0) {
-          const [created] = await db
-            .insert(businessModulesTable)
-            .values({ businessId, module, enabled })
-            .returning();
-          return created;
-        }
-
-        const [updated] = await db
-          .update(businessModulesTable)
-          .set({ enabled })
-          .where(eq(businessModulesTable.id, existing[0].id))
-          .returning();
-        return updated;
-      }),
-    );
-
-    res.json(updates);
-  },
-);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
 export default router;

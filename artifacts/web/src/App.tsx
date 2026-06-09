@@ -1,269 +1,140 @@
-import { useEffect, useRef, type ReactElement } from "react";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
-import { shadcn } from '@clerk/themes';
-import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from 'wouter';
-import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { queryClient } from "./lib/queryClient";
-import { useGetMyBusiness, getGetMyBusinessQueryKey } from "@workspace/api-client-react";
-import { ThemeProvider } from "./components/theme-provider";
-import { Toaster } from "@/components/ui/toaster";
+import { Switch, Route, Redirect } from "wouter";
+import { SignIn, SignUp, useAuth } from "@clerk/react";
+import { useAuthToken } from "@/hooks/useAuth";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { EmployeePortalLayout } from "@/components/layout/EmployeePortalLayout";
 
-import Home from "./pages/home";
-import SignInPage from "./pages/auth/sign-in";
-import SignUpPage from "./pages/auth/sign-up";
-import Onboarding from "./pages/onboarding";
-import Dashboard from "./pages/dashboard";
-import Settings from "./pages/settings";
-import Locations from "./pages/locations";
-import ItemsPage from "./pages/items";
-import InventoryPage from "./pages/inventory";
-import OrdersPage from "./pages/orders";
-import CustomersPage from "./pages/customers";
-import EmployeesPage from "./pages/employees";
-import SchedulePage from "./pages/schedule";
-import TimeTrackingPage from "./pages/time-tracking";
-import StubPage from "./pages/stub";
-import PayrollPage from "./pages/payroll";
-import POSPage from "./pages/pos";
-import { AppLayout } from "./components/layout/app-layout";
-import NotFound from "./pages/not-found";
+// Dashboard pages
+import { OnboardingPage } from "@/pages/OnboardingPage";
+import { DashboardHomePage } from "@/pages/DashboardHomePage";
+import { ItemsPage } from "@/pages/ItemsPage";
+import { InventoryPage } from "@/pages/InventoryPage";
+import { OrdersPage } from "@/pages/OrdersPage";
+import { EmployeesPage } from "@/pages/EmployeesPage";
+import { TimeTrackingPage } from "@/pages/TimeTrackingPage";
+import { SchedulingPage } from "@/pages/SchedulingPage";
+import { PurchasingPage } from "@/pages/PurchasingPage";
+import { SuppliersPage } from "@/pages/SuppliersPage";
+import { CustomersPage } from "@/pages/CustomersPage";
+import { ConsumptionProfilesPage } from "@/pages/ConsumptionProfilesPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+// Employee portal pages
+import { MeHomePage } from "@/pages/me/MeHomePage";
+import { MeTimeOffPage } from "@/pages/me/MeTimeOffPage";
+import { MeSchedulePage } from "@/pages/me/MeSchedulePage";
 
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || "/"
-    : path;
-}
+export default function App() {
+  useAuthToken();
+  const { isSignedIn, isLoaded } = useAuth();
 
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
-}
-
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: "clerk",
-  options: {
-    logoPlacement: "inside" as const,
-    logoLinkUrl: basePath || "/",
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-  },
-  variables: {
-    colorPrimary: "hsl(186 80% 28%)",
-    colorForeground: "hsl(222 47% 11%)",
-    colorMutedForeground: "hsl(215 16% 47%)",
-    colorDanger: "hsl(0 84% 60%)",
-    colorBackground: "hsl(0 0% 100%)",
-    colorInput: "hsl(214 32% 91%)",
-    colorInputForeground: "hsl(222 47% 11%)",
-    colorNeutral: "hsl(214 32% 91%)",
-    fontFamily: "'Inter', sans-serif",
-    borderRadius: "0.5rem",
-  },
-  elements: {
-    rootBox: "w-full flex justify-center",
-    cardBox: "bg-white rounded-2xl w-[440px] max-w-full overflow-hidden shadow-lg",
-    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
-    headerTitle: "text-2xl font-bold tracking-tight text-foreground",
-    headerSubtitle: "text-muted-foreground text-sm",
-    socialButtonsBlockButtonText: "text-sm font-medium",
-    formFieldLabel: "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-    footerActionLink: "text-primary font-medium hover:text-primary/90",
-    footerActionText: "text-muted-foreground",
-    dividerText: "text-muted-foreground text-xs",
-    identityPreviewEditButton: "text-primary hover:text-primary/90",
-    formFieldSuccessText: "text-sm text-green-600",
-    alertText: "text-sm",
-  },
-};
-
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const queryClient = useQueryClient();
-  const prevUserIdRef = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (
-        prevUserIdRef.current !== undefined &&
-        prevUserIdRef.current !== userId
-      ) {
-        queryClient.clear();
-      }
-      prevUserIdRef.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, queryClient]);
-
-  return null;
-}
-
-type LayoutRouteProps = {
-  path: string;
-  component: () => ReactElement;
-};
-
-// Routes wrapper that forces layout
-function LayoutRoute({ component: Component, path }: LayoutRouteProps) {
-  return (
-    <Route path={path}>
-      {() => (
-        <AppLayout>
-          <Component />
-        </AppLayout>
-      )}
-    </Route>
-  );
-}
-
-// Sync Clerk user profile to local DB on every sign-in session
-function UserSyncEffect() {
-  const { user, isLoaded, isSignedIn } = useUser();
-  const syncedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user || syncedRef.current) return;
-    syncedRef.current = true;
-    const primaryEmail = user.primaryEmailAddress?.emailAddress;
-    if (!primaryEmail) return;
-    fetch("/api/users/sync", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: primaryEmail,
-        firstName: user.firstName ?? undefined,
-        lastName: user.lastName ?? undefined,
-        imageUrl: user.imageUrl ?? undefined,
-      }),
-    }).catch(() => {
-      // Best-effort sync — don't block the UI on failure
-    });
-  }, [isLoaded, isSignedIn, user]);
-
-  return null;
-}
-
-// Handle the portal access check
-function PortalRouter() {
-  const { isLoaded, isSignedIn } = useUser();
-  const { data: business, isLoading: isLoadingBusiness, error } = useGetMyBusiness({
-    query: {
-      enabled: isLoaded && !!isSignedIn,
-      retry: false,
-      queryKey: getGetMyBusinessQueryKey(),
-    }
-  });
-
-  if (!isLoaded || (isSignedIn && isLoadingBusiness)) {
+  if (!isLoaded) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-900" />
       </div>
     );
   }
 
   if (!isSignedIn) {
-    return <Redirect to="/" />;
-  }
-
-  // If user has no business (404), force them to onboarding (unless already there)
-  if (error && error.status === 404) {
     return (
-      <Switch>
-        <Route path="/onboarding" component={Onboarding} />
-        <Route path="*">
-          <Redirect to="/onboarding" />
-        </Route>
-      </Switch>
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <Switch>
+          <Route path="/sign-up" component={() => <SignUp routing="hash" />} />
+          <Route component={() => <SignIn routing="hash" />} />
+        </Switch>
+      </div>
     );
   }
 
-  // User is signed in and has a business
   return (
     <Switch>
-      <Route path="/onboarding">
-        <Redirect to="/dashboard" />
+      {/* Employee portal */}
+      <Route path="/me">
+        <EmployeePortalLayout>
+          <MeHomePage />
+        </EmployeePortalLayout>
       </Route>
-      <LayoutRoute path="/dashboard" component={Dashboard} />
-      <LayoutRoute path="/settings" component={Settings} />
-      <LayoutRoute path="/locations" component={Locations} />
-      <LayoutRoute path="/orders" component={OrdersPage} />
-      <LayoutRoute path="/customers" component={CustomersPage} />
-      <LayoutRoute path="/items" component={ItemsPage} />
-      <LayoutRoute path="/inventory" component={InventoryPage} />
-      <LayoutRoute path="/employees" component={EmployeesPage} />
-      <LayoutRoute path="/schedule" component={SchedulePage} />
-      <LayoutRoute path="/time-tracking" component={TimeTrackingPage} />
-      <LayoutRoute path="/payroll" component={PayrollPage} />
-      <LayoutRoute path="/reports" component={() => <StubPage title="Reports" description="View detailed business analytics and insights." />} />
-      <Route path="/pos" component={POSPage} />
-      <Route path="*">
-        <NotFound />
+      <Route path="/me/time-off">
+        <EmployeePortalLayout>
+          <MeTimeOffPage />
+        </EmployeePortalLayout>
+      </Route>
+      <Route path="/me/schedule">
+        <EmployeePortalLayout>
+          <MeSchedulePage />
+        </EmployeePortalLayout>
+      </Route>
+
+      {/* Onboarding */}
+      <Route path="/onboarding" component={OnboardingPage} />
+
+      {/* Admin dashboard */}
+      <Route path="/dashboard">
+        <DashboardLayout>
+          <DashboardHomePage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/items">
+        <DashboardLayout>
+          <ItemsPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/inventory">
+        <DashboardLayout>
+          <InventoryPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/orders">
+        <DashboardLayout>
+          <OrdersPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/employees">
+        <DashboardLayout>
+          <EmployeesPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/time-tracking">
+        <DashboardLayout>
+          <TimeTrackingPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/scheduling">
+        <DashboardLayout>
+          <SchedulingPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/purchasing">
+        <DashboardLayout>
+          <PurchasingPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/suppliers">
+        <DashboardLayout>
+          <SuppliersPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/customers">
+        <DashboardLayout>
+          <CustomersPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/consumption-profiles">
+        <DashboardLayout>
+          <ConsumptionProfilesPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/settings">
+        <DashboardLayout>
+          <SettingsPage />
+        </DashboardLayout>
+      </Route>
+
+      {/* Default redirect */}
+      <Route>
+        <Redirect to="/dashboard" />
       </Route>
     </Switch>
   );
 }
-
-function HomeRedirect() {
-  return (
-    <>
-      <Show when="signed-in">
-        <Redirect to="/dashboard" />
-      </Show>
-      <Show when="signed-out">
-        <Home />
-      </Show>
-    </>
-  );
-}
-
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-
-  return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      appearance={clerkAppearance}
-      signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-up`}
-      localization={{
-        signIn: { start: { title: "Welcome back", subtitle: "Sign in to BizCore" } },
-        signUp: { start: { title: "Create your account", subtitle: "Get started with BizCore today" } },
-      }}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <UserSyncEffect />
-        <Switch>
-          <Route path="/" component={HomeRedirect} />
-          <Route path="/sign-in/*?" component={SignInPage} />
-          <Route path="/sign-up/*?" component={SignUpPage} />
-          <Route path="*">
-            <PortalRouter />
-          </Route>
-        </Switch>
-        <Toaster />
-      </QueryClientProvider>
-    </ClerkProvider>
-  );
-}
-
-function App() {
-  return (
-    <ThemeProvider defaultTheme="light" storageKey="bizcore-ui-theme">
-      <WouterRouter base={basePath}>
-        <ClerkProviderWithRoutes />
-      </WouterRouter>
-    </ThemeProvider>
-  );
-}
-
-export default App;

@@ -1,0 +1,12 @@
+{
+  "name": "@bizcore/lambda-invoice-ai",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "AWS Lambda — invoice AI extraction via Claude API",
+  "dependencies": {
+    "@anthropic-ai/sdk": "catalog:",
+    "@aws-sdk/client-s3": "catalog:",
+    "pg": "catalog:"
+  }
+}

@@ -1,135 +1,79 @@
-import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db } from "@workspace/db";
-import { locationsTable } from "@workspace/db";
-import {
-  requireAuth,
-  loadBusiness,
-  requireRole,
-  type AuthedRequest,
-} from "../middlewares/auth";
-import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
-import {
-  CreateLocationBody,
-  UpdateLocationBody,
-  UpdateLocationParams,
-  DeleteLocationParams,
-} from "@workspace/api-zod";
+import { Router } from "express";
+import { db } from "@bizcore/db";
+import { locationsTable } from "@bizcore/db/schema";
+import { eq, and } from "drizzle-orm";
+import { z } from "zod";
+import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
 
-// All authenticated users can list locations
-router.get(
-  "/locations",
-  requireAuth,
-  loadBusiness,
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    if (!authedReq.businessId) {
-      res.json([]);
-      return;
-    }
-    const businessId = assertBusinessId(authedReq.businessId);
+router.get("/locations", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const rows = await db.select().from(locationsTable).where(tenantWhere(locationsTable.businessId, businessId));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    const locations = await db
-      .select()
-      .from(locationsTable)
-      .where(tenantWhere(locationsTable.businessId, businessId));
+const createLocationSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(["restaurant", "retail", "service", "warehouse", "office"]).default("service"),
+  address: z.string().optional(),
+  phone: z.string().optional(),
+  timezone: z.string().default("America/New_York"),
+});
 
-    res.json(locations);
-  },
-);
+router.post("/locations", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = createLocationSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    const [row] = await db.insert(locationsTable).values({ ...body.data, businessId }).returning();
+    res.status(201).json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-// Only admin or manager can create locations
-router.post(
-  "/locations",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin", "manager"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const businessId = assertBusinessId(authedReq.businessId);
+router.get("/locations/:id", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [row] = await db.select().from(locationsTable).where(
+      and(eq(locationsTable.id, req.params["id"]!), tenantWhere(locationsTable.businessId, businessId))
+    );
+    if (!row) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    const parsed = CreateLocationBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
+const updateLocationSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.enum(["restaurant", "retail", "service", "warehouse", "office"]).optional(),
+  address: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  timezone: z.string().optional(),
+  active: z.boolean().optional(),
+});
 
-    const [location] = await db
-      .insert(locationsTable)
-      .values({ ...parsed.data, businessId })
+router.patch("/locations/:id", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = updateLocationSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    const [row] = await db.update(locationsTable)
+      .set(body.data)
+      .where(and(eq(locationsTable.id, req.params["id"]!), tenantWhere(locationsTable.businessId, businessId)))
       .returning();
-
-    res.status(201).json(location);
-  },
-);
-
-// Only admin or manager can update locations
-router.patch(
-  "/locations/:id",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin", "manager"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const businessId = assertBusinessId(authedReq.businessId);
-
-    const params = UpdateLocationParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
-
-    const parsed = UpdateLocationBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
-
-    const [location] = await db
-      .update(locationsTable)
-      .set(parsed.data)
-      .where(tenantWhere(locationsTable.businessId, businessId, eq(locationsTable.id, params.data.id)))
-      .returning();
-
-    if (!location) {
-      res.status(404).json({ error: "Location not found" });
-      return;
-    }
-
-    res.json(location);
-  },
-);
-
-// Only admin can delete locations
-router.delete(
-  "/locations/:id",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const businessId = assertBusinessId(authedReq.businessId);
-
-    const params = DeleteLocationParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
-
-    const [location] = await db
-      .delete(locationsTable)
-      .where(tenantWhere(locationsTable.businessId, businessId, eq(locationsTable.id, params.data.id)))
-      .returning();
-
-    if (!location) {
-      res.status(404).json({ error: "Location not found" });
-      return;
-    }
-
-    res.sendStatus(204);
-  },
-);
+    if (!row) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
 export default router;

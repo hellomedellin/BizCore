@@ -1,163 +1,92 @@
-import { Router, type IRouter } from "express";
+import { Router } from "express";
+import { db } from "@bizcore/db";
+import { businessesTable, locationsTable, businessModulesTable, businessUsersTable } from "@bizcore/db/schema";
 import { eq, and } from "drizzle-orm";
-import { db } from "@workspace/db";
-import {
-  businessesTable,
-  businessModulesTable,
-  businessUsersTable,
-} from "@workspace/db";
-import {
-  requireAuth,
-  loadBusiness,
-  requireRole,
-  type AuthedRequest,
-} from "../middlewares/auth";
-import {
-  CreateBusinessBody,
-  UpdateBusinessBody,
-  UpdateBusinessParams,
-} from "@workspace/api-zod";
+import { z } from "zod";
+import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
 
-const ALL_MODULES = [
-  "inventory",
-  "orders",
-  "employees",
-  "scheduling",
-  "time_tracking",
-  "reports",
-  "payroll_future",
-  "recipes_future",
-];
+// ─── GET /businesses/me ───────────────────────────────────────────────────────
 
-router.get(
-  "/businesses/me",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const userId = authedReq.userId;
-
-    // Check if user owns a business
-    const ownedBusiness = await db
+router.get("/businesses/me", requireAuth, loadBusiness, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [business] = await db
       .select()
       .from(businessesTable)
-      .where(eq(businessesTable.ownerUserId, userId))
-      .limit(1);
+      .where(eq(businessesTable.id, businessId));
 
-    if (ownedBusiness.length > 0) {
-      res.json(ownedBusiness[0]);
-      return;
-    }
+    if (!business) { res.status(404).json({ error: "Business not found" }); return; }
+    res.json(business);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    // Check if user is a member of any business via business_users
-    const membership = await db
-      .select({ businessId: businessUsersTable.businessId })
-      .from(businessUsersTable)
-      .where(
-        and(
-          eq(businessUsersTable.userId, userId),
-          eq(businessUsersTable.active, true),
-        ),
-      )
-      .limit(1);
+// ─── POST /businesses ─────────────────────────────────────────────────────────
 
-    if (membership.length > 0) {
-      const memberBusiness = await db
-        .select()
-        .from(businessesTable)
-        .where(eq(businessesTable.id, membership[0].businessId))
-        .limit(1);
+const createBusinessSchema = z.object({
+  name: z.string().min(1),
+  currencyCode: z.string().length(3).default("USD"),
+  timezone: z.string().default("America/New_York"),
+  phone: z.string().optional(),
+  email: z.string().email().optional(),
+  address: z.string().optional(),
+});
 
-      if (memberBusiness.length > 0) {
-        res.json(memberBusiness[0]);
-        return;
-      }
-    }
-
-    res.status(404).json({ error: "No business found" });
-  },
-);
-
-router.post(
-  "/businesses",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const userId = authedReq.userId;
-
-    const existing = await db
-      .select()
-      .from(businessesTable)
-      .where(eq(businessesTable.ownerUserId, userId))
-      .limit(1);
-
-    if (existing.length > 0) {
-      res.status(400).json({ error: "User already has a business" });
-      return;
-    }
-
-    const parsed = CreateBusinessBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
+router.post("/businesses", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthedRequest;
+  try {
+    const body = createBusinessSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const [business] = await db
       .insert(businessesTable)
-      .values({ ...parsed.data, ownerUserId: userId })
+      .values({ ...body.data, ownerUserId: userId })
       .returning();
 
-    await db.insert(businessModulesTable).values(
-      ALL_MODULES.map((module) => ({
-        businessId: business.id,
-        module,
-        enabled: ["inventory", "orders", "employees"].includes(module),
-      })),
-    );
+    // Create owner business_user record
+    await db.insert(businessUsersTable).values({
+      businessId: business!.id,
+      userId,
+      role: "owner",
+    });
 
     res.status(201).json(business);
-  },
-);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-// Only admin/owner can update business settings
-router.patch(
-  "/businesses/:id",
-  requireAuth,
-  loadBusiness,
-  requireRole("admin"),
-  async (req, res): Promise<void> => {
-    const authedReq = req as AuthedRequest;
-    const params = UpdateBusinessParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
+// ─── PATCH /businesses/me ─────────────────────────────────────────────────────
 
-    const parsed = UpdateBusinessBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
+const updateBusinessSchema = z.object({
+  name: z.string().min(1).optional(),
+  timezone: z.string().optional(),
+  phone: z.string().nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  address: z.string().nullable().optional(),
+  logoUrl: z.string().nullable().optional(),
+});
 
-    const [business] = await db
+router.patch("/businesses/me", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = updateBusinessSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const [updated] = await db
       .update(businessesTable)
-      .set(parsed.data)
-      .where(
-        and(
-          eq(businessesTable.id, params.data.id),
-          eq(businessesTable.ownerUserId, authedReq.userId),
-        ),
-      )
+      .set(body.data)
+      .where(eq(businessesTable.id, businessId))
       .returning();
 
-    if (!business) {
-      res.status(404).json({ error: "Business not found" });
-      return;
-    }
-
-    res.json(business);
-  },
-);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
 export default router;

@@ -1,350 +1,139 @@
-import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { employeesTable, employeeRolesTable, locationsTable } from "@workspace/db/schema";
-import { eq, and, ilike, SQL } from "drizzle-orm";
-import {
-  requireAuth,
-  loadBusiness,
-  requireRole,
-  type AuthedRequest,
-} from "../middlewares/auth";
-import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
+import { Router } from "express";
+import { db } from "@bizcore/db";
+import { employeesTable, employeeRolesTable, employeeLocationsTable } from "@bizcore/db/schema";
+import { eq, and, ilike } from "drizzle-orm";
 import { z } from "zod";
+import { requireAuth, loadBusiness, requireModule, requireRole, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
+const guard = [requireAuth, loadBusiness, requireModule("employees")];
 
-router.get("/employee-roles", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+// ─── Employee Roles ───────────────────────────────────────────────────────────
+
+router.get("/employee-roles", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const rows = await db
-      .select()
-      .from(employeeRolesTable)
-      .where(tenantWhere(employeeRolesTable.businessId, businessId!))
+    const rows = await db.select().from(employeeRolesTable)
+      .where(tenantWhere(employeeRolesTable.businessId, businessId))
       .orderBy(employeeRolesTable.name);
     res.json(rows);
-  } catch (err: unknown) {
+  } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-const createRoleSchema = z.object({ name: z.string().min(1) });
+const roleSchema = z.object({
+  name: z.string().min(1),
+  hourlyRateDefault: z.string().nullable().optional(),
+});
 
-router.post("/employee-roles", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+router.post("/employee-roles", ...guard, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const body = createRoleSchema.safeParse(req.body);
+    const body = roleSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-    const [row] = await db
-      .insert(employeeRolesTable)
-      .values({ businessId: businessId!, name: body.data.name })
-      .returning();
+    const [row] = await db.insert(employeeRolesTable).values({ ...body.data, businessId }).returning();
     res.status(201).json(row);
-  } catch (err: unknown) {
+  } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-const updateRoleSchema = z.object({ name: z.string().min(1) });
-
-router.patch("/employee-roles/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+router.patch("/employee-roles/:id", ...guard, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-    const body = updateRoleSchema.safeParse(req.body);
+    const body = roleSchema.partial().safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-    const [row] = await db
-      .update(employeeRolesTable)
-      .set({ name: body.data.name })
-      .where(and(eq(employeeRolesTable.id, id), tenantWhere(employeeRolesTable.businessId, businessId!)))
+    const [row] = await db.update(employeeRolesTable).set(body.data)
+      .where(and(eq(employeeRolesTable.id, req.params["id"]!), tenantWhere(employeeRolesTable.businessId, businessId)))
       .returning();
-    if (!row) { res.status(404).json({ error: "Role not found" }); return; }
+    if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
-  } catch (err: unknown) {
+  } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-router.delete("/employee-roles/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+// ─── Employees ────────────────────────────────────────────────────────────────
+
+router.get("/employees", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-    await db
-      .delete(employeeRolesTable)
-      .where(and(eq(employeeRolesTable.id, id), tenantWhere(employeeRolesTable.businessId, businessId!)));
-    res.status(204).send();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("foreign key") || msg.includes("violates") || msg.includes("constraint")) {
-      res.status(409).json({ error: "This role is assigned to one or more employees. Reassign or remove them first." });
-      return;
-    }
-    res.status(500).json({ error: msg || "Internal error" });
-  }
-});
-
-router.get("/employees", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-
-    const conditions: SQL[] = [tenantWhere(employeesTable.businessId, businessId!)];
-
-    if (req.query.search && typeof req.query.search === "string" && req.query.search.trim()) {
-      conditions.push(ilike(employeesTable.name, `%${req.query.search.trim()}%`));
-    }
-    if (req.query.locationId && !isNaN(parseInt(req.query.locationId as string))) {
-      conditions.push(eq(employeesTable.locationId, parseInt(req.query.locationId as string)));
-    }
-    if (req.query.roleId && !isNaN(parseInt(req.query.roleId as string))) {
-      conditions.push(eq(employeesTable.roleId, parseInt(req.query.roleId as string)));
-    }
-    if (req.query.active !== undefined) {
-      conditions.push(eq(employeesTable.active, req.query.active === "true"));
-    }
-
-    const rows = await db
-      .select({
-        id: employeesTable.id,
-        businessId: employeesTable.businessId,
-        name: employeesTable.name,
-        email: employeesTable.email,
-        phone: employeesTable.phone,
-        roleId: employeesTable.roleId,
-        roleName: employeeRolesTable.name,
-        locationId: employeesTable.locationId,
-        locationName: locationsTable.name,
-        hourlyRate: employeesTable.hourlyRate,
-        active: employeesTable.active,
-        createdAt: employeesTable.createdAt,
-        updatedAt: employeesTable.updatedAt,
-      })
-      .from(employeesTable)
-      .leftJoin(employeeRolesTable, eq(employeesTable.roleId, employeeRolesTable.id))
-      .leftJoin(locationsTable, eq(employeesTable.locationId, locationsTable.id))
-      .where(and(...conditions))
-      .orderBy(employeesTable.name);
-
+    const conditions = [tenantWhere(employeesTable.businessId, businessId)];
+    if (req.query["search"]) conditions.push(ilike(employeesTable.name, `%${req.query["search"]}%`));
+    if (req.query["active"] !== undefined) conditions.push(eq(employeesTable.active, req.query["active"] === "true"));
+    if (req.query["roleId"]) conditions.push(eq(employeesTable.roleId, req.query["roleId"] as string));
+    const rows = await db.select().from(employeesTable).where(and(...conditions)).orderBy(employeesTable.name);
     res.json(rows);
-  } catch (err: unknown) {
+  } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-const createEmployeeSchema = z.object({
+const employeeSchema = z.object({
   name: z.string().min(1),
   email: z.string().email().nullable().optional(),
   phone: z.string().nullable().optional(),
-  roleId: z.number().int().nullable().optional(),
-  locationId: z.number().int().nullable().optional(),
-  hourlyRate: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
-});
-
-router.post("/employees", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const body = createEmployeeSchema.safeParse(req.body);
-    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-
-    if (body.data.roleId != null) {
-      const [role] = await db.select({ id: employeeRolesTable.id })
-        .from(employeeRolesTable)
-        .where(and(eq(employeeRolesTable.id, body.data.roleId), tenantWhere(employeeRolesTable.businessId, businessId!)));
-      if (!role) { res.status(400).json({ error: "Employee role not found" }); return; }
-    }
-    if (body.data.locationId != null) {
-      const [loc] = await db.select({ id: locationsTable.id })
-        .from(locationsTable)
-        .where(and(eq(locationsTable.id, body.data.locationId), tenantWhere(locationsTable.businessId, businessId!)));
-      if (!loc) { res.status(400).json({ error: "Location not found" }); return; }
-    }
-
-    const [emp] = await db
-      .insert(employeesTable)
-      .values({ businessId: businessId!, ...body.data })
-      .returning();
-
-    const [row] = await db
-      .select({
-        id: employeesTable.id,
-        businessId: employeesTable.businessId,
-        name: employeesTable.name,
-        email: employeesTable.email,
-        phone: employeesTable.phone,
-        roleId: employeesTable.roleId,
-        roleName: employeeRolesTable.name,
-        locationId: employeesTable.locationId,
-        locationName: locationsTable.name,
-        hourlyRate: employeesTable.hourlyRate,
-        active: employeesTable.active,
-        createdAt: employeesTable.createdAt,
-        updatedAt: employeesTable.updatedAt,
-      })
-      .from(employeesTable)
-      .leftJoin(employeeRolesTable, eq(employeesTable.roleId, employeeRolesTable.id))
-      .leftJoin(locationsTable, eq(employeesTable.locationId, locationsTable.id))
-      .where(eq(employeesTable.id, emp.id));
-
-    res.status(201).json(row);
-  } catch (err: unknown) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
-  }
-});
-
-router.get("/employees/:id", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const [row] = await db
-      .select({
-        id: employeesTable.id,
-        businessId: employeesTable.businessId,
-        name: employeesTable.name,
-        email: employeesTable.email,
-        phone: employeesTable.phone,
-        roleId: employeesTable.roleId,
-        roleName: employeeRolesTable.name,
-        locationId: employeesTable.locationId,
-        locationName: locationsTable.name,
-        hourlyRate: employeesTable.hourlyRate,
-        active: employeesTable.active,
-        createdAt: employeesTable.createdAt,
-        updatedAt: employeesTable.updatedAt,
-      })
-      .from(employeesTable)
-      .leftJoin(employeeRolesTable, eq(employeesTable.roleId, employeeRolesTable.id))
-      .leftJoin(locationsTable, eq(employeesTable.locationId, locationsTable.id))
-      .where(and(eq(employeesTable.id, id), tenantWhere(employeesTable.businessId, businessId!)));
-
-    if (!row) { res.status(404).json({ error: "Employee not found" }); return; }
-    res.json(row);
-  } catch (err: unknown) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
-  }
-});
-
-const updateEmployeeSchema = z.object({
-  name: z.string().min(1).optional(),
-  email: z.string().email().nullable().optional(),
-  phone: z.string().nullable().optional(),
-  roleId: z.number().int().nullable().optional(),
-  locationId: z.number().int().nullable().optional(),
-  hourlyRate: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+  roleId: z.string().uuid().nullable().optional(),
+  primaryLocationId: z.string().uuid().nullable().optional(),
+  hourlyRate: z.string().nullable().optional(),
+  overtimeRateMultiplier: z.string().optional(),
   active: z.boolean().optional(),
+  locationIds: z.array(z.string().uuid()).optional(),
 });
 
-router.patch("/employees/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+router.post("/employees", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const body = updateEmployeeSchema.safeParse(req.body);
+    const body = employeeSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    const { locationIds, ...fields } = body.data;
 
-    const [existing] = await db.select({ id: employeesTable.id })
-      .from(employeesTable)
-      .where(and(eq(employeesTable.id, id), tenantWhere(employeesTable.businessId, businessId!)));
-    if (!existing) { res.status(404).json({ error: "Employee not found" }); return; }
-
-    if (body.data.roleId != null) {
-      const [role] = await db.select({ id: employeeRolesTable.id })
-        .from(employeeRolesTable)
-        .where(and(eq(employeeRolesTable.id, body.data.roleId), tenantWhere(employeeRolesTable.businessId, businessId!)));
-      if (!role) { res.status(400).json({ error: "Employee role not found" }); return; }
+    const [employee] = await db.insert(employeesTable).values({ ...fields, businessId }).returning();
+    if (locationIds?.length) {
+      await db.insert(employeeLocationsTable).values(locationIds.map((lid) => ({ employeeId: employee!.id, locationId: lid })));
     }
-    if (body.data.locationId != null) {
-      const [loc] = await db.select({ id: locationsTable.id })
-        .from(locationsTable)
-        .where(and(eq(locationsTable.id, body.data.locationId), tenantWhere(locationsTable.businessId, businessId!)));
-      if (!loc) { res.status(400).json({ error: "Location not found" }); return; }
-    }
-
-    await db.update(employeesTable).set(body.data).where(eq(employeesTable.id, id));
-
-    const [row] = await db
-      .select({
-        id: employeesTable.id,
-        businessId: employeesTable.businessId,
-        name: employeesTable.name,
-        email: employeesTable.email,
-        phone: employeesTable.phone,
-        roleId: employeesTable.roleId,
-        roleName: employeeRolesTable.name,
-        locationId: employeesTable.locationId,
-        locationName: locationsTable.name,
-        hourlyRate: employeesTable.hourlyRate,
-        active: employeesTable.active,
-        createdAt: employeesTable.createdAt,
-        updatedAt: employeesTable.updatedAt,
-      })
-      .from(employeesTable)
-      .leftJoin(employeeRolesTable, eq(employeesTable.roleId, employeeRolesTable.id))
-      .leftJoin(locationsTable, eq(employeesTable.locationId, locationsTable.id))
-      .where(eq(employeesTable.id, id));
-
-    res.json(row);
-  } catch (err: unknown) {
+    res.status(201).json(employee);
+  } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-router.delete("/employees/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+router.get("/employees/:id", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const [employee] = await db.select().from(employeesTable).where(
+      and(eq(employeesTable.id, req.params["id"]!), tenantWhere(employeesTable.businessId, businessId))
+    );
+    if (!employee) { res.status(404).json({ error: "Not found" }); return; }
+    const locations = await db.select().from(employeeLocationsTable).where(eq(employeeLocationsTable.employeeId, employee.id));
+    res.json({ ...employee, locations });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    const [existing] = await db.select({ id: employeesTable.id })
-      .from(employeesTable)
-      .where(and(eq(employeesTable.id, id), tenantWhere(employeesTable.businessId, businessId!)));
-    if (!existing) { res.status(404).json({ error: "Employee not found" }); return; }
+router.patch("/employees/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = employeeSchema.partial().safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    const { locationIds, ...fields } = body.data;
 
-    await db.update(employeesTable).set({ active: false }).where(eq(employeesTable.id, id));
+    const [employee] = await db.update(employeesTable).set(fields)
+      .where(and(eq(employeesTable.id, req.params["id"]!), tenantWhere(employeesTable.businessId, businessId)))
+      .returning();
+    if (!employee) { res.status(404).json({ error: "Not found" }); return; }
 
-    const [row] = await db
-      .select({
-        id: employeesTable.id,
-        businessId: employeesTable.businessId,
-        name: employeesTable.name,
-        email: employeesTable.email,
-        phone: employeesTable.phone,
-        roleId: employeesTable.roleId,
-        roleName: employeeRolesTable.name,
-        locationId: employeesTable.locationId,
-        locationName: locationsTable.name,
-        hourlyRate: employeesTable.hourlyRate,
-        active: employeesTable.active,
-        createdAt: employeesTable.createdAt,
-        updatedAt: employeesTable.updatedAt,
-      })
-      .from(employeesTable)
-      .leftJoin(employeeRolesTable, eq(employeesTable.roleId, employeeRolesTable.id))
-      .leftJoin(locationsTable, eq(employeesTable.locationId, locationsTable.id))
-      .where(eq(employeesTable.id, id));
-
-    res.json(row);
-  } catch (err: unknown) {
+    if (locationIds !== undefined) {
+      await db.delete(employeeLocationsTable).where(eq(employeeLocationsTable.employeeId, employee.id));
+      if (locationIds.length) {
+        await db.insert(employeeLocationsTable).values(locationIds.map((lid) => ({ employeeId: employee.id, locationId: lid })));
+      }
+    }
+    res.json(employee);
+  } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });

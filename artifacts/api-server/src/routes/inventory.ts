@@ -1,51 +1,30 @@
-import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { Router } from "express";
+import { db } from "@bizcore/db";
 import {
-  inventoryTable,
-  inventoryTransactionsTable,
-  itemVariantsTable,
-  itemsTable,
-  categoriesTable,
-  locationsTable,
-} from "@workspace/db/schema";
+  inventoryTable, inventoryTransactionsTable, itemVariantsTable, itemsTable,
+  categoriesTable, locationsTable, unitsTable,
+} from "@bizcore/db/schema";
 import { eq, and, ilike, sql, SQL, desc } from "drizzle-orm";
-import {
-  requireAuth,
-  loadBusiness,
-  requireRole,
-  type AuthedRequest,
-} from "../middlewares/auth";
-import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
 import { z } from "zod";
+import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
+const guard = [requireAuth, loadBusiness, requireModule("inventory")];
 
-router.get("/inventory", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+router.get("/inventory", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-
-    const locationId = parseInt(req.query.locationId as string);
-    if (isNaN(locationId)) {
-      res.status(400).json({ error: "locationId is required" });
-      return;
-    }
+    const locationId = req.query["locationId"] as string | undefined;
+    if (!locationId) { res.status(400).json({ error: "locationId is required" }); return; }
 
     const conditions: SQL[] = [
       eq(inventoryTable.locationId, locationId),
-      tenantWhere(itemsTable.businessId, businessId!),
-      tenantWhere(locationsTable.businessId, businessId!),
+      tenantWhere(itemsTable.businessId, businessId),
     ];
-    if (req.query.search && typeof req.query.search === "string") {
-      conditions.push(ilike(itemsTable.name, `%${req.query.search.trim()}%`));
-    }
-    if (req.query.categoryId && !isNaN(parseInt(req.query.categoryId as string))) {
-      conditions.push(eq(itemsTable.categoryId, parseInt(req.query.categoryId as string)));
-    }
-    if (req.query.type && typeof req.query.type === "string") {
-      conditions.push(eq(itemsTable.type, req.query.type));
-    }
+    if (req.query["search"]) conditions.push(ilike(itemsTable.name, `%${req.query["search"]}%`));
+    if (req.query["categoryId"]) conditions.push(eq(itemsTable.categoryId, req.query["categoryId"] as string));
+    if (req.query["type"]) conditions.push(eq(itemsTable.type, req.query["type"] as any));
 
     const rows = await db
       .select({
@@ -53,9 +32,12 @@ router.get("/inventory", requireAuth, loadBusiness, async (req, res): Promise<vo
         variantId: inventoryTable.variantId,
         locationId: inventoryTable.locationId,
         quantity: inventoryTable.quantity,
+        unitId: inventoryTable.unitId,
+        unitAbbreviation: unitsTable.abbreviation,
         lowStockThreshold: inventoryTable.lowStockThreshold,
         itemId: itemsTable.id,
         itemName: itemsTable.name,
+        itemType: itemsTable.type,
         variantName: itemVariantsTable.name,
         sku: itemVariantsTable.sku,
         categoryId: itemsTable.categoryId,
@@ -65,267 +47,101 @@ router.get("/inventory", requireAuth, loadBusiness, async (req, res): Promise<vo
       .innerJoin(itemVariantsTable, eq(inventoryTable.variantId, itemVariantsTable.id))
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
       .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
-      .innerJoin(locationsTable, eq(inventoryTable.locationId, locationsTable.id))
+      .leftJoin(unitsTable, eq(inventoryTable.unitId, unitsTable.id))
       .where(and(...conditions))
       .orderBy(itemsTable.name, itemVariantsTable.name);
 
     const result = rows.map((r) => ({
       ...r,
-      isLowStock:
-        r.lowStockThreshold !== null &&
-        parseFloat(r.quantity) < parseFloat(r.lowStockThreshold),
+      isLowStock: r.lowStockThreshold !== null && parseFloat(r.quantity) < parseFloat(r.lowStockThreshold),
     }));
 
-    if (req.query.lowStock === "true") {
+    if (req.query["lowStock"] === "true") {
       res.json(result.filter((r) => r.isLowStock));
       return;
     }
 
     res.json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Internal error";
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-router.get("/inventory/low-stock", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+// Manual adjustment
+const adjustSchema = z.object({
+  variantId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  type: z.enum(["receive", "consume", "adjust", "transfer_in", "transfer_out", "waste", "return"]),
+  quantityChange: z.string(),
+  unitId: z.string().uuid().optional(),
+  notes: z.string().optional(),
+});
+
+router.post("/inventory/adjust", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId, userId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
+    const body = adjustSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const locationId = req.query.locationId ? parseInt(req.query.locationId as string) : null;
+    await db.transaction(async (tx) => {
+      // Write transaction
+      await tx.insert(inventoryTransactionsTable).values({
+        ...body.data,
+        createdBy: userId,
+      });
 
-    const baseConditions: SQL[] = [
-      tenantWhere(itemsTable.businessId, businessId!),
-      tenantWhere(locationsTable.businessId, businessId!),
-      sql`${inventoryTable.lowStockThreshold} IS NOT NULL`,
-      sql`CAST(${inventoryTable.quantity} AS NUMERIC) < CAST(${inventoryTable.lowStockThreshold} AS NUMERIC)`,
-    ];
-    if (locationId !== null && !isNaN(locationId)) {
-      baseConditions.push(eq(inventoryTable.locationId, locationId));
-    }
+      // Upsert inventory balance
+      await tx
+        .insert(inventoryTable)
+        .values({
+          variantId: body.data.variantId,
+          locationId: body.data.locationId,
+          quantity: body.data.quantityChange,
+          unitId: body.data.unitId ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [inventoryTable.variantId, inventoryTable.locationId],
+          set: {
+            quantity: sql`${inventoryTable.quantity} + ${body.data.quantityChange}`,
+          },
+        });
+    });
 
-    const rows = await db
-      .select({
-        id: inventoryTable.id,
-        variantId: inventoryTable.variantId,
-        locationId: inventoryTable.locationId,
-        quantity: inventoryTable.quantity,
-        lowStockThreshold: inventoryTable.lowStockThreshold,
-        itemId: itemsTable.id,
-        itemName: itemsTable.name,
-        variantName: itemVariantsTable.name,
-        sku: itemVariantsTable.sku,
-        categoryId: itemsTable.categoryId,
-        categoryName: categoriesTable.name,
-      })
-      .from(inventoryTable)
-      .innerJoin(itemVariantsTable, eq(inventoryTable.variantId, itemVariantsTable.id))
-      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
-      .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
-      .innerJoin(locationsTable, eq(inventoryTable.locationId, locationsTable.id))
-      .where(and(...baseConditions))
-      .orderBy(itemsTable.name);
-
-    res.json(rows.map((r) => ({ ...r, isLowStock: true })));
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Internal error";
-    res.status(500).json({ error: msg });
+    res.status(201).json({ message: "Adjustment recorded" });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-router.get("/inventory/transactions", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+// Inventory transactions log
+router.get("/inventory/transactions", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const locationId = req.query.locationId ? parseInt(req.query.locationId as string) : null;
-    const variantId = req.query.variantId ? parseInt(req.query.variantId as string) : null;
-
-    const conditions: SQL[] = [
-      tenantWhere(itemsTable.businessId, businessId!),
-      tenantWhere(locationsTable.businessId, businessId!),
-    ];
-    if (locationId !== null && !isNaN(locationId)) {
-      conditions.push(eq(inventoryTransactionsTable.locationId, locationId));
-    }
-    if (variantId !== null && !isNaN(variantId)) {
-      conditions.push(eq(inventoryTransactionsTable.variantId, variantId));
-    }
-
+    const limit = Math.min(parseInt(req.query["limit"] as string || "50", 10), 200);
     const rows = await db
       .select({
         id: inventoryTransactionsTable.id,
         variantId: inventoryTransactionsTable.variantId,
+        variantName: itemVariantsTable.name,
+        itemName: itemsTable.name,
         locationId: inventoryTransactionsTable.locationId,
         type: inventoryTransactionsTable.type,
         quantityChange: inventoryTransactionsTable.quantityChange,
         referenceType: inventoryTransactionsTable.referenceType,
         referenceId: inventoryTransactionsTable.referenceId,
-        batchId: inventoryTransactionsTable.batchId,
-        expiresAt: inventoryTransactionsTable.expiresAt,
         notes: inventoryTransactionsTable.notes,
         createdBy: inventoryTransactionsTable.createdBy,
         createdAt: inventoryTransactionsTable.createdAt,
-        itemName: itemsTable.name,
-        variantName: itemVariantsTable.name,
       })
       .from(inventoryTransactionsTable)
       .innerJoin(itemVariantsTable, eq(inventoryTransactionsTable.variantId, itemVariantsTable.id))
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
-      .innerJoin(locationsTable, eq(inventoryTransactionsTable.locationId, locationsTable.id))
-      .where(and(...conditions))
+      .where(tenantWhere(itemsTable.businessId, businessId))
       .orderBy(desc(inventoryTransactionsTable.createdAt))
       .limit(limit);
-
     res.json(rows);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Internal error";
-    res.status(500).json({ error: msg });
-  }
-});
-
-const updateInventorySchema = z.object({
-  lowStockThreshold: z.string().nullable(),
-});
-
-router.patch("/inventory/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    const body = updateInventorySchema.safeParse(req.body);
-    if (!body.success) {
-      res.status(400).json({ error: body.error.message });
-      return;
-    }
-
-    const [inv] = await db
-      .select({ id: inventoryTable.id, variantId: inventoryTable.variantId })
-      .from(inventoryTable)
-      .where(eq(inventoryTable.id, id));
-    if (!inv) {
-      res.status(404).json({ error: "Inventory entry not found" });
-      return;
-    }
-
-    const [variant] = await db
-      .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
-      .from(itemVariantsTable)
-      .where(eq(itemVariantsTable.id, inv.variantId));
-    if (!variant) {
-      res.status(404).json({ error: "Variant not found" });
-      return;
-    }
-
-    const [item] = await db
-      .select({ id: itemsTable.id })
-      .from(itemsTable)
-      .where(and(eq(itemsTable.id, variant.itemId), tenantWhere(itemsTable.businessId, businessId!)));
-    if (!item) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
-
-    const [updated] = await db
-      .update(inventoryTable)
-      .set({ lowStockThreshold: body.data.lowStockThreshold, updatedAt: new Date() })
-      .where(eq(inventoryTable.id, id))
-      .returning();
-
-    res.json({ ...updated, isLowStock: updated.lowStockThreshold !== null && parseFloat(updated.quantity) < parseFloat(updated.lowStockThreshold) });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Internal error";
-    res.status(500).json({ error: msg });
-  }
-});
-
-const createTransactionSchema = z.object({
-  variantId: z.number().int(),
-  locationId: z.number().int(),
-  type: z.enum(["purchase", "adjustment", "waste", "return", "transfer", "sale"]),
-  quantityChange: z.string(),
-  notes: z.string().nullable().optional(),
-  batchId: z.string().nullable().optional(),
-  expiresAt: z.string().datetime().nullable().optional(),
-});
-
-router.post("/inventory/transactions", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const userId = authedReq.userId;
-
-    const body = createTransactionSchema.safeParse(req.body);
-    if (!body.success) {
-      res.status(400).json({ error: body.error.message });
-      return;
-    }
-
-    const [location] = await db
-      .select({ id: locationsTable.id })
-      .from(locationsTable)
-      .where(and(eq(locationsTable.id, body.data.locationId), tenantWhere(locationsTable.businessId, businessId!)));
-    if (!location) {
-      res.status(400).json({ error: "Location not found or not in your business" });
-      return;
-    }
-
-    const [variant] = await db
-      .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
-      .from(itemVariantsTable)
-      .where(eq(itemVariantsTable.id, body.data.variantId));
-    if (!variant) {
-      res.status(400).json({ error: "Variant not found" });
-      return;
-    }
-
-    const [item] = await db
-      .select({ id: itemsTable.id })
-      .from(itemsTable)
-      .where(and(eq(itemsTable.id, variant.itemId), tenantWhere(itemsTable.businessId, businessId!)));
-    if (!item) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
-
-    const [txn] = await db
-      .insert(inventoryTransactionsTable)
-      .values({
-        ...body.data,
-        expiresAt: body.data.expiresAt ? new Date(body.data.expiresAt) : null,
-        createdBy: userId ?? null,
-      })
-      .returning();
-
-    await db
-      .insert(inventoryTable)
-      .values({
-        variantId: body.data.variantId,
-        locationId: body.data.locationId,
-        quantity: body.data.quantityChange,
-      })
-      .onConflictDoUpdate({
-        target: [inventoryTable.variantId, inventoryTable.locationId],
-        set: {
-          quantity: sql`${inventoryTable.quantity} + CAST(${body.data.quantityChange} AS NUMERIC)`,
-          updatedAt: new Date(),
-        },
-      });
-
-    res.status(201).json(txn);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Internal error";
-    res.status(500).json({ error: msg });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 

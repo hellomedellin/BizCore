@@ -1,714 +1,244 @@
-import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { Router } from "express";
+import { db } from "@bizcore/db";
 import {
-  ordersTable,
-  orderLinesTable,
-  customersTable,
-  locationsTable,
-  orderStatusHistoryTable,
-  recipesTable,
-  recipeItemsTable,
-  itemVariantsTable,
-  inventoryTable,
-  inventoryTransactionsTable,
-} from "@workspace/db/schema";
-import { eq, and, ilike, gte, lte, sql, SQL, desc, count, inArray, sum, asc, isNotNull } from "drizzle-orm";
-import {
-  requireAuth,
-  loadBusiness,
-  requireRole,
-  type AuthedRequest,
-} from "../middlewares/auth";
-import { tenantWhere, assertBusinessId } from "../lib/tenantScope";
+  ordersTable, orderLinesTable, orderStatusHistoryTable,
+  inventoryTransactionsTable, inventoryTable,
+  consumptionProfilesTable, consumptionProfileLinesTable,
+  itemVariantsTable, itemsTable,
+} from "@bizcore/db/schema";
+import { eq, and, desc, isNull, sql, SQL } from "drizzle-orm";
 import { z } from "zod";
+import { requireAuth, loadBusiness, requireRole, requireModule, requireApiKey, type AuthedRequest } from "../middlewares/auth";
+import { tenantWhere } from "../lib/tenant";
 
-const router: IRouter = Router();
+const router = Router();
+const guard = [requireAuth, loadBusiness, requireModule("orders")];
 
-const numericString = z.string().regex(/^\d+(\.\d{1,4})?$/, "Must be a non-negative number");
+router.get("/orders", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const conditions: SQL[] = [tenantWhere(ordersTable.businessId, businessId)];
+    if (req.query["locationId"]) conditions.push(eq(ordersTable.locationId, req.query["locationId"] as string));
+    if (req.query["status"]) conditions.push(eq(ordersTable.status, req.query["status"] as any));
+    if (req.query["orderType"]) conditions.push(eq(ordersTable.orderType, req.query["orderType"] as any));
 
-const CreateOrderBodySchema = z.object({
-  locationId: z.number().int(),
-  orderType: z.enum(["dine_in", "pickup", "delivery"]).default("dine_in"),
-  customerId: z.number().int().nullable().optional(),
-  tableNumber: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  lines: z
-    .array(
-      z.object({
-        variantId: z.number().int().nullable().optional(),
-        name: z.string().min(1),
-        quantity: numericString,
-        price: numericString,
-        notes: z.string().nullable().optional(),
-        modifiers: z.record(z.unknown()).nullable().optional(),
-      })
-    )
-    .optional()
-    .default([]),
+    const limit = Math.min(parseInt(req.query["limit"] as string || "50", 10), 200);
+    const rows = await db.select().from(ordersTable).where(and(...conditions)).orderBy(desc(ordersTable.createdAt)).limit(limit);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
 });
 
-const UpdateOrderBodySchema = z.object({
-  status: z
-    .enum(["pending", "preparing", "ready", "completed", "cancelled", "refunded"])
-    .optional(),
-  customerId: z.number().int().nullable().optional(),
-  tableNumber: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  discount: numericString.optional(),
-});
-
-const AddOrderLineBodySchema = z.object({
-  variantId: z.number().int().nullable().optional(),
+const orderLineInputSchema = z.object({
+  variantId: z.string().uuid().nullable().optional(),
   name: z.string().min(1),
-  quantity: numericString,
-  price: numericString,
+  quantity: z.string(),
+  unitPrice: z.string(),
   notes: z.string().nullable().optional(),
-  modifiers: z.record(z.unknown()).nullable().optional(),
+  modifiers: z.array(z.object({ name: z.string(), priceAdjustment: z.number() })).optional(),
 });
 
-const UpdateOrderLineBodySchema = z.object({
-  quantity: numericString.optional(),
-  price: numericString.optional(),
+const createOrderSchema = z.object({
+  locationId: z.string().uuid(),
+  customerId: z.string().uuid().nullable().optional(),
+  orderType: z.enum(["dine_in", "pickup", "delivery", "service", "retail"]).default("retail"),
+  tableNumber: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-  modifiers: z.record(z.unknown()).nullable().optional(),
+  discount: z.string().optional(),
+  tax: z.string().optional(),
+  currencyCode: z.string().length(3).optional(),
+  externalRef: z.string().nullable().optional(),
+  lines: z.array(orderLineInputSchema).min(1),
 });
 
-async function recalcOrder(orderId: number): Promise<void> {
-  const lines = await db
-    .select({ quantity: orderLinesTable.quantity, price: orderLinesTable.price })
-    .from(orderLinesTable)
-    .where(eq(orderLinesTable.orderId, orderId));
+router.post("/orders", ...guard, async (req, res): Promise<void> => {
+  const { businessId, userId } = req as AuthedRequest;
+  try {
+    const body = createOrderSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-  const subtotal = lines.reduce(
-    (acc, l) => acc + parseFloat(l.quantity) * parseFloat(l.price),
-    0
-  );
+    const subtotal = body.data.lines.reduce((sum, l) => sum + parseFloat(l.unitPrice) * parseFloat(l.quantity), 0);
+    const discount = parseFloat(body.data.discount ?? "0");
+    const tax = parseFloat(body.data.tax ?? "0");
+    const total = subtotal - discount + tax;
 
-  const [order] = await db
-    .select({ discount: ordersTable.discount, tax: ordersTable.tax })
-    .from(ordersTable)
-    .where(eq(ordersTable.id, orderId));
+    const result = await db.transaction(async (tx) => {
+      const [order] = await tx.insert(ordersTable).values({
+        businessId,
+        locationId: body.data.locationId,
+        customerId: body.data.customerId ?? null,
+        orderType: body.data.orderType,
+        source: "internal",
+        externalRef: body.data.externalRef ?? null,
+        tableNumber: body.data.tableNumber ?? null,
+        notes: body.data.notes ?? null,
+        subtotal: subtotal.toFixed(2),
+        discount: discount.toFixed(2),
+        tax: tax.toFixed(2),
+        total: total.toFixed(2),
+        currencyCode: body.data.currencyCode ?? "USD",
+        createdBy: userId,
+      }).returning();
 
-  const discount = parseFloat(order?.discount ?? "0");
-  const tax = parseFloat(order?.tax ?? "0");
-  const total = Math.max(0, subtotal - discount + tax);
+      const lineValues = body.data.lines.map((l) => ({
+        orderId: order!.id,
+        variantId: l.variantId ?? null,
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: (parseFloat(l.unitPrice) * parseFloat(l.quantity)).toFixed(2),
+        notes: l.notes ?? null,
+        modifiers: l.modifiers ?? null,
+      }));
+      await tx.insert(orderLinesTable).values(lineValues);
 
-  await db
-    .update(ordersTable)
-    .set({
+      await tx.insert(orderStatusHistoryTable).values({ orderId: order!.id, toStatus: "pending", changedBy: userId });
+
+      return order!;
+    });
+
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// External POS order intake
+router.post("/orders/ingest", requireApiKey, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = createOrderSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const subtotal = body.data.lines.reduce((sum, l) => sum + parseFloat(l.unitPrice) * parseFloat(l.quantity), 0);
+    const discount = parseFloat(body.data.discount ?? "0");
+    const tax = parseFloat(body.data.tax ?? "0");
+    const total = subtotal - discount + tax;
+
+    const [order] = await db.insert(ordersTable).values({
+      businessId,
+      locationId: body.data.locationId,
+      customerId: body.data.customerId ?? null,
+      orderType: body.data.orderType,
+      source: "api",
+      externalRef: body.data.externalRef ?? null,
+      tableNumber: body.data.tableNumber ?? null,
+      notes: body.data.notes ?? null,
       subtotal: subtotal.toFixed(2),
+      discount: discount.toFixed(2),
+      tax: tax.toFixed(2),
       total: total.toFixed(2),
-    })
-    .where(eq(ordersTable.id, orderId));
-}
+      currencyCode: body.data.currencyCode ?? "USD",
+      createdBy: "api",
+    }).returning();
 
-async function getOrderDetail(orderId: number) {
-  const [order] = await db
-    .select({
-      id: ordersTable.id,
-      businessId: ordersTable.businessId,
-      locationId: ordersTable.locationId,
-      customerId: ordersTable.customerId,
-      customerName: customersTable.name,
-      orderType: ordersTable.orderType,
-      status: ordersTable.status,
-      tableNumber: ordersTable.tableNumber,
-      notes: ordersTable.notes,
-      subtotal: ordersTable.subtotal,
-      discount: ordersTable.discount,
-      tax: ordersTable.tax,
-      total: ordersTable.total,
-      createdBy: ordersTable.createdBy,
-      createdAt: ordersTable.createdAt,
-      updatedAt: ordersTable.updatedAt,
-    })
-    .from(ordersTable)
-    .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-    .where(eq(ordersTable.id, orderId));
+    await db.insert(orderLinesTable).values(
+      body.data.lines.map((l) => ({
+        orderId: order!.id,
+        variantId: l.variantId ?? null,
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: (parseFloat(l.unitPrice) * parseFloat(l.quantity)).toFixed(2),
+        notes: l.notes ?? null,
+        modifiers: l.modifiers ?? null,
+      }))
+    );
 
-  if (!order) return null;
-
-  const lines = await db
-    .select()
-    .from(orderLinesTable)
-    .where(eq(orderLinesTable.orderId, orderId))
-    .orderBy(orderLinesTable.createdAt);
-
-  const statusHistory = await db
-    .select()
-    .from(orderStatusHistoryTable)
-    .where(eq(orderStatusHistoryTable.orderId, orderId))
-    .orderBy(orderStatusHistoryTable.changedAt);
-
-  return {
-    ...order,
-    subtotal: String(order.subtotal),
-    discount: String(order.discount),
-    tax: String(order.tax),
-    total: String(order.total),
-    lines: lines.map((l) => ({
-      ...l,
-      quantity: String(l.quantity),
-      price: String(l.price),
-    })),
-    statusHistory,
-  };
-}
-
-router.get("/orders", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-
-    const { locationId, status, orderType, search, dateFrom, dateTo, limit, offset } = req.query;
-    const lim = Math.min(parseInt((limit as string) || "50"), 200);
-    const off = parseInt((offset as string) || "0") || 0;
-
-    const conditions: SQL[] = [tenantWhere(ordersTable.businessId, businessId!)];
-
-    if (locationId && !isNaN(parseInt(locationId as string))) {
-      conditions.push(eq(ordersTable.locationId, parseInt(locationId as string)));
-    }
-    if (status && typeof status === "string") {
-      conditions.push(eq(ordersTable.status, status));
-    }
-    if (orderType && typeof orderType === "string") {
-      conditions.push(eq(ordersTable.orderType, orderType));
-    }
-    if (dateFrom && typeof dateFrom === "string") {
-      conditions.push(gte(ordersTable.createdAt, new Date(dateFrom)));
-    }
-    if (dateTo && typeof dateTo === "string") {
-      const to = new Date(dateTo);
-      to.setHours(23, 59, 59, 999);
-      conditions.push(lte(ordersTable.createdAt, to));
-    }
-    if (search && typeof search === "string" && search.trim()) {
-      const q = `%${search.trim()}%`;
-      conditions.push(ilike(customersTable.name, q));
-    }
-
-    const whereClause = and(...conditions);
-
-    const [totalResult] = await db
-      .select({ count: count() })
-      .from(ordersTable)
-      .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-      .where(whereClause);
-
-    const orders = await db
-      .select({
-        id: ordersTable.id,
-        businessId: ordersTable.businessId,
-        locationId: ordersTable.locationId,
-        customerId: ordersTable.customerId,
-        customerName: customersTable.name,
-        orderType: ordersTable.orderType,
-        status: ordersTable.status,
-        tableNumber: ordersTable.tableNumber,
-        notes: ordersTable.notes,
-        subtotal: ordersTable.subtotal,
-        discount: ordersTable.discount,
-        tax: ordersTable.tax,
-        total: ordersTable.total,
-        createdBy: ordersTable.createdBy,
-        createdAt: ordersTable.createdAt,
-        updatedAt: ordersTable.updatedAt,
-      })
-      .from(ordersTable)
-      .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-      .where(whereClause)
-      .orderBy(desc(ordersTable.createdAt))
-      .limit(lim)
-      .offset(off);
-
-    res.json({
-      orders: orders.map((o) => ({
-        ...o,
-        subtotal: String(o.subtotal),
-        discount: String(o.discount),
-        tax: String(o.tax),
-        total: String(o.total),
-      })),
-      total: totalResult?.count ?? 0,
-    });
-  } catch (err: unknown) {
-    console.error("GET /orders error", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(201).json(order);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 
-router.post("/orders", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
+router.get("/orders/:id", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
   try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
+    const [order] = await db.select().from(ordersTable).where(
+      and(eq(ordersTable.id, req.params["id"]!), tenantWhere(ordersTable.businessId, businessId))
+    );
+    if (!order) { res.status(404).json({ error: "Not found" }); return; }
+    const lines = await db.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
+    const history = await db.select().from(orderStatusHistoryTable).where(eq(orderStatusHistoryTable.orderId, order.id)).orderBy(orderStatusHistoryTable.changedAt);
+    res.json({ ...order, lines, history });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
 
-    const body = CreateOrderBodySchema.safeParse(req.body);
+// Status transition — triggers inventory deduction on "completed"
+router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => {
+  const { businessId, userId } = req as AuthedRequest;
+  try {
+    const body = z.object({ status: z.enum(["confirmed", "in_progress", "ready", "completed", "cancelled"]) }).safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const { locationId, orderType, customerId, tableNumber, notes, lines } = body.data;
+    const [order] = await db.select().from(ordersTable).where(
+      and(eq(ordersTable.id, req.params["id"]!), tenantWhere(ordersTable.businessId, businessId))
+    );
+    if (!order) { res.status(404).json({ error: "Not found" }); return; }
 
-    const [location] = await db
-      .select({ id: locationsTable.id })
-      .from(locationsTable)
-      .where(and(eq(locationsTable.id, locationId), tenantWhere(locationsTable.businessId, businessId!)));
-    if (!location) { res.status(403).json({ error: "Location not found or forbidden" }); return; }
-
-    if (customerId) {
-      const [customer] = await db
-        .select({ id: customersTable.id })
-        .from(customersTable)
-        .where(and(eq(customersTable.id, customerId), tenantWhere(customersTable.businessId, businessId!)));
-      if (!customer) { res.status(403).json({ error: "Customer not found or forbidden" }); return; }
-    }
-
-    const [order] = await db
-      .insert(ordersTable)
-      .values({
-        businessId: businessId!,
-        locationId,
-        orderType,
-        customerId: customerId ?? null,
-        tableNumber: tableNumber ?? null,
-        notes: notes ?? null,
-        createdBy: authedReq.userId ?? null,
-        status: "pending",
-      })
-      .returning();
-
-    await db.insert(orderStatusHistoryTable).values({
-      orderId: order.id,
-      fromStatus: null,
-      toStatus: "pending",
-      changedBy: authedReq.userId ?? null,
-    });
-
-    if (lines && lines.length > 0) {
-      await db.insert(orderLinesTable).values(
-        lines.map((l) => ({
-          orderId: order.id,
-          variantId: l.variantId ?? null,
-          name: l.name,
-          quantity: l.quantity,
-          price: l.price,
-          notes: l.notes ?? null,
-          modifiers: l.modifiers ?? null,
-        }))
-      );
-      await recalcOrder(order.id);
-    }
-
-    const detail = await getOrderDetail(order.id);
-    res.status(201).json(detail);
-  } catch (err: unknown) {
-    console.error("POST /orders error", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.get("/orders/:id", requireAuth, loadBusiness, async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const detail = await getOrderDetail(id);
-    if (!detail || detail.businessId !== businessId) {
-      res.status(404).json({ error: "Order not found" });
-      return;
-    }
-    res.json(detail);
-  } catch (err: unknown) {
-    console.error("GET /orders/:id error", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.patch("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const body = UpdateOrderBodySchema.safeParse(req.body);
-    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-
-    const [existing] = await db
-      .select({ id: ordersTable.id, businessId: ordersTable.businessId, status: ordersTable.status })
-      .from(ordersTable)
-      .where(and(eq(ordersTable.id, id), tenantWhere(ordersTable.businessId, businessId!)));
-    if (!existing) { res.status(404).json({ error: "Order not found" }); return; }
-
-    if (body.data.status !== undefined) {
-      const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-        pending: ["preparing", "cancelled"],
-        preparing: ["ready", "cancelled"],
-        ready: ["completed", "cancelled"],
-        completed: ["refunded"],
-        cancelled: [],
-        refunded: [],
-      };
-      const allowed = ALLOWED_TRANSITIONS[existing.status] ?? [];
-      if (!allowed.includes(body.data.status)) {
-        res.status(400).json({
-          error: `Cannot transition from '${existing.status}' to '${body.data.status}'`,
-        });
-        return;
-      }
-      const managerOnlyStatuses = ["cancelled", "refunded"];
-      if (managerOnlyStatuses.includes(body.data.status) && authedReq.userRole === "cashier") {
-        res.status(403).json({ error: "Cashier cannot cancel or refund orders" });
-        return;
-      }
-    }
-
-    if (body.data.discount !== undefined && authedReq.userRole === "cashier") {
-      res.status(403).json({ error: "Cashier cannot modify discounts" });
-      return;
-    }
-
-    if (body.data.customerId) {
-      const [customer] = await db
-        .select({ id: customersTable.id })
-        .from(customersTable)
-        .where(and(eq(customersTable.id, body.data.customerId), tenantWhere(customersTable.businessId, businessId!)));
-      if (!customer) { res.status(403).json({ error: "Customer not found or forbidden" }); return; }
-    }
-
-    const updates: Record<string, unknown> = {};
-    if (body.data.status !== undefined) updates.status = body.data.status;
-    if (body.data.customerId !== undefined) updates.customerId = body.data.customerId;
-    if (body.data.tableNumber !== undefined) updates.tableNumber = body.data.tableNumber;
-    if (body.data.notes !== undefined) updates.notes = body.data.notes;
-    if (body.data.discount !== undefined) {
-      updates.discount = body.data.discount;
-    }
-
-    // Wrap status update + status history + recipe deductions in a single transaction
     await db.transaction(async (tx) => {
-      if (Object.keys(updates).length > 0) {
-        await tx.update(ordersTable).set(updates).where(eq(ordersTable.id, id));
-      }
+      const updates: Record<string, unknown> = { status: body.data.status };
+      if (body.data.status === "completed") updates["completedAt"] = new Date();
 
-      if (body.data.status !== undefined && body.data.status !== existing.status) {
-        await tx.insert(orderStatusHistoryTable).values({
-          orderId: id,
-          fromStatus: existing.status,
-          toStatus: body.data.status,
-          changedBy: authedReq.userId ?? null,
-        });
-      }
+      await tx.update(ordersTable).set(updates).where(eq(ordersTable.id, order.id));
+      await tx.insert(orderStatusHistoryTable).values({
+        orderId: order.id,
+        fromStatus: order.status,
+        toStatus: body.data.status,
+        changedBy: userId,
+      });
 
-      // Recipe enforcement: deduct ingredients from inventory when order is completed
-      if (body.data.status === "completed" && existing.status !== "completed") {
-        // Idempotency guard: if deductions already exist for this order, skip
-        const existingDeductions = await tx
-          .select({ id: inventoryTransactionsTable.id })
-          .from(inventoryTransactionsTable)
-          .where(
-            and(
-              eq(inventoryTransactionsTable.referenceType, "order"),
-              eq(inventoryTransactionsTable.referenceId, id)
-            )
-          )
-          .limit(1);
+      // Trigger inventory deduction on completion
+      if (body.data.status === "completed") {
+        const lines = await tx.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
 
-        if (existingDeductions.length === 0) {
-          const [order] = await tx
-            .select({ locationId: ordersTable.locationId })
-            .from(ordersTable)
-            .where(eq(ordersTable.id, id));
+        for (const line of lines) {
+          if (!line.variantId) continue;
 
-          if (order) {
-            const lines = await tx
-              .select({ variantId: orderLinesTable.variantId, quantity: orderLinesTable.quantity })
-              .from(orderLinesTable)
-              .where(eq(orderLinesTable.orderId, id));
+          const [variant] = await tx.select({ itemId: itemVariantsTable.itemId }).from(itemVariantsTable).where(eq(itemVariantsTable.id, line.variantId));
+          if (!variant) continue;
 
-            const linesWithVariant = lines.filter((l) => l.variantId !== null);
-            if (linesWithVariant.length > 0) {
-              const variantIds = linesWithVariant.map((l) => l.variantId!);
-              const variants = await tx
-                .select({ id: itemVariantsTable.id, itemId: itemVariantsTable.itemId })
-                .from(itemVariantsTable)
-                .where(inArray(itemVariantsTable.id, variantIds));
+          // Find consumption profile (variant-specific first, then item-level)
+          let profile = await tx.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable)
+            .where(and(eq(consumptionProfilesTable.outputItemId, variant.itemId), eq(consumptionProfilesTable.outputVariantId, line.variantId), eq(consumptionProfilesTable.active, true)))
+            .limit(1);
 
-              const variantToItemMap = new Map(variants.map((v) => [v.id, v.itemId]));
-              const itemIds = [...new Set(variants.map((v) => v.itemId))];
+          if (!profile[0]) {
+            profile = await tx.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable)
+              .where(and(eq(consumptionProfilesTable.outputItemId, variant.itemId), isNull(consumptionProfilesTable.outputVariantId), eq(consumptionProfilesTable.active, true)))
+              .limit(1);
+          }
 
-              if (itemIds.length > 0) {
-                const recipes = await tx
-                  .select({ id: recipesTable.id, menuItemId: recipesTable.menuItemId })
-                  .from(recipesTable)
-                  .where(inArray(recipesTable.menuItemId, itemIds));
+          if (!profile[0]) {
+            // Direct product deduction
+            const qty = `-${line.quantity}`;
+            await tx.insert(inventoryTransactionsTable).values({ variantId: line.variantId, locationId: order.locationId, type: "consume", quantityChange: qty, referenceType: "order", referenceId: order.id, createdBy: "system" });
+            await tx.insert(inventoryTable).values({ variantId: line.variantId, locationId: order.locationId, quantity: qty })
+              .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${qty}` } });
+            continue;
+          }
 
-                if (recipes.length > 0) {
-                  const recipeIds = recipes.map((r) => r.id);
-                  const itemToRecipeMap = new Map(recipes.map((r) => [r.menuItemId, r.id]));
+          const profileLines = await tx.select().from(consumptionProfileLinesTable).where(eq(consumptionProfileLinesTable.profileId, profile[0].id));
 
-                  const recipeItems = await tx
-                    .select({
-                      recipeId: recipeItemsTable.recipeId,
-                      ingredientVariantId: recipeItemsTable.ingredientVariantId,
-                      quantity: recipeItemsTable.quantity,
-                    })
-                    .from(recipeItemsTable)
-                    .where(inArray(recipeItemsTable.recipeId, recipeIds));
-
-                  // Build deduction map: ingredientVariantId → total quantity to deduct
-                  const deductions = new Map<number, number>();
-                  for (const line of linesWithVariant) {
-                    const itemId = variantToItemMap.get(line.variantId!);
-                    if (!itemId) continue;
-                    const recipeId = itemToRecipeMap.get(itemId);
-                    if (!recipeId) continue;
-                    const ingredients = recipeItems.filter((ri) => ri.recipeId === recipeId);
-                    for (const ingredient of ingredients) {
-                      const qty = parseFloat(line.quantity) * parseFloat(ingredient.quantity);
-                      deductions.set(ingredient.ingredientVariantId, (deductions.get(ingredient.ingredientVariantId) ?? 0) + qty);
-                    }
-                  }
-
-                  // FIFO batch-aware inventory deduction
-                  for (const [ingredientVariantId, totalQty] of deductions) {
-                    let remaining = totalQty;
-
-                    // FIFO: find batches ordered by expiresAt ASC with net positive remaining qty
-                    const batches = await tx
-                      .select({
-                        batchId: inventoryTransactionsTable.batchId,
-                        expiresAt: inventoryTransactionsTable.expiresAt,
-                        remaining: sum(inventoryTransactionsTable.quantityChange),
-                      })
-                      .from(inventoryTransactionsTable)
-                      .where(
-                        and(
-                          eq(inventoryTransactionsTable.variantId, ingredientVariantId),
-                          eq(inventoryTransactionsTable.locationId, order.locationId),
-                          isNotNull(inventoryTransactionsTable.batchId)
-                        )
-                      )
-                      .groupBy(
-                        inventoryTransactionsTable.batchId,
-                        inventoryTransactionsTable.expiresAt
-                      )
-                      .orderBy(asc(inventoryTransactionsTable.expiresAt));
-
-                    // Consume oldest batches first
-                    for (const batch of batches) {
-                      if (remaining <= 0) break;
-                      const batchRemaining = parseFloat(batch.remaining ?? "0");
-                      if (batchRemaining <= 0) continue;
-                      const consume = Math.min(remaining, batchRemaining);
-                      await tx.insert(inventoryTransactionsTable).values({
-                        variantId: ingredientVariantId,
-                        locationId: order.locationId,
-                        type: "sale",
-                        quantityChange: (-consume).toFixed(3),
-                        batchId: batch.batchId,
-                        expiresAt: batch.expiresAt,
-                        referenceType: "order",
-                        referenceId: id,
-                        notes: `Recipe deduction (batch ${batch.batchId}) for order #${id}`,
-                        createdBy: authedReq.userId ?? null,
-                      });
-                      remaining -= consume;
-                    }
-
-                    // Remaining qty not covered by named batches
-                    if (remaining > 0.0001) {
-                      await tx.insert(inventoryTransactionsTable).values({
-                        variantId: ingredientVariantId,
-                        locationId: order.locationId,
-                        type: "sale",
-                        quantityChange: (-remaining).toFixed(3),
-                        referenceType: "order",
-                        referenceId: id,
-                        notes: `Recipe deduction for order #${id}`,
-                        createdBy: authedReq.userId ?? null,
-                      });
-                    }
-
-                    // Upsert inventory aggregate: create row if missing, decrement if exists
-                    await tx
-                      .insert(inventoryTable)
-                      .values({
-                        variantId: ingredientVariantId,
-                        locationId: order.locationId,
-                        quantity: (-totalQty).toFixed(3),
-                      })
-                      .onConflictDoUpdate({
-                        target: [inventoryTable.variantId, inventoryTable.locationId],
-                        set: {
-                          quantity: sql`${inventoryTable.quantity} - CAST(${totalQty.toFixed(3)} AS NUMERIC)`,
-                          updatedAt: new Date(),
-                        },
-                      });
-                  }
-                }
-              }
+          for (const pl of profileLines) {
+            if (pl.lineType === "resource" && pl.resourceVariantId && pl.quantity) {
+              const consumed = `-${(parseFloat(pl.quantity) * parseFloat(line.quantity)).toFixed(4)}`;
+              await tx.insert(inventoryTransactionsTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, type: "consume", quantityChange: consumed, unitId: pl.unitId, referenceType: "order", referenceId: order.id, createdBy: "system" });
+              await tx.insert(inventoryTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, quantity: consumed })
+                .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${consumed}` } });
             }
           }
         }
       }
     });
 
-    if (body.data.discount !== undefined) {
-      await recalcOrder(id);
-    }
-
-    const detail = await getOrderDetail(id);
-    res.json(detail);
-  } catch (err: unknown) {
-    console.error("PATCH /orders/:id error", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.delete("/orders/:id", requireAuth, loadBusiness, requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const id = parseInt(req.params.id as string);
-    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const [existing] = await db
-      .select({ id: ordersTable.id })
-      .from(ordersTable)
-      .where(and(eq(ordersTable.id, id), tenantWhere(ordersTable.businessId, businessId!)));
-    if (!existing) { res.status(404).json({ error: "Order not found" }); return; }
-
-    await db.delete(ordersTable).where(eq(ordersTable.id, id));
-    res.status(204).end();
-  } catch (err: unknown) {
-    console.error("DELETE /orders/:id error", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/orders/:orderId/lines", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const orderId = parseInt(req.params.orderId as string);
-    if (isNaN(orderId)) { res.status(400).json({ error: "Invalid orderId" }); return; }
-
-    const body = AddOrderLineBodySchema.safeParse(req.body);
-    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-
-    const [order] = await db
-      .select({ id: ordersTable.id, status: ordersTable.status })
-      .from(ordersTable)
-      .where(and(eq(ordersTable.id, orderId), tenantWhere(ordersTable.businessId, businessId!)));
-    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
-    if (["completed", "cancelled", "refunded"].includes(order.status)) {
-      res.status(400).json({ error: "Cannot add lines to a completed/cancelled/refunded order" });
-      return;
-    }
-
-    await db.insert(orderLinesTable).values({
-      orderId,
-      variantId: body.data.variantId ?? null,
-      name: body.data.name,
-      quantity: body.data.quantity,
-      price: body.data.price,
-      notes: body.data.notes ?? null,
-      modifiers: body.data.modifiers ?? null,
-    });
-
-    await recalcOrder(orderId);
-    const detail = await getOrderDetail(orderId);
-    res.status(201).json(detail);
-  } catch (err: unknown) {
-    console.error("POST /orders/:orderId/lines error", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.patch("/orders/:orderId/lines/:lineId", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const orderId = parseInt(req.params.orderId as string);
-    const lineId = parseInt(req.params.lineId as string);
-    if (isNaN(orderId) || isNaN(lineId)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const body = UpdateOrderLineBodySchema.safeParse(req.body);
-    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-
-    const [order] = await db
-      .select({ id: ordersTable.id, status: ordersTable.status })
-      .from(ordersTable)
-      .where(and(eq(ordersTable.id, orderId), tenantWhere(ordersTable.businessId, businessId!)));
-    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
-    if (["completed", "cancelled", "refunded"].includes(order.status)) {
-      res.status(400).json({ error: "Cannot modify lines on a completed/cancelled/refunded order" });
-      return;
-    }
-
-    const [line] = await db
-      .select({ id: orderLinesTable.id })
-      .from(orderLinesTable)
-      .where(and(eq(orderLinesTable.id, lineId), eq(orderLinesTable.orderId, orderId)));
-    if (!line) { res.status(404).json({ error: "Order line not found" }); return; }
-
-    const updates: Record<string, unknown> = {};
-    if (body.data.quantity !== undefined) updates.quantity = body.data.quantity;
-    if (body.data.price !== undefined) updates.price = body.data.price;
-    if (body.data.notes !== undefined) updates.notes = body.data.notes;
-    if (body.data.modifiers !== undefined) updates.modifiers = body.data.modifiers;
-
-    if (Object.keys(updates).length > 0) {
-      await db.update(orderLinesTable).set(updates).where(eq(orderLinesTable.id, lineId));
-    }
-
-    await recalcOrder(orderId);
-    const detail = await getOrderDetail(orderId);
-    res.json(detail);
-  } catch (err: unknown) {
-    console.error("PATCH /orders/:orderId/lines/:lineId error", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.delete("/orders/:orderId/lines/:lineId", requireAuth, loadBusiness, requireRole("admin", "manager", "cashier"), async (req, res): Promise<void> => {
-  const authedReq = req as AuthedRequest;
-  try {
-    const businessId = authedReq.businessId;
-    assertBusinessId(businessId);
-    const orderId = parseInt(req.params.orderId as string);
-    const lineId = parseInt(req.params.lineId as string);
-    if (isNaN(orderId) || isNaN(lineId)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-    const [order] = await db
-      .select({ id: ordersTable.id, status: ordersTable.status })
-      .from(ordersTable)
-      .where(and(eq(ordersTable.id, orderId), tenantWhere(ordersTable.businessId, businessId!)));
-    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
-    if (["completed", "cancelled", "refunded"].includes(order.status)) {
-      res.status(400).json({ error: "Cannot remove lines from a completed/cancelled/refunded order" });
-      return;
-    }
-
-    await db.delete(orderLinesTable).where(
-      and(eq(orderLinesTable.id, lineId), eq(orderLinesTable.orderId, orderId))
-    );
-
-    await recalcOrder(orderId);
-    const detail = await getOrderDetail(orderId);
-    res.json(detail);
-  } catch (err: unknown) {
-    console.error("DELETE /orders/:orderId/lines/:lineId error", err);
-    res.status(500).json({ error: "Internal server error" });
+    const [updated] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id));
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
 });
 

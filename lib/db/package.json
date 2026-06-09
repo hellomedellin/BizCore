@@ -1,27 +1,31 @@
 {
-  "name": "@workspace/db",
-  "version": "0.0.0",
+  "name": "@bizcore/db",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
+  "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
-    "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
-    "seed": "tsx src/seed.ts"
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/seed.ts",
+    "build": "echo 'db is source-only'"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
-    "drizzle-zod": "^0.8.3",
-    "pg": "^8.20.0",
-    "zod": "catalog:"
+    "drizzle-zod": "catalog:",
+    "pg": "catalog:",
+    "zod": "catalog:",
+    "dotenv": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "@types/pg": "^8.18.0",
-    "drizzle-kit": "^0.31.9",
-    "tsx": "catalog:"
+    "@types/pg": "catalog:",
+    "drizzle-kit": "catalog:",
+    "tsx": "^4.19.0",
+    "typescript": "catalog:"
   }
 }
