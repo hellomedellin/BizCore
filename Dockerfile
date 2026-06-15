@@ -35,8 +35,9 @@ COPY artifacts/api-server ./artifacts/api-server
 # Production install only
 RUN pnpm install --no-frozen-lockfile --prod
 
-# Copy built output from builder
-COPY --from=builder /app/lib/db/dist ./lib/db/dist
+# Copy built output from builder.
+# @bizcore/db is source-only (no dist) and the api-server is a self-contained
+# esbuild bundle, so only the api-server dist is needed at runtime.
 COPY --from=builder /app/artifacts/api-server/dist ./artifacts/api-server/dist
 
 EXPOSE 3001
