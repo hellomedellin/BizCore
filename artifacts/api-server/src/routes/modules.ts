@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
 import { businessModulesTable } from "@bizcore/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -52,15 +52,15 @@ router.put("/modules", requireAuth, loadBusiness, requireRole("owner", "admin"),
 router.put("/modules/bulk", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
-    const body = z.array(upsertModuleSchema).safeParse(req.body);
+    const body = z.object({ modules: z.array(upsertModuleSchema) }).safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const rows = await db
       .insert(businessModulesTable)
-      .values(body.data.map((m) => ({ businessId, ...m })))
+      .values(body.data.modules.map((m) => ({ businessId, ...m })))
       .onConflictDoUpdate({
         target: [businessModulesTable.businessId, businessModulesTable.module],
-        set: { enabled: businessModulesTable.enabled },
+        set: { enabled: sql`excluded.enabled` },
       })
       .returning();
 
