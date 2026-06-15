@@ -41,7 +41,7 @@ catalog:
   wouter: "^3.3.0"
   "@tanstack/react-query": "^5.90.0"
   "@tanstack/react-query-devtools": "^5.90.0"
-  "@clerk/react": "^5.0.0"
+  "@clerk/react": "^6.9.0"
   framer-motion: "^12.0.0"
   recharts: "^2.15.0"
   lucide-react: "^0.511.0"

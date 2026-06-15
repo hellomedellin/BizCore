@@ -18,13 +18,13 @@
   "dependencies": {
     "drizzle-orm": "catalog:",
     "drizzle-zod": "catalog:",
+    "drizzle-kit": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:",
     "dotenv": "catalog:"
   },
   "devDependencies": {
     "@types/pg": "catalog:",
-    "drizzle-kit": "catalog:",
     "tsx": "^4.19.0",
     "typescript": "catalog:"
   }

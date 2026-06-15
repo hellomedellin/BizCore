@@ -17,6 +17,7 @@
     "@clerk/express": "catalog:",
     "cors": "catalog:",
     "dotenv": "catalog:",
+    "drizzle-orm": "catalog:",
     "express": "catalog:",
     "pino": "catalog:",
     "pino-http": "catalog:",

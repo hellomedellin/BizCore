@@ -15,7 +15,7 @@ export function EmployeePortalLayout({ children }: { children: React.ReactNode }
       {/* Top bar */}
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
         <span className="font-bold text-slate-900">BizCore — My Portal</span>
-        <UserButton afterSignOutUrl="/" />
+        <UserButton />
       </header>
 
       {/* Content */}

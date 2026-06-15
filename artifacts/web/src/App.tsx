@@ -1,6 +1,8 @@
 import { Switch, Route, Redirect } from "wouter";
 import { SignIn, SignUp, useAuth } from "@clerk/react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthToken } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { EmployeePortalLayout } from "@/components/layout/EmployeePortalLayout";
 
@@ -131,10 +133,30 @@ export default function App() {
         </DashboardLayout>
       </Route>
 
-      {/* Default redirect */}
+      {/* Default redirect — route new users without a business through onboarding */}
       <Route>
-        <Redirect to="/dashboard" />
+        <PostAuthRedirect />
       </Route>
     </Switch>
   );
+}
+
+// Decide where a freshly-authenticated user lands: the dashboard if they already
+// have a business, otherwise the onboarding wizard to create their first one.
+function PostAuthRedirect() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["businesses", "me"],
+    queryFn: () => api.get("/businesses/me").then((r) => r.data),
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-900" />
+      </div>
+    );
+  }
+
+  return <Redirect to={isError || !data ? "/onboarding" : "/dashboard"} />;
 }

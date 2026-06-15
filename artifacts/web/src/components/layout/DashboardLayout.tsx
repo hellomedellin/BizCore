@@ -86,7 +86,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         {/* User / collapse */}
         <div className={cn("flex items-center border-t border-slate-200 p-2", collapsed ? "flex-col gap-2" : "justify-between")}>
-          <UserButton afterSignOutUrl="/" />
+          <UserButton />
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
