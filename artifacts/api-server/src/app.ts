@@ -25,6 +25,7 @@ import purchasingRouter from "./routes/purchasing";
 import invoiceAiRouter from "./routes/invoice-ai";
 import apiKeysRouter from "./routes/api-keys";
 import meRouter from "./routes/me";
+import adminRouter from "./routes/admin";
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use("/api/v1", purchasingRouter);
 app.use("/api/v1", invoiceAiRouter);
 app.use("/api/v1", apiKeysRouter);
 app.use("/api/v1/me", meRouter);
+app.use("/api/v1", adminRouter);
 
 // Global error handler
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
