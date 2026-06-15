@@ -16,7 +16,7 @@ import {
   ordersTable, orderLinesTable, orderStatusHistoryTable,
   consumptionProfilesTable, consumptionProfileLinesTable,
 } from "./index";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 const OWNER_EMAIL = process.env["DEMO_OWNER_EMAIL"] ?? "ikamand@hellomedellin.com";
 
@@ -304,4 +304,41 @@ export async function seedDemo(): Promise<Record<string, unknown>> {
     purchaseOrders: poDefs.length, employees: employees.length, recipes: profiles.length, orders: orderCount,
   };
   });
+}
+
+// Removes businesses that have no real data (no items, orders, customers, or
+// employees) — i.e. leftovers from abandoned onboarding attempts. Deleting a
+// business cascades its locations, members, and module settings. Pass
+// confirm=false for a dry run that only reports what would be deleted.
+export async function cleanupEmptyBusinesses(confirm: boolean): Promise<Record<string, unknown>> {
+  const [owner] = await db.select().from(usersTable).where(eq(usersTable.email, OWNER_EMAIL)).limit(1);
+  const allBiz = await db.select().from(businessesTable);
+
+  const report: { id: string; name: string; linkedToOwner: boolean; hasItems: boolean; hasOrders: boolean; empty: boolean }[] = [];
+  for (const biz of allBiz) {
+    const [it] = await db.select().from(itemsTable).where(eq(itemsTable.businessId, biz.id)).limit(1);
+    const [ord] = await db.select().from(ordersTable).where(eq(ordersTable.businessId, biz.id)).limit(1);
+    const [cust] = await db.select().from(customersTable).where(eq(customersTable.businessId, biz.id)).limit(1);
+    const [emp] = await db.select().from(employeesTable).where(eq(employeesTable.businessId, biz.id)).limit(1);
+    let linked = false;
+    if (owner) {
+      const [l] = await db.select().from(businessUsersTable).where(and(eq(businessUsersTable.businessId, biz.id), eq(businessUsersTable.userId, owner.id))).limit(1);
+      linked = !!l;
+    }
+    report.push({ id: biz.id, name: biz.name, linkedToOwner: linked, hasItems: !!it, hasOrders: !!ord, empty: !it && !ord && !cust && !emp });
+  }
+
+  const deleted: string[] = [];
+  if (confirm) {
+    await db.transaction(async (tx) => {
+      for (const r of report) {
+        if (r.empty) {
+          await tx.delete(businessesTable).where(eq(businessesTable.id, r.id));
+          deleted.push(r.name);
+        }
+      }
+    });
+  }
+
+  return { ownerEmail: OWNER_EMAIL, ownerFound: !!owner, totalBusinesses: allBiz.length, mode: confirm ? "deleted" : "dry-run", businesses: report, deleted };
 }
