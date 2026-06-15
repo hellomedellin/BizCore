@@ -1,0 +1,17 @@
+# Railway configuration for the WEB FRONTEND service.
+#
+# Both the API and web services deploy from this one repo, so they need
+# separate config files. The API uses railway.toml (root Dockerfile); the web
+# service must point its "Config file path" (Settings -> Config-as-code) at THIS
+# file so it builds the web Dockerfile instead of the API one.
+#
+# No healthcheckPath: the frontend is static nginx on port 80 — when you
+# generate its domain, set the target port to 80.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "artifacts/web/Dockerfile"
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
