@@ -8,6 +8,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireModule, requireRole, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
+import { isLocationAllowed } from "../lib/access";
 
 const router = Router();
 const guard = [requireAuth, loadBusiness, requireModule("purchasing")];
@@ -39,10 +40,11 @@ const createPOSchema = z.object({
 });
 
 router.post("/purchase-orders", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
-  const { businessId, userId } = req as AuthedRequest;
+  const { businessId, userId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = createPOSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
     const [po] = await db.insert(purchaseOrdersTable).values({
       businessId,

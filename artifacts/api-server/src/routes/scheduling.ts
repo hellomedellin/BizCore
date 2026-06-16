@@ -5,6 +5,7 @@ import { eq, and, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireModule, requireRole, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
+import { isLocationAllowed } from "../lib/access";
 
 const router = Router();
 const guard = [requireAuth, loadBusiness, requireModule("scheduling")];
@@ -41,10 +42,11 @@ const shiftSchema = z.object({
 });
 
 router.post("/shifts", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
-  const { businessId } = req as AuthedRequest;
+  const { businessId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = shiftSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
     // Confirm employee belongs to this business
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable).where(

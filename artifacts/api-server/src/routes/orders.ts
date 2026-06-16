@@ -11,6 +11,7 @@ import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, requireApiKey, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
 import { computeOrderTotals, centsToString } from "../lib/money";
+import { isLocationAllowed } from "../lib/access";
 
 const router = Router();
 const guard = [requireAuth, loadBusiness, requireModule("orders")];
@@ -54,10 +55,11 @@ const createOrderSchema = z.object({
 });
 
 router.post("/orders", ...guard, async (req, res): Promise<void> => {
-  const { businessId, userId } = req as AuthedRequest;
+  const { businessId, userId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = createOrderSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
     const totals = computeOrderTotals(body.data.lines, body.data.discount ?? "0", body.data.tax ?? "0");
 
@@ -106,10 +108,11 @@ router.post("/orders", ...guard, async (req, res): Promise<void> => {
 
 // External POS order intake
 router.post("/orders/ingest", requireApiKey, async (req, res): Promise<void> => {
-  const { businessId } = req as AuthedRequest;
+  const { businessId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = createOrderSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
     const totals = computeOrderTotals(body.data.lines, body.data.discount ?? "0", body.data.tax ?? "0");
 

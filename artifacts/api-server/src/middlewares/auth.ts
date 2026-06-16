@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { clerkMiddleware, getAuth } from "@clerk/express";
+import { clerkMiddleware, getAuth, clerkClient } from "@clerk/express";
 import { db } from "@bizcore/db";
 import {
   usersTable,
@@ -33,17 +33,35 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   void (async () => {
     try {
-      // Upsert user on first sign-in
-      await db
-        .insert(usersTable)
-        .values({
-          id: auth.userId!,
-          email: (auth as any).sessionClaims?.email ?? "",
-          name: (auth as any).sessionClaims?.name ?? null,
-        })
-        .onConflictDoNothing();
+      const userId = auth.userId!;
+      const [existing] = await db
+        .select({ id: usersTable.id, email: usersTable.email })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
 
-      (req as AuthedRequest).userId = auth.userId!;
+      // Clerk session claims omit email by default, so fetch it from the Backend
+      // API on first sign-in (and backfill any previously-stored empty email).
+      if (!existing || !existing.email) {
+        let email = (auth as any).sessionClaims?.email ?? "";
+        let name = (auth as any).sessionClaims?.name ?? null;
+        try {
+          const u = await clerkClient.users.getUser(userId);
+          email =
+            u.emailAddresses.find((e) => e.id === u.primaryEmailAddressId)?.emailAddress ??
+            u.emailAddresses[0]?.emailAddress ??
+            email;
+          name = [u.firstName, u.lastName].filter(Boolean).join(" ") || name;
+        } catch {
+          /* fall back to session claims */
+        }
+        await db
+          .insert(usersTable)
+          .values({ id: userId, email, name })
+          .onConflictDoUpdate({ target: usersTable.id, set: { email, name } });
+      }
+
+      (req as AuthedRequest).userId = userId;
       next();
     } catch (err) {
       next(err);

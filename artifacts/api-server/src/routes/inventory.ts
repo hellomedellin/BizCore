@@ -8,15 +8,17 @@ import { eq, and, ilike, sql, SQL, desc } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
+import { isLocationAllowed } from "../lib/access";
 
 const router = Router();
 const guard = [requireAuth, loadBusiness, requireModule("inventory")];
 
 router.get("/inventory", ...guard, async (req, res): Promise<void> => {
-  const { businessId } = req as AuthedRequest;
+  const { businessId, allowedLocationIds } = req as AuthedRequest;
   try {
     const locationId = req.query["locationId"] as string | undefined;
     if (!locationId) { res.status(400).json({ error: "locationId is required" }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
     const conditions: SQL[] = [
       eq(inventoryTable.locationId, locationId),
@@ -78,10 +80,11 @@ const adjustSchema = z.object({
 });
 
 router.post("/inventory/adjust", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
-  const { businessId, userId } = req as AuthedRequest;
+  const { businessId, userId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = adjustSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
     await db.transaction(async (tx) => {
       // Write transaction
