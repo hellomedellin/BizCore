@@ -102,7 +102,7 @@ router.post("/inventory/adjust", ...guard, requireRole("owner", "admin", "manage
         .onConflictDoUpdate({
           target: [inventoryTable.variantId, inventoryTable.locationId],
           set: {
-            quantity: sql`${inventoryTable.quantity} + ${body.data.quantityChange}`,
+            quantity: sql`${inventoryTable.quantity} + ${body.data.quantityChange}::numeric`,
           },
         });
     });

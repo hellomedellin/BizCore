@@ -115,7 +115,7 @@ router.post("/purchase-orders/:id/receive", ...guard, requireRole("owner", "admi
           createdBy: userId,
         });
         await tx.insert(inventoryTable).values({ variantId: line.variantId, locationId: po.locationId, quantity: line.quantity })
-          .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${line.quantity}` } });
+          .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${line.quantity}::numeric` } });
       }
 
       await tx.update(purchaseOrdersTable).set({ status: "received", receivedAt: new Date() }).where(eq(purchaseOrdersTable.id, po.id));

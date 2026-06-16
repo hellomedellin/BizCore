@@ -4,12 +4,13 @@ import {
   ordersTable, orderLinesTable, orderStatusHistoryTable,
   inventoryTransactionsTable, inventoryTable,
   consumptionProfilesTable, consumptionProfileLinesTable,
-  itemVariantsTable, itemsTable,
+  itemVariantsTable, itemsTable, businessesTable,
 } from "@bizcore/db/schema";
 import { eq, and, desc, isNull, sql, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, requireApiKey, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
+import { computeOrderTotals, centsToString } from "../lib/money";
 
 const router = Router();
 const guard = [requireAuth, loadBusiness, requireModule("orders")];
@@ -58,12 +59,11 @@ router.post("/orders", ...guard, async (req, res): Promise<void> => {
     const body = createOrderSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const subtotal = body.data.lines.reduce((sum, l) => sum + parseFloat(l.unitPrice) * parseFloat(l.quantity), 0);
-    const discount = parseFloat(body.data.discount ?? "0");
-    const tax = parseFloat(body.data.tax ?? "0");
-    const total = subtotal - discount + tax;
+    const totals = computeOrderTotals(body.data.lines, body.data.discount ?? "0", body.data.tax ?? "0");
 
     const result = await db.transaction(async (tx) => {
+      const [biz] = await tx.select({ currencyCode: businessesTable.currencyCode }).from(businessesTable).where(eq(businessesTable.id, businessId));
+
       const [order] = await tx.insert(ordersTable).values({
         businessId,
         locationId: body.data.locationId,
@@ -73,21 +73,21 @@ router.post("/orders", ...guard, async (req, res): Promise<void> => {
         externalRef: body.data.externalRef ?? null,
         tableNumber: body.data.tableNumber ?? null,
         notes: body.data.notes ?? null,
-        subtotal: subtotal.toFixed(2),
-        discount: discount.toFixed(2),
-        tax: tax.toFixed(2),
-        total: total.toFixed(2),
-        currencyCode: body.data.currencyCode ?? "USD",
+        subtotal: centsToString(totals.subtotalCents),
+        discount: centsToString(totals.discountCents),
+        tax: centsToString(totals.taxCents),
+        total: centsToString(totals.totalCents),
+        currencyCode: body.data.currencyCode ?? biz?.currencyCode ?? "USD",
         createdBy: userId,
       }).returning();
 
-      const lineValues = body.data.lines.map((l) => ({
+      const lineValues = body.data.lines.map((l, i) => ({
         orderId: order!.id,
         variantId: l.variantId ?? null,
         name: l.name,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
-        lineTotal: (parseFloat(l.unitPrice) * parseFloat(l.quantity)).toFixed(2),
+        lineTotal: centsToString(totals.lineTotalsCents[i]!),
         notes: l.notes ?? null,
         modifiers: l.modifiers ?? null,
       }));
@@ -111,40 +111,40 @@ router.post("/orders/ingest", requireApiKey, async (req, res): Promise<void> => 
     const body = createOrderSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const subtotal = body.data.lines.reduce((sum, l) => sum + parseFloat(l.unitPrice) * parseFloat(l.quantity), 0);
-    const discount = parseFloat(body.data.discount ?? "0");
-    const tax = parseFloat(body.data.tax ?? "0");
-    const total = subtotal - discount + tax;
+    const totals = computeOrderTotals(body.data.lines, body.data.discount ?? "0", body.data.tax ?? "0");
 
-    const [order] = await db.insert(ordersTable).values({
-      businessId,
-      locationId: body.data.locationId,
-      customerId: body.data.customerId ?? null,
-      orderType: body.data.orderType,
-      source: "api",
-      externalRef: body.data.externalRef ?? null,
-      tableNumber: body.data.tableNumber ?? null,
-      notes: body.data.notes ?? null,
-      subtotal: subtotal.toFixed(2),
-      discount: discount.toFixed(2),
-      tax: tax.toFixed(2),
-      total: total.toFixed(2),
-      currencyCode: body.data.currencyCode ?? "USD",
-      createdBy: "api",
-    }).returning();
-
-    await db.insert(orderLinesTable).values(
-      body.data.lines.map((l) => ({
-        orderId: order!.id,
-        variantId: l.variantId ?? null,
-        name: l.name,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        lineTotal: (parseFloat(l.unitPrice) * parseFloat(l.quantity)).toFixed(2),
-        notes: l.notes ?? null,
-        modifiers: l.modifiers ?? null,
-      }))
-    );
+    const order = await db.transaction(async (tx) => {
+      const [biz] = await tx.select({ currencyCode: businessesTable.currencyCode }).from(businessesTable).where(eq(businessesTable.id, businessId));
+      const [o] = await tx.insert(ordersTable).values({
+        businessId,
+        locationId: body.data.locationId,
+        customerId: body.data.customerId ?? null,
+        orderType: body.data.orderType,
+        source: "api",
+        externalRef: body.data.externalRef ?? null,
+        tableNumber: body.data.tableNumber ?? null,
+        notes: body.data.notes ?? null,
+        subtotal: centsToString(totals.subtotalCents),
+        discount: centsToString(totals.discountCents),
+        tax: centsToString(totals.taxCents),
+        total: centsToString(totals.totalCents),
+        currencyCode: body.data.currencyCode ?? biz?.currencyCode ?? "USD",
+        createdBy: "api",
+      }).returning();
+      await tx.insert(orderLinesTable).values(
+        body.data.lines.map((l, i) => ({
+          orderId: o!.id,
+          variantId: l.variantId ?? null,
+          name: l.name,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          lineTotal: centsToString(totals.lineTotalsCents[i]!),
+          notes: l.notes ?? null,
+          modifiers: l.modifiers ?? null,
+        }))
+      );
+      return o!;
+    });
 
     res.status(201).json(order);
   } catch (err) {
@@ -217,7 +217,7 @@ router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => 
             const qty = `-${line.quantity}`;
             await tx.insert(inventoryTransactionsTable).values({ variantId: line.variantId, locationId: order.locationId, type: "consume", quantityChange: qty, referenceType: "order", referenceId: order.id, createdBy: "system" });
             await tx.insert(inventoryTable).values({ variantId: line.variantId, locationId: order.locationId, quantity: qty })
-              .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${qty}` } });
+              .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${qty}::numeric` } });
             continue;
           }
 
@@ -228,7 +228,7 @@ router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => 
               const consumed = `-${(parseFloat(pl.quantity) * parseFloat(line.quantity)).toFixed(4)}`;
               await tx.insert(inventoryTransactionsTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, type: "consume", quantityChange: consumed, unitId: pl.unitId, referenceType: "order", referenceId: order.id, createdBy: "system" });
               await tx.insert(inventoryTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, quantity: consumed })
-                .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${consumed}` } });
+                .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${consumed}::numeric` } });
             }
           }
         }
