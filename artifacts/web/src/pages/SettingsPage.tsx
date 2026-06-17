@@ -88,7 +88,7 @@ export function SettingsPage() {
   }
   const locPayload = () => ({ ...loc, address: loc.address || null, phone: loc.phone || null });
   const createLoc = useMutation({
-    mutationFn: () => api.post("/locations", loc),
+    mutationFn: () => api.post("/locations", locPayload()),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["locations"] }); setLocCreateOpen(false); toast({ title: "Location added", variant: "success" }); },
     onError: (e) => toast({ title: "Couldn't save", description: errText(e), variant: "destructive" }),
   });

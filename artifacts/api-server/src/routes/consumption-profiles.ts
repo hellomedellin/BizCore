@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
 import { consumptionProfilesTable, consumptionProfileLinesTable, itemsTable } from "@bizcore/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -44,6 +44,16 @@ router.post("/consumption-profiles", ...guard, requireRole("owner", "admin", "ma
   try {
     const body = createProfileSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    // Idempotent: reuse the existing recipe for this output so racing first-line
+    // adds can't create duplicate profiles (order deduction only reads one).
+    const [existing] = await db.select().from(consumptionProfilesTable).where(and(
+      tenantWhere(consumptionProfilesTable.businessId, businessId),
+      eq(consumptionProfilesTable.outputItemId, body.data.outputItemId),
+      body.data.outputVariantId ? eq(consumptionProfilesTable.outputVariantId, body.data.outputVariantId) : isNull(consumptionProfilesTable.outputVariantId),
+    )).limit(1);
+    if (existing) { res.json(existing); return; }
+
     const [row] = await db.insert(consumptionProfilesTable).values({ ...body.data, businessId }).returning();
     res.status(201).json(row);
   } catch (err) {

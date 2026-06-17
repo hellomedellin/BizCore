@@ -55,7 +55,7 @@ router.get("/inventory", ...guard, async (req, res): Promise<void> => {
 
     const result = rows.map((r) => ({
       ...r,
-      isLowStock: r.lowStockThreshold !== null && parseFloat(r.quantity) < parseFloat(r.lowStockThreshold),
+      isLowStock: r.lowStockThreshold !== null && parseFloat(r.quantity) <= parseFloat(r.lowStockThreshold),
     }));
 
     if (req.query["lowStock"] === "true") {
@@ -99,7 +99,7 @@ router.get("/inventory/levels", ...guard, async (req, res): Promise<void> => {
     const result = rows.map((r) => ({
       ...r,
       quantity: r.quantity ?? "0",
-      isLowStock: r.lowStockThreshold != null && r.quantity != null && parseFloat(r.quantity) < parseFloat(r.lowStockThreshold),
+      isLowStock: r.lowStockThreshold != null && r.quantity != null && parseFloat(r.quantity) <= parseFloat(r.lowStockThreshold),
     }));
     res.json(result);
   } catch (err) {
@@ -123,6 +123,12 @@ router.post("/inventory/adjust", ...guard, requireRole("owner", "admin", "manage
     const body = adjustSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
+
+    // The variant must belong to this business (prevents cross-tenant adjustment).
+    const [ownsVariant] = await db.select({ id: itemVariantsTable.id }).from(itemVariantsTable)
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .where(and(eq(itemVariantsTable.id, body.data.variantId), tenantWhere(itemsTable.businessId, businessId)));
+    if (!ownsVariant) { res.status(404).json({ error: "Item not found" }); return; }
 
     await db.transaction(async (tx) => {
       // Write transaction

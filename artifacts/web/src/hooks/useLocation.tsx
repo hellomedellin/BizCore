@@ -36,14 +36,14 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
-  // Resolve the effective selection. One location → always that one (never ask).
-  let activeLocationId: string | null = stored;
+  // Resolve the effective selection. Stay null until locations load so no query
+  // fires with a stale/foreign stored id (the storage key is shared across logins,
+  // so a prior tenant's id could leak in). One location → always that one; with
+  // several, honor the stored id only if it's actually in the active set.
+  let activeLocationId: string | null = null;
   if (isSuccess) {
-    if (active.length === 1) {
-      activeLocationId = active[0]!.id;
-    } else if (stored && !active.some((l) => l.id === stored)) {
-      activeLocationId = null; // stored location no longer exists → All
-    }
+    if (active.length === 1) activeLocationId = active[0]!.id;
+    else if (stored && active.some((l) => l.id === stored)) activeLocationId = stored;
   }
 
   const setActiveLocationId = React.useCallback((id: string | null) => {

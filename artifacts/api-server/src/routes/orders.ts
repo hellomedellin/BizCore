@@ -6,7 +6,7 @@ import {
   consumptionProfilesTable, consumptionProfileLinesTable,
   itemVariantsTable, itemsTable, businessesTable,
 } from "@bizcore/db/schema";
-import { eq, and, desc, isNull, sql, SQL } from "drizzle-orm";
+import { eq, and, ne, desc, isNull, sql, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, requireApiKey, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -146,6 +146,7 @@ router.post("/orders/ingest", requireApiKey, async (req, res): Promise<void> => 
           modifiers: l.modifiers ?? null,
         }))
       );
+      await tx.insert(orderStatusHistoryTable).values({ orderId: o!.id, toStatus: "pending", changedBy: "api" });
       return o!;
     });
 
@@ -170,7 +171,17 @@ router.get("/orders/:id", ...guard, async (req, res): Promise<void> => {
   }
 });
 
-// Status transition — triggers inventory deduction on "completed"
+// Valid status moves. Terminal states (completed/cancelled) allow no further change.
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  pending: ["confirmed", "in_progress", "ready", "completed", "cancelled"],
+  confirmed: ["in_progress", "ready", "completed", "cancelled"],
+  in_progress: ["ready", "completed", "cancelled"],
+  ready: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
+// Status transition — deducts inventory exactly once, on the move into "completed"
 router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => {
   const { businessId, userId } = req as AuthedRequest;
   try {
@@ -182,57 +193,64 @@ router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => 
     );
     if (!order) { res.status(404).json({ error: "Not found" }); return; }
 
+    const next = body.data.status;
+    if (!(ALLOWED_TRANSITIONS[order.status] ?? []).includes(next)) {
+      res.status(409).json({ error: `Cannot change a ${order.status} order to ${next}.` });
+      return;
+    }
+
     await db.transaction(async (tx) => {
-      const updates: Record<string, unknown> = { status: body.data.status };
-      if (body.data.status === "completed") updates["completedAt"] = new Date();
+      if (next !== "completed") {
+        await tx.update(ordersTable).set({ status: next }).where(eq(ordersTable.id, order.id));
+        await tx.insert(orderStatusHistoryTable).values({ orderId: order.id, fromStatus: order.status, toStatus: next, changedBy: userId });
+        return;
+      }
 
-      await tx.update(ordersTable).set(updates).where(eq(ordersTable.id, order.id));
-      await tx.insert(orderStatusHistoryTable).values({
-        orderId: order.id,
-        fromStatus: order.status,
-        toStatus: body.data.status,
-        changedBy: userId,
-      });
+      // Completion: atomic one-time guard so a double-click or repeat PATCH can't
+      // deduct stock twice — only the first transition into "completed" applies it.
+      const won = await tx.update(ordersTable)
+        .set({ status: "completed", completedAt: new Date() })
+        .where(and(eq(ordersTable.id, order.id), ne(ordersTable.status, "completed")))
+        .returning({ id: ordersTable.id });
+      if (won.length === 0) return;
 
-      // Trigger inventory deduction on completion
-      if (body.data.status === "completed") {
-        const lines = await tx.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
+      await tx.insert(orderStatusHistoryTable).values({ orderId: order.id, fromStatus: order.status, toStatus: "completed", changedBy: userId });
 
-        for (const line of lines) {
-          if (!line.variantId) continue;
+      const lines = await tx.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
+      for (const line of lines) {
+        if (!line.variantId) continue;
 
-          const [variant] = await tx.select({ itemId: itemVariantsTable.itemId }).from(itemVariantsTable).where(eq(itemVariantsTable.id, line.variantId));
-          if (!variant) continue;
+        // Variant must belong to this business.
+        const [variant] = await tx.select({ itemId: itemVariantsTable.itemId }).from(itemVariantsTable)
+          .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+          .where(and(eq(itemVariantsTable.id, line.variantId), tenantWhere(itemsTable.businessId, businessId)));
+        if (!variant) continue;
 
-          // Find consumption profile (variant-specific first, then item-level)
-          let profile = await tx.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable)
-            .where(and(eq(consumptionProfilesTable.outputItemId, variant.itemId), eq(consumptionProfilesTable.outputVariantId, line.variantId), eq(consumptionProfilesTable.active, true)))
+        // Recipe lookup (variant-specific first, then item-level), tenant-scoped.
+        let profile = await tx.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable)
+          .where(and(tenantWhere(consumptionProfilesTable.businessId, businessId), eq(consumptionProfilesTable.outputItemId, variant.itemId), eq(consumptionProfilesTable.outputVariantId, line.variantId), eq(consumptionProfilesTable.active, true)))
+          .limit(1);
+        if (!profile[0]) {
+          profile = await tx.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable)
+            .where(and(tenantWhere(consumptionProfilesTable.businessId, businessId), eq(consumptionProfilesTable.outputItemId, variant.itemId), isNull(consumptionProfilesTable.outputVariantId), eq(consumptionProfilesTable.active, true)))
             .limit(1);
+        }
 
-          if (!profile[0]) {
-            profile = await tx.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable)
-              .where(and(eq(consumptionProfilesTable.outputItemId, variant.itemId), isNull(consumptionProfilesTable.outputVariantId), eq(consumptionProfilesTable.active, true)))
-              .limit(1);
-          }
+        if (!profile[0]) {
+          const qty = `-${line.quantity}`;
+          await tx.insert(inventoryTransactionsTable).values({ variantId: line.variantId, locationId: order.locationId, type: "consume", quantityChange: qty, referenceType: "order", referenceId: order.id, createdBy: "system" });
+          await tx.insert(inventoryTable).values({ variantId: line.variantId, locationId: order.locationId, quantity: qty })
+            .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${qty}::numeric` } });
+          continue;
+        }
 
-          if (!profile[0]) {
-            // Direct product deduction
-            const qty = `-${line.quantity}`;
-            await tx.insert(inventoryTransactionsTable).values({ variantId: line.variantId, locationId: order.locationId, type: "consume", quantityChange: qty, referenceType: "order", referenceId: order.id, createdBy: "system" });
-            await tx.insert(inventoryTable).values({ variantId: line.variantId, locationId: order.locationId, quantity: qty })
-              .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${qty}::numeric` } });
-            continue;
-          }
-
-          const profileLines = await tx.select().from(consumptionProfileLinesTable).where(eq(consumptionProfileLinesTable.profileId, profile[0].id));
-
-          for (const pl of profileLines) {
-            if (pl.lineType === "resource" && pl.resourceVariantId && pl.quantity) {
-              const consumed = `-${(parseFloat(pl.quantity) * parseFloat(line.quantity)).toFixed(4)}`;
-              await tx.insert(inventoryTransactionsTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, type: "consume", quantityChange: consumed, unitId: pl.unitId, referenceType: "order", referenceId: order.id, createdBy: "system" });
-              await tx.insert(inventoryTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, quantity: consumed })
-                .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${consumed}::numeric` } });
-            }
+        const profileLines = await tx.select().from(consumptionProfileLinesTable).where(eq(consumptionProfileLinesTable.profileId, profile[0].id));
+        for (const pl of profileLines) {
+          if (pl.lineType === "resource" && pl.resourceVariantId && pl.quantity) {
+            const consumed = `-${(parseFloat(pl.quantity) * parseFloat(line.quantity)).toFixed(3)}`;
+            await tx.insert(inventoryTransactionsTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, type: "consume", quantityChange: consumed, unitId: pl.unitId, referenceType: "order", referenceId: order.id, createdBy: "system" });
+            await tx.insert(inventoryTable).values({ variantId: pl.resourceVariantId, locationId: order.locationId, quantity: consumed })
+              .onConflictDoUpdate({ target: [inventoryTable.variantId, inventoryTable.locationId], set: { quantity: sql`${inventoryTable.quantity} + ${consumed}::numeric` } });
           }
         }
       }

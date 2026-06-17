@@ -78,15 +78,20 @@ export function loadBusiness(req: Request, res: Response, next: NextFunction): v
 
   void (async () => {
     try {
+      // Honor an explicit business selection (multi-business users); otherwise pick
+      // deterministically (oldest membership) rather than an arbitrary row.
+      const requestedBusinessId = req.header("X-Business-Id");
+      const memberConditions = [
+        eq(businessUsersTable.userId, authed.userId),
+        eq(businessUsersTable.active, true),
+      ];
+      if (requestedBusinessId) memberConditions.push(eq(businessUsersTable.businessId, requestedBusinessId));
+
       const [businessUser] = await db
         .select()
         .from(businessUsersTable)
-        .where(
-          and(
-            eq(businessUsersTable.userId, authed.userId),
-            eq(businessUsersTable.active, true),
-          ),
-        )
+        .where(and(...memberConditions))
+        .orderBy(businessUsersTable.createdAt)
         .limit(1);
 
       if (!businessUser) {

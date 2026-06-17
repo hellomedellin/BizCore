@@ -24,7 +24,7 @@ interface Employee {
   hourlyRate: string | null;
 }
 interface Role { id: string; name: string }
-interface Location { id: string; name: string }
+interface Location { id: string; name: string; active?: boolean }
 
 const EMPTY = { name: "", email: "", phone: "", roleId: "", hourlyRate: "", primaryLocationId: "" };
 
@@ -151,7 +151,7 @@ export function EmployeesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">No location</SelectItem>
-              {(locations ?? []).map((l) => (
+              {(locations ?? []).filter((l) => l.active !== false).map((l) => (
                 <SelectItem key={l.id} value={l.id}>
                   {l.name}
                 </SelectItem>
