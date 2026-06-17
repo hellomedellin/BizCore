@@ -14,7 +14,8 @@ router.get("/suppliers", ...guard, async (req, res): Promise<void> => {
   try {
     const conditions = [tenantWhere(suppliersTable.businessId, businessId)];
     if (req.query["search"]) conditions.push(ilike(suppliersTable.name, `%${req.query["search"]}%`));
-    if (req.query["active"] !== undefined) conditions.push(eq(suppliersTable.active, req.query["active"] === "true"));
+    // Default to active-only; pass ?active=false to include removed suppliers.
+    conditions.push(eq(suppliersTable.active, req.query["active"] === undefined ? true : req.query["active"] === "true"));
     const rows = await db.select().from(suppliersTable).where(and(...conditions)).orderBy(suppliersTable.name);
     res.json(rows);
   } catch (err) {
