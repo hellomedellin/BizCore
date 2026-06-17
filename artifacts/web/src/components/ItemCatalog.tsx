@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
+import { RecipeEditor } from "@/components/RecipeEditor";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
@@ -267,6 +268,7 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
             <DialogTitle>Edit {cfg.editLabel}</DialogTitle>
           </DialogHeader>
           {renderFields()}
+          {kind === "menu" && editing ? <RecipeEditor itemId={editing.id} itemName={editing.name} /> : null}
           <div className="flex items-center justify-between pt-1">
             <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmDelete(true)}>
               Remove

@@ -79,6 +79,22 @@ router.get("/items/menu", ...guard, async (req, res): Promise<void> => {
   }
 });
 
+// Ingredients (resource items), one row per variant — used by the recipe editor.
+router.get("/items/ingredients", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const rows = await db
+      .select({ itemId: itemsTable.id, itemName: itemsTable.name, variantId: itemVariantsTable.id, variantName: itemVariantsTable.name })
+      .from(itemVariantsTable)
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .where(and(tenantWhere(itemsTable.businessId, businessId), eq(itemsTable.type, "resource"), eq(itemsTable.active, true), eq(itemVariantsTable.active, true)))
+      .orderBy(itemsTable.name);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
 const createItemSchema = z.object({
   name: z.string().min(1),
   description: z.string().nullable().optional(),
