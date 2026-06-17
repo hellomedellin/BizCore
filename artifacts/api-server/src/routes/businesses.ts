@@ -64,6 +64,7 @@ router.post("/businesses", requireAuth, async (req, res): Promise<void> => {
 
 const updateBusinessSchema = z.object({
   name: z.string().min(1).optional(),
+  currencyCode: z.string().length(3).optional(),
   timezone: z.string().optional(),
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
