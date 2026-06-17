@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, Warehouse, ShoppingCart,
   Users, Clock, Calendar, Truck, Building2,
   Cog, ChevronLeft, ChevronRight, Layers, BookUser,
-  Tag, FileText,
+  Tag, FileText, UtensilsCrossed, Carrot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,8 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Items", href: "/dashboard/items", icon: Package, module: "inventory" },
+  { label: "Menu", href: "/dashboard/menu", icon: UtensilsCrossed, module: "inventory" },
+  { label: "Ingredients", href: "/dashboard/ingredients", icon: Carrot, module: "inventory" },
   { label: "Inventory", href: "/dashboard/inventory", icon: Warehouse, module: "inventory" },
   { label: "Consumption Profiles", href: "/dashboard/consumption-profiles", icon: Layers, module: "consumption_profiles" },
   { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart, module: "orders" },

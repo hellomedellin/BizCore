@@ -130,6 +130,16 @@ router.patch("/items/:id", ...guard, requireRole("owner", "admin", "manager"), a
       and(eq(itemsTable.id, req.params["id"]!), tenantWhere(itemsTable.businessId, businessId))
     ).returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Keep the auto-created single "Default" variant's price in sync so the
+    // sellable price always matches the edited menu price for simple items.
+    if (body.data.basePrice !== undefined) {
+      const variants = await db.select({ id: itemVariantsTable.id }).from(itemVariantsTable).where(eq(itemVariantsTable.itemId, row.id));
+      if (variants.length === 1) {
+        await db.update(itemVariantsTable).set({ price: body.data.basePrice }).where(eq(itemVariantsTable.id, variants[0]!.id));
+      }
+    }
+
     res.json(row);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });

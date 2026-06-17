@@ -9,7 +9,8 @@ import { EmployeePortalLayout } from "@/components/layout/EmployeePortalLayout";
 // Dashboard pages
 import { OnboardingPage } from "@/pages/OnboardingPage";
 import { DashboardHomePage } from "@/pages/DashboardHomePage";
-import { ItemsPage } from "@/pages/ItemsPage";
+import { MenuPage } from "@/pages/MenuPage";
+import { IngredientsPage } from "@/pages/IngredientsPage";
 import { InventoryPage } from "@/pages/InventoryPage";
 import { OrdersPage } from "@/pages/OrdersPage";
 import { EmployeesPage } from "@/pages/EmployeesPage";
@@ -77,9 +78,14 @@ export default function App() {
           <DashboardHomePage />
         </DashboardLayout>
       </Route>
-      <Route path="/dashboard/items">
+      <Route path="/dashboard/menu">
         <DashboardLayout>
-          <ItemsPage />
+          <MenuPage />
+        </DashboardLayout>
+      </Route>
+      <Route path="/dashboard/ingredients">
+        <DashboardLayout>
+          <IngredientsPage />
         </DashboardLayout>
       </Route>
       <Route path="/dashboard/inventory">
