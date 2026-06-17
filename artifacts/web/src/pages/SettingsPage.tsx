@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Trash2, Copy, Eye, EyeOff, Pencil } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
+import { Plus, Trash2, Copy, Eye, EyeOff, Pencil, RefreshCw } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 
 const ALL_MODULES = [
   { key: "inventory", label: "Inventory" },
@@ -158,6 +160,31 @@ export function SettingsPage() {
   const revokeKey = useMutation({
     mutationFn: (id: string) => api.patch(`/api-keys/${id}`, { active: false }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
+  });
+
+  // ── POS integration ───────────────────────────────────────────────────────
+  const { data: posConn } = useQuery({ queryKey: ["pos-connection"], queryFn: () => api.get("/pos-connection").then((r) => r.data).catch(() => null) });
+  const [posForm, setPosForm] = useState({ name: "", apiUrl: "", apiKey: "" });
+  const [posKeyVisible, setPosKeyVisible] = useState(false);
+  const [posEditing, setPosEditing] = useState(false);
+  function openPosEdit() {
+    setPosForm({ name: posConn?.name ?? "", apiUrl: posConn?.apiUrl ?? "", apiKey: "" });
+    setPosEditing(true);
+  }
+  const savePos = useMutation({
+    mutationFn: () => api.put("/pos-connection", { name: posForm.name, apiUrl: posForm.apiUrl, apiKey: posForm.apiKey || null }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["pos-connection"] }); setPosEditing(false); toast({ title: "POS connection saved", variant: "success" }); },
+    onError: (e) => toast({ title: "Couldn't save", description: errText(e), variant: "destructive" }),
+  });
+  const syncPos = useMutation({
+    mutationFn: () => api.post("/payments/pos-sync"),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["pos-connection"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      const { imported, skipped } = res.data;
+      toast({ title: `Sync complete — ${imported} imported, ${skipped} skipped`, variant: "success" });
+    },
+    onError: (e) => toast({ title: "Sync failed", description: errText(e), variant: "destructive" }),
   });
 
   return (
@@ -344,6 +371,73 @@ export function SettingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* POS Integration */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>POS Integration</CardTitle>
+          {posConn && !posEditing && (
+            <Button size="sm" variant="outline" onClick={openPosEdit}><Pencil className="mr-1 h-3.5 w-3.5" /> Edit</Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Hint>
+            BizCore pulls completed transactions from your POS terminal. The POS must expose:{" "}
+            <code className="text-xs bg-slate-100 rounded px-1">GET /transactions?from=ISO&to=ISO</code> returning{" "}
+            <code className="text-xs bg-slate-100 rounded px-1">{"{ transactions: [{ id, bizcore_order_id, amount, method, processedAt }] }"}</code>.
+          </Hint>
+
+          {!posConn && !posEditing ? (
+            <Button variant="outline" onClick={openPosEdit}><Plus className="mr-1 h-4 w-4" /> Connect POS</Button>
+          ) : posEditing ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Connection name</Label>
+                <Input value={posForm.name} onChange={(e) => setPosForm({ ...posForm, name: e.target.value })} placeholder="e.g. Cafetería POS" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>API URL</Label>
+                <Input value={posForm.apiUrl} onChange={(e) => setPosForm({ ...posForm, apiUrl: e.target.value })} placeholder="https://pos.example.com/api" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>API key {posConn ? "(leave blank to keep current)" : ""}</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={posKeyVisible ? "text" : "password"}
+                    value={posForm.apiKey}
+                    onChange={(e) => setPosForm({ ...posForm, apiKey: e.target.value })}
+                    placeholder={posConn ? "•••••••••••••••" : "Bearer token / API key"}
+                  />
+                  <Button size="icon" variant="outline" onClick={() => setPosKeyVisible(!posKeyVisible)}>
+                    {posKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setPosEditing(false)}>Cancel</Button>
+                <Button disabled={!posForm.name.trim() || !posForm.apiUrl.trim() || savePos.isPending} onClick={() => savePos.mutate()}>
+                  {savePos.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-slate-100 divide-y divide-slate-100">
+                {[["Name", posConn.name], ["API URL", posConn.apiUrl], ["Last sync", posConn.lastSyncAt ? formatDateTime(posConn.lastSyncAt) : "Never"]].map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-4 px-3 py-2 text-sm">
+                    <span className="font-medium w-24 text-slate-600">{k}</span>
+                    <span className="text-slate-900 truncate">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <Button variant="outline" disabled={syncPos.isPending} onClick={() => syncPos.mutate()}>
+                <RefreshCw className={`mr-1.5 h-4 w-4 ${syncPos.isPending ? "animate-spin" : ""}`} />
+                {syncPos.isPending ? "Syncing…" : "Sync now"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <ConfirmDialog
         open={confirmLoc}

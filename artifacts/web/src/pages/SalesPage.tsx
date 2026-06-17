@@ -6,25 +6,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
+import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { Plus, Minus, Trash2, ShoppingCart } from "lucide-react";
+import { Plus, Minus, Trash2, ShoppingCart, Printer, MessageCircle, CreditCard } from "lucide-react";
 
 interface MenuVariant { itemId: string; itemName: string; categoryName: string | null; variantId: string; variantName: string; price: string | null }
 interface Order { id: string; orderType: string; status: string; subtotal: string; tax: string; discount: string; total: string; currencyCode: string; customerId: string | null; createdAt: string }
 interface OrderLine { id: string; name: string; quantity: string; unitPrice: string; lineTotal: string }
+interface Payment { id: string; method: string; amount: string; tip: string; processedAt: string; posSource: string; externalTransactionId: string | null }
 interface Customer { id: string; name: string }
 interface CartLine { variantId: string; name: string; unitPrice: number; quantity: number }
 
 const ORDER_TYPES = ["dine_in", "pickup", "delivery", "retail"];
 const TYPE_LABEL: Record<string, string> = { dine_in: "Dine-in", pickup: "Pickup", delivery: "Delivery", retail: "Retail", service: "Service" };
 const STATUS_LABEL: Record<string, string> = { pending: "Pending", confirmed: "Confirmed", in_progress: "In progress", ready: "Ready", completed: "Completed", cancelled: "Cancelled" };
+const METHOD_LABEL: Record<string, string> = { cash: "Cash", card: "Card", transfer: "Transfer", nequi: "Nequi", daviplata: "Daviplata", other: "Other" };
 const statusVariant = (s: string): "success" | "secondary" | "warning" => (s === "completed" ? "success" : s === "cancelled" ? "secondary" : "warning");
+const PAYMENT_METHODS = ["cash", "card", "transfer", "nequi", "daviplata", "other"];
+const TIP_RATE = 0.10; // 10% Colombian propina
+
+const EMPTY_PAY = { method: "cash", amount: "", addTip: false, tip: "", notes: "" };
 
 export function SalesPage() {
   const qc = useQueryClient();
@@ -36,6 +43,8 @@ export function SalesPage() {
   const [orderType, setOrderType] = useState("dine_in");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payForm, setPayForm] = useState(EMPTY_PAY);
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ["orders", activeLocationId],
@@ -46,6 +55,11 @@ export function SalesPage() {
   const { data: detail } = useQuery({
     queryKey: ["order", detailId],
     queryFn: () => api.get(`/orders/${detailId}`).then((r) => r.data as Order & { lines: OrderLine[] }),
+    enabled: !!detailId,
+  });
+  const { data: detailPayments } = useQuery({
+    queryKey: ["payments", detailId],
+    queryFn: () => api.get(`/payments?orderId=${detailId}`).then((r) => r.data as Payment[]),
     enabled: !!detailId,
   });
 
@@ -64,6 +78,14 @@ export function SalesPage() {
     setBuilderOpen(true);
   }
 
+  function openPayDialog() {
+    if (!detail) return;
+    const suggested = parseFloat(detail.total).toFixed(2);
+    const tipAmt = (parseFloat(detail.total) * TIP_RATE).toFixed(2);
+    setPayForm({ method: "cash", amount: suggested, addTip: false, tip: tipAmt, notes: "" });
+    setPayOpen(true);
+  }
+
   function addToCart(v: MenuVariant) {
     setCart((prev) => {
       const ex = prev.find((c) => c.variantId === v.variantId);
@@ -77,6 +99,13 @@ export function SalesPage() {
   }
   const cartTotal = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
   const filteredMenu = (menu ?? []).filter((v) => v.itemName.toLowerCase().includes(menuSearch.toLowerCase()));
+
+  // Payment dialog computed values
+  const orderTotal = detail ? parseFloat(detail.total) : 0;
+  const tipAmount = payForm.addTip ? parseFloat(payForm.tip || "0") : 0;
+  const amountCollected = parseFloat(payForm.amount || "0");
+  const changeDue = Math.max(0, amountCollected - orderTotal - tipAmount);
+  const isShort = amountCollected < orderTotal;
 
   const createOrder = useMutation({
     mutationFn: () =>
@@ -95,30 +124,69 @@ export function SalesPage() {
     onError: (e) => toast({ title: "Couldn't create sale", description: errText(e), variant: "destructive" }),
   });
 
-  const setStatus = useMutation({
-    mutationFn: (status: string) => api.patch(`/orders/${detailId}/status`, { status }),
+  const cancelOrder = useMutation({
+    mutationFn: () => api.patch(`/orders/${detailId}/status`, { status: "cancelled" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["order", detailId] });
-      qc.invalidateQueries({ queryKey: ["stock-levels"] });
       setConfirmCancel(false);
-      toast({ title: "Order updated", variant: "success" });
+      toast({ title: "Order cancelled", variant: "success" });
     },
     onError: (e) => {
       setConfirmCancel(false);
-      toast({ title: "Couldn't update", description: errText(e), variant: "destructive" });
+      toast({ title: "Couldn't cancel", description: errText(e), variant: "destructive" });
     },
+  });
+
+  const recordPayment = useMutation({
+    mutationFn: () =>
+      api.post("/payments", {
+        orderId: detailId,
+        amount: parseFloat(payForm.amount).toFixed(2),
+        tip: payForm.addTip ? parseFloat(payForm.tip || "0").toFixed(2) : "0",
+        method: payForm.method,
+        notes: payForm.notes || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["order", detailId] });
+      qc.invalidateQueries({ queryKey: ["payments", detailId] });
+      qc.invalidateQueries({ queryKey: ["stock-levels"] });
+      setPayOpen(false);
+      toast({ title: "Payment recorded — sale complete!", variant: "success" });
+    },
+    onError: (e) => toast({ title: "Couldn't record payment", description: errText(e), variant: "destructive" }),
   });
 
   const noMenu = (menu ?? []).length === 0;
   const terminal = detail && (detail.status === "completed" || detail.status === "cancelled");
+  const payment = detailPayments?.[0];
+
+  function buildWhatsAppText() {
+    if (!detail) return "";
+    const biz = "Restaurante";
+    const lines = (detail.lines ?? []).map((l) =>
+      `  ${parseFloat(l.quantity)}x ${l.name} — ${formatCurrency(l.lineTotal, detail.currencyCode)}`
+    ).join("\n");
+    const tip = payment ? parseFloat(payment.tip) : 0;
+    const total = parseFloat(detail.total) + tip;
+    const method = payment ? METHOD_LABEL[payment.method] ?? payment.method : "";
+    return encodeURIComponent(
+      `*${biz}*\nRecibo\n\n${lines}\n\nSubtotal: ${formatCurrency(detail.subtotal, detail.currencyCode)}\n` +
+      (parseFloat(detail.tax) > 0 ? `Impuesto: ${formatCurrency(detail.tax, detail.currencyCode)}\n` : "") +
+      (tip > 0 ? `Propina: ${formatCurrency(tip, detail.currencyCode)}\n` : "") +
+      `*TOTAL: ${formatCurrency(total, detail.currencyCode)}*\n` +
+      (method ? `Pago: ${method}\n` : "") +
+      `\n¡Gracias por su visita!`
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
-          <p className="text-sm text-slate-500">Take orders and complete them — completing a sale updates your stock.</p>
+          <p className="text-sm text-slate-500">Take orders and collect payment — completing a sale updates your stock.</p>
         </div>
         <Button onClick={openBuilder}>
           <Plus className="mr-1 h-4 w-4" /> New sale
@@ -129,7 +197,7 @@ export function SalesPage() {
         <GuidedEmptyState
           icon={ShoppingCart}
           title="No sales yet"
-          description={noMenu ? "Add a few menu items first, then you can take orders here." : "Take your first order — pick items, set quantities, and complete the sale."}
+          description={noMenu ? "Add a few menu items first, then you can take orders here." : "Take your first order — pick items, set quantities, and collect payment."}
           actionLabel={noMenu ? "Go to Menu" : "New sale"}
           actionHref={noMenu ? "/dashboard/menu" : undefined}
           onAction={noMenu ? undefined : openBuilder}
@@ -163,7 +231,7 @@ export function SalesPage() {
         </Card>
       )}
 
-      {/* Order builder */}
+      {/* ── Order builder ── */}
       <Dialog open={builderOpen} onOpenChange={setBuilderOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -175,7 +243,6 @@ export function SalesPage() {
             </div>
           ) : (
             <div className="space-y-4 pt-2">
-              {/* Item picker */}
               <div className="space-y-2">
                 <Input placeholder="Search the menu…" value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} />
                 <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
@@ -196,7 +263,6 @@ export function SalesPage() {
                 </div>
               </div>
 
-              {/* Cart */}
               <div className="rounded-lg border border-slate-200">
                 {cart.length === 0 ? (
                   <p className="px-4 py-6 text-center text-sm text-slate-400">Tap items above to add them to the order.</p>
@@ -258,13 +324,20 @@ export function SalesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Order detail */}
-      <Dialog open={!!detailId} onOpenChange={(o) => { if (!o) setDetailId(null); }}>
+      {/* ── Order detail ── */}
+      <Dialog open={!!detailId} onOpenChange={(o) => { if (!o) { setDetailId(null); setPayOpen(false); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Order
               {detail ? <Badge variant={statusVariant(detail.status)}>{STATUS_LABEL[detail.status] ?? detail.status}</Badge> : null}
+              {payment ? (
+                <Badge variant="secondary" className="gap-1">
+                  <CreditCard className="h-3 w-3" />
+                  {METHOD_LABEL[payment.method] ?? payment.method}
+                  {payment.posSource === "pos_sync" ? " · POS" : ""}
+                </Badge>
+              ) : null}
             </DialogTitle>
           </DialogHeader>
           {detail ? (
@@ -273,6 +346,7 @@ export function SalesPage() {
                 <span>{customerName(detail.customerId)} · {TYPE_LABEL[detail.orderType] ?? detail.orderType}</span>
                 <span>{formatDateTime(detail.createdAt)}</span>
               </div>
+
               <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                 {(detail.lines ?? []).map((l) => (
                   <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -281,17 +355,50 @@ export function SalesPage() {
                   </div>
                 ))}
               </div>
+
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{formatCurrency(detail.subtotal, detail.currencyCode)}</span></div>
                 {parseFloat(detail.discount) > 0 && <div className="flex justify-between text-slate-500"><span>Discount</span><span>−{formatCurrency(detail.discount, detail.currencyCode)}</span></div>}
                 {parseFloat(detail.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span>{formatCurrency(detail.tax, detail.currencyCode)}</span></div>}
-                <div className="flex justify-between border-t border-slate-100 pt-1 text-base font-bold"><span>Total</span><span>{formatCurrency(detail.total, detail.currencyCode)}</span></div>
+                {payment && parseFloat(payment.tip) > 0 && (
+                  <div className="flex justify-between text-slate-500"><span>Propina (10%)</span><span>{formatCurrency(payment.tip, detail.currencyCode)}</span></div>
+                )}
+                <div className="flex justify-between border-t border-slate-100 pt-1 text-base font-bold">
+                  <span>Total</span>
+                  <span>{formatCurrency(payment ? (parseFloat(detail.total) + parseFloat(payment.tip)).toFixed(2) : detail.total, detail.currencyCode)}</span>
+                </div>
               </div>
+
+              {/* Completed order — receipt & WhatsApp */}
+              {terminal && payment && (
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => window.open(`/api/v1/receipts/${detail.id}`, "_blank")}
+                  >
+                    <Printer className="mr-1.5 h-4 w-4" /> Print receipt
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-green-700 border-green-200 hover:bg-green-50"
+                    onClick={() => window.open(`https://wa.me/?text=${buildWhatsAppText()}`, "_blank")}
+                  >
+                    <MessageCircle className="mr-1.5 h-4 w-4" /> WhatsApp
+                  </Button>
+                </div>
+              )}
+
+              {/* Active order — action buttons */}
               {!terminal && (
                 <div className="flex items-center justify-between pt-1">
-                  <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmCancel(true)}>Cancel order</Button>
-                  <Button disabled={setStatus.isPending} onClick={() => setStatus.mutate("completed")}>
-                    {setStatus.isPending ? "Working…" : "Complete sale"}
+                  <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmCancel(true)}>
+                    Cancel order
+                  </Button>
+                  <Button onClick={openPayDialog}>
+                    <CreditCard className="mr-1.5 h-4 w-4" /> Take payment
                   </Button>
                 </div>
               )}
@@ -302,6 +409,88 @@ export function SalesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Payment dialog ── */}
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Take payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Payment method</Label>
+              <Select value={payForm.method} onValueChange={(v) => setPayForm({ ...payForm, method: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{METHOD_LABEL[m] ?? m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Amount collected</Label>
+              <Input
+                value={payForm.amount}
+                onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+                inputMode="decimal"
+                placeholder={orderTotal.toFixed(2)}
+              />
+              {payForm.method === "cash" && amountCollected > 0 && !isShort && (
+                <p className="text-sm text-slate-600">
+                  Change due: <span className="font-semibold">{formatCurrency(changeDue, detail?.currencyCode)}</span>
+                </p>
+              )}
+              {isShort && amountCollected > 0 && (
+                <p className="text-sm text-red-600">
+                  Short by {formatCurrency(orderTotal - amountCollected, detail?.currencyCode)}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-slate-100 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Add propina (10%)</span>
+                <button
+                  onClick={() => setPayForm((f) => ({ ...f, addTip: !f.addTip }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${payForm.addTip ? "bg-slate-900" : "bg-slate-200"}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${payForm.addTip ? "translate-x-4" : "translate-x-1"}`} />
+                </button>
+              </div>
+              {payForm.addTip && (
+                <div className="space-y-1">
+                  <Input
+                    value={payForm.tip}
+                    onChange={(e) => setPayForm({ ...payForm, tip: e.target.value })}
+                    inputMode="decimal"
+                  />
+                  <Hint>Adjust the tip amount if needed.</Hint>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-slate-50 p-3 text-sm space-y-1">
+              <div className="flex justify-between text-slate-500"><span>Order total</span><span>{formatCurrency(orderTotal, detail?.currencyCode)}</span></div>
+              {payForm.addTip && <div className="flex justify-between text-slate-500"><span>Propina</span><span>{formatCurrency(parseFloat(payForm.tip || "0"), detail?.currencyCode)}</span></div>}
+              <div className="flex justify-between font-bold border-t border-slate-200 pt-1"><span>Grand total</span><span>{formatCurrency(orderTotal + tipAmount, detail?.currencyCode)}</span></div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Input value={payForm.notes} onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} placeholder="Optional" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!payForm.amount || isShort || recordPayment.isPending}
+              onClick={() => recordPayment.mutate()}
+            >
+              {recordPayment.isPending ? "Processing…" : "Confirm payment"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
@@ -309,8 +498,8 @@ export function SalesPage() {
         description="It will be marked cancelled. Stock is not deducted for cancelled orders."
         confirmLabel="Cancel order"
         destructive
-        loading={setStatus.isPending}
-        onConfirm={() => setStatus.mutate("cancelled")}
+        loading={cancelOrder.isPending}
+        onConfirm={() => cancelOrder.mutate()}
       />
     </div>
   );

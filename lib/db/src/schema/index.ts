@@ -5,6 +5,7 @@ export * from "./inventory";
 export * from "./customers";
 export * from "./consumption-profiles";
 export * from "./orders";
+export * from "./payments";
 export * from "./employees";
 export * from "./purchasing";
 export * from "./custom-fields";
