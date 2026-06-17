@@ -12,7 +12,7 @@ const guard = [requireAuth, loadBusiness, requireModule("customers")];
 router.get("/customers", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
-    const conditions = [tenantWhere(customersTable.businessId, businessId)];
+    const conditions = [tenantWhere(customersTable.businessId, businessId), eq(customersTable.active, true)];
     if (req.query["search"]) conditions.push(ilike(customersTable.name, `%${req.query["search"]}%`));
     const rows = await db.select().from(customersTable).where(and(...conditions)).orderBy(customersTable.name);
     res.json(rows);
@@ -26,6 +26,7 @@ const customerSchema = z.object({
   phone: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   notes: z.string().nullable().optional(),
+  active: z.boolean().optional(),
 });
 
 router.post("/customers", ...guard, async (req, res): Promise<void> => {
