@@ -10,6 +10,7 @@ import {
   Tag, FileText, UtensilsCrossed, Carrot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LocationProvider, LocationSwitcher } from "@/hooks/useLocation";
 
 interface NavItem {
   label: string;
@@ -63,6 +64,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const visibleNav = NAV.filter((item) => !item.module || enabledModules.has(item.module));
 
   return (
+    <LocationProvider>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Sidebar */}
       <aside className={cn(
@@ -99,10 +101,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
+        <div className="sticky top-0 z-10 flex h-14 items-center justify-end border-b border-slate-200 bg-white/80 px-6 backdrop-blur">
+          <LocationSwitcher />
+        </div>
         <div className="p-6">
           {children}
         </div>
       </main>
     </div>
+    </LocationProvider>
   );
 }
