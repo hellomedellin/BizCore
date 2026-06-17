@@ -16,7 +16,7 @@ import { SalesPage } from "@/pages/SalesPage";
 import { EmployeesPage } from "@/pages/EmployeesPage";
 import { TimeTrackingPage } from "@/pages/TimeTrackingPage";
 import { SchedulingPage } from "@/pages/SchedulingPage";
-import { PurchasingPage } from "@/pages/PurchasingPage";
+import { PurchasesPage } from "@/pages/PurchasesPage";
 import { SuppliersPage } from "@/pages/SuppliersPage";
 import { CustomersPage } from "@/pages/CustomersPage";
 import { ConsumptionProfilesPage } from "@/pages/ConsumptionProfilesPage";
@@ -115,7 +115,7 @@ export default function App() {
       </Route>
       <Route path="/dashboard/purchasing">
         <DashboardLayout>
-          <PurchasingPage />
+          <PurchasesPage />
         </DashboardLayout>
       </Route>
       <Route path="/dashboard/suppliers">

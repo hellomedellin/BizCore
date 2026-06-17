@@ -24,14 +24,13 @@ const NAV: NavItem[] = [
   { label: "Menu", href: "/dashboard/menu", icon: UtensilsCrossed, module: "inventory" },
   { label: "Ingredients", href: "/dashboard/ingredients", icon: Carrot, module: "inventory" },
   { label: "Stock", href: "/dashboard/stock", icon: Warehouse, module: "inventory" },
-  { label: "Consumption Profiles", href: "/dashboard/consumption-profiles", icon: Layers, module: "consumption_profiles" },
   { label: "Sales", href: "/dashboard/sales", icon: ShoppingCart, module: "orders" },
   { label: "Customers", href: "/dashboard/customers", icon: BookUser, module: "customers" },
   { label: "Employees", href: "/dashboard/employees", icon: Users, module: "employees" },
   { label: "Time Tracking", href: "/dashboard/time-tracking", icon: Clock, module: "time_tracking" },
   { label: "Scheduling", href: "/dashboard/scheduling", icon: Calendar, module: "scheduling" },
   { label: "Suppliers", href: "/dashboard/suppliers", icon: Tag, module: "purchasing" },
-  { label: "Purchasing", href: "/dashboard/purchasing", icon: Truck, module: "purchasing" },
+  { label: "Purchases", href: "/dashboard/purchasing", icon: Truck, module: "purchasing" },
   { label: "Settings", href: "/dashboard/settings", icon: Cog },
 ];
 
