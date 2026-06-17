@@ -12,7 +12,7 @@ import { DashboardHomePage } from "@/pages/DashboardHomePage";
 import { MenuPage } from "@/pages/MenuPage";
 import { IngredientsPage } from "@/pages/IngredientsPage";
 import { StockPage } from "@/pages/StockPage";
-import { OrdersPage } from "@/pages/OrdersPage";
+import { SalesPage } from "@/pages/SalesPage";
 import { EmployeesPage } from "@/pages/EmployeesPage";
 import { TimeTrackingPage } from "@/pages/TimeTrackingPage";
 import { SchedulingPage } from "@/pages/SchedulingPage";
@@ -93,9 +93,9 @@ export default function App() {
           <StockPage />
         </DashboardLayout>
       </Route>
-      <Route path="/dashboard/orders">
+      <Route path="/dashboard/sales">
         <DashboardLayout>
-          <OrdersPage />
+          <SalesPage />
         </DashboardLayout>
       </Route>
       <Route path="/dashboard/employees">

@@ -25,7 +25,7 @@ const NAV: NavItem[] = [
   { label: "Ingredients", href: "/dashboard/ingredients", icon: Carrot, module: "inventory" },
   { label: "Stock", href: "/dashboard/stock", icon: Warehouse, module: "inventory" },
   { label: "Consumption Profiles", href: "/dashboard/consumption-profiles", icon: Layers, module: "consumption_profiles" },
-  { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart, module: "orders" },
+  { label: "Sales", href: "/dashboard/sales", icon: ShoppingCart, module: "orders" },
   { label: "Customers", href: "/dashboard/customers", icon: BookUser, module: "customers" },
   { label: "Employees", href: "/dashboard/employees", icon: Users, module: "employees" },
   { label: "Time Tracking", href: "/dashboard/time-tracking", icon: Clock, module: "time_tracking" },

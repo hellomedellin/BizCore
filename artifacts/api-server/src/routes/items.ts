@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
 import { itemsTable, itemVariantsTable, categoriesTable } from "@bizcore/db/schema";
-import { eq, and, ilike, SQL } from "drizzle-orm";
+import { eq, and, ilike, inArray, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -43,6 +43,36 @@ router.get("/items", ...guard, async (req, res): Promise<void> => {
       .where(and(...conditions))
       .orderBy(itemsTable.name);
 
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Sellable menu items, one row per priced variant — used by the order builder.
+// Declared before /items/:id so "menu" isn't captured as an :id.
+router.get("/items/menu", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const rows = await db
+      .select({
+        itemId: itemsTable.id,
+        itemName: itemsTable.name,
+        categoryName: categoriesTable.name,
+        variantId: itemVariantsTable.id,
+        variantName: itemVariantsTable.name,
+        price: itemVariantsTable.price,
+      })
+      .from(itemVariantsTable)
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
+      .where(and(
+        tenantWhere(itemsTable.businessId, businessId),
+        inArray(itemsTable.type, ["product", "service", "bundle"]),
+        eq(itemsTable.active, true),
+        eq(itemVariantsTable.active, true),
+      ))
+      .orderBy(itemsTable.name, itemVariantsTable.name);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
