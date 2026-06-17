@@ -89,7 +89,7 @@ router.patch("/time-entries/:id", ...guard, requireRole("owner", "admin", "manag
     const body = createEntrySchema.partial().safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const [existing] = await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, req.params["id"]!));
+    const [existing] = await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, req.params["id"] as string));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable)
@@ -119,7 +119,7 @@ router.post("/time-entries/:id/review", ...guard, requireRole("owner", "admin", 
     const body = z.object({ action: z.enum(["approve", "reject"]), rejectionReason: z.string().optional() }).safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const [existing] = await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, req.params["id"]!));
+    const [existing] = await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, req.params["id"] as string));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable)
@@ -211,7 +211,7 @@ router.post("/time-off-requests/:id/review", ...guard, requireRole("owner", "adm
     const body = z.object({ action: z.enum(["approve", "reject"]), rejectionReason: z.string().optional() }).safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-    const [existing] = await db.select().from(timeOffRequestsTable).where(eq(timeOffRequestsTable.id, req.params["id"]!));
+    const [existing] = await db.select().from(timeOffRequestsTable).where(eq(timeOffRequestsTable.id, req.params["id"] as string));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable)

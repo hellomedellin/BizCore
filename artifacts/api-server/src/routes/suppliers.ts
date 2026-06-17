@@ -48,7 +48,7 @@ router.post("/suppliers", ...guard, requireRole("owner", "admin", "manager"), as
 router.get("/suppliers/:id", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
-    const [row] = await db.select().from(suppliersTable).where(and(eq(suppliersTable.id, req.params["id"]!), tenantWhere(suppliersTable.businessId, businessId)));
+    const [row] = await db.select().from(suppliersTable).where(and(eq(suppliersTable.id, req.params["id"] as string), tenantWhere(suppliersTable.businessId, businessId)));
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
   } catch (err) {
@@ -61,7 +61,7 @@ router.patch("/suppliers/:id", ...guard, requireRole("owner", "admin", "manager"
   try {
     const body = supplierSchema.partial().safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
-    const [row] = await db.update(suppliersTable).set(body.data).where(and(eq(suppliersTable.id, req.params["id"]!), tenantWhere(suppliersTable.businessId, businessId))).returning();
+    const [row] = await db.update(suppliersTable).set(body.data).where(and(eq(suppliersTable.id, req.params["id"] as string), tenantWhere(suppliersTable.businessId, businessId))).returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
   } catch (err) {

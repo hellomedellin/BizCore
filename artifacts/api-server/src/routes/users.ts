@@ -57,7 +57,7 @@ router.patch("/team/:businessUserId", requireAuth, loadBusiness, requireRole("ow
       .update(businessUsersTable)
       .set(body.data)
       .where(and(
-        eq(businessUsersTable.id, req.params["businessUserId"]!),
+        eq(businessUsersTable.id, req.params["businessUserId"] as string),
         tenantWhere(businessUsersTable.businessId, businessId),
       ))
       .returning();
@@ -80,7 +80,7 @@ router.put("/team/:businessUserId/locations", requireAuth, loadBusiness, require
       .select({ id: businessUsersTable.id })
       .from(businessUsersTable)
       .where(and(
-        eq(businessUsersTable.id, req.params["businessUserId"]!),
+        eq(businessUsersTable.id, req.params["businessUserId"] as string),
         tenantWhere(businessUsersTable.businessId, businessId),
       ));
     if (!bu) { res.status(404).json({ error: "Team member not found" }); return; }

@@ -72,7 +72,7 @@ router.patch("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"), 
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const [existing] = await db.select({ id: shiftsTable.id, employeeId: shiftsTable.employeeId }).from(shiftsTable)
-      .where(eq(shiftsTable.id, req.params["id"]!));
+      .where(eq(shiftsTable.id, req.params["id"] as string));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     // Tenant check via employee
@@ -95,7 +95,7 @@ router.delete("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"),
   const { businessId } = req as AuthedRequest;
   try {
     const [existing] = await db.select({ id: shiftsTable.id, employeeId: shiftsTable.employeeId }).from(shiftsTable)
-      .where(eq(shiftsTable.id, req.params["id"]!));
+      .where(eq(shiftsTable.id, req.params["id"] as string));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable)

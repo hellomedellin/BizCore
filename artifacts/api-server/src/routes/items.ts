@@ -154,7 +154,7 @@ router.get("/items/:id", ...guard, async (req, res): Promise<void> => {
       })
       .from(itemsTable)
       .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
-      .where(and(eq(itemsTable.id, req.params["id"]!), tenantWhere(itemsTable.businessId, businessId)));
+      .where(and(eq(itemsTable.id, req.params["id"] as string), tenantWhere(itemsTable.businessId, businessId)));
 
     if (!item) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -173,7 +173,7 @@ router.patch("/items/:id", ...guard, requireRole("owner", "admin", "manager"), a
     const body = updateItemSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     const [row] = await db.update(itemsTable).set(body.data).where(
-      and(eq(itemsTable.id, req.params["id"]!), tenantWhere(itemsTable.businessId, businessId))
+      and(eq(itemsTable.id, req.params["id"] as string), tenantWhere(itemsTable.businessId, businessId))
     ).returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -206,7 +206,7 @@ router.post("/items/:id/variants", ...guard, requireRole("owner", "admin", "mana
   const { businessId } = req as AuthedRequest;
   try {
     const [item] = await db.select({ id: itemsTable.id }).from(itemsTable).where(
-      and(eq(itemsTable.id, req.params["id"]!), tenantWhere(itemsTable.businessId, businessId))
+      and(eq(itemsTable.id, req.params["id"] as string), tenantWhere(itemsTable.businessId, businessId))
     );
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
 
@@ -224,7 +224,7 @@ router.patch("/items/:id/variants/:variantId", ...guard, requireRole("owner", "a
   const { businessId } = req as AuthedRequest;
   try {
     const [item] = await db.select({ id: itemsTable.id }).from(itemsTable).where(
-      and(eq(itemsTable.id, req.params["id"]!), tenantWhere(itemsTable.businessId, businessId))
+      and(eq(itemsTable.id, req.params["id"] as string), tenantWhere(itemsTable.businessId, businessId))
     );
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
 
@@ -232,7 +232,7 @@ router.patch("/items/:id/variants/:variantId", ...guard, requireRole("owner", "a
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const [variant] = await db.update(itemVariantsTable).set(body.data).where(
-      and(eq(itemVariantsTable.id, req.params["variantId"]!), eq(itemVariantsTable.itemId, item.id))
+      and(eq(itemVariantsTable.id, req.params["variantId"] as string), eq(itemVariantsTable.itemId, item.id))
     ).returning();
     if (!variant) { res.status(404).json({ error: "Variant not found" }); return; }
     res.json(variant);

@@ -19,7 +19,6 @@ import { SchedulingPage } from "@/pages/SchedulingPage";
 import { PurchasesPage } from "@/pages/PurchasesPage";
 import { SuppliersPage } from "@/pages/SuppliersPage";
 import { CustomersPage } from "@/pages/CustomersPage";
-import { ConsumptionProfilesPage } from "@/pages/ConsumptionProfilesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
 // Employee portal pages
@@ -126,11 +125,6 @@ export default function App() {
       <Route path="/dashboard/customers">
         <DashboardLayout>
           <CustomersPage />
-        </DashboardLayout>
-      </Route>
-      <Route path="/dashboard/consumption-profiles">
-        <DashboardLayout>
-          <ConsumptionProfilesPage />
         </DashboardLayout>
       </Route>
       <Route path="/dashboard/settings">

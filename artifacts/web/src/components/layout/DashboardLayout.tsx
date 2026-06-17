@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { UserButton } from "@clerk/react";
 import { api } from "@/lib/api";
 import {
-  LayoutDashboard, Package, Warehouse, ShoppingCart,
+  LayoutDashboard, Warehouse, ShoppingCart,
   Users, Clock, Calendar, Truck, Building2,
-  Cog, ChevronLeft, ChevronRight, Layers, BookUser,
-  Tag, FileText, UtensilsCrossed, Carrot,
+  Cog, ChevronLeft, ChevronRight, BookUser,
+  Tag, UtensilsCrossed, Carrot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LocationProvider, LocationSwitcher } from "@/hooks/useLocation";
@@ -17,20 +17,25 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   module?: string;
+  group?: string;
 }
 
 const NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Menu", href: "/dashboard/menu", icon: UtensilsCrossed, module: "inventory" },
-  { label: "Ingredients", href: "/dashboard/ingredients", icon: Carrot, module: "inventory" },
-  { label: "Stock", href: "/dashboard/stock", icon: Warehouse, module: "inventory" },
-  { label: "Sales", href: "/dashboard/sales", icon: ShoppingCart, module: "orders" },
-  { label: "Customers", href: "/dashboard/customers", icon: BookUser, module: "customers" },
-  { label: "Employees", href: "/dashboard/employees", icon: Users, module: "employees" },
-  { label: "Time Tracking", href: "/dashboard/time-tracking", icon: Clock, module: "time_tracking" },
-  { label: "Scheduling", href: "/dashboard/scheduling", icon: Calendar, module: "scheduling" },
-  { label: "Suppliers", href: "/dashboard/suppliers", icon: Tag, module: "purchasing" },
-  { label: "Purchases", href: "/dashboard/purchasing", icon: Truck, module: "purchasing" },
+  // Operations
+  { label: "Menu", href: "/dashboard/menu", icon: UtensilsCrossed, module: "inventory", group: "Operations" },
+  { label: "Ingredients", href: "/dashboard/ingredients", icon: Carrot, module: "inventory", group: "Operations" },
+  { label: "Stock", href: "/dashboard/stock", icon: Warehouse, module: "inventory", group: "Operations" },
+  { label: "Sales", href: "/dashboard/sales", icon: ShoppingCart, module: "orders", group: "Operations" },
+  { label: "Customers", href: "/dashboard/customers", icon: BookUser, module: "customers", group: "Operations" },
+  // Purchasing
+  { label: "Suppliers", href: "/dashboard/suppliers", icon: Tag, module: "purchasing", group: "Purchasing" },
+  { label: "Purchases", href: "/dashboard/purchasing", icon: Truck, module: "purchasing", group: "Purchasing" },
+  // Team
+  { label: "Employees", href: "/dashboard/employees", icon: Users, module: "employees", group: "Team" },
+  { label: "Scheduling", href: "/dashboard/scheduling", icon: Calendar, module: "scheduling", group: "Team" },
+  { label: "Time Tracking", href: "/dashboard/time-tracking", icon: Clock, module: "time_tracking", group: "Team" },
+  // System
   { label: "Settings", href: "/dashboard/settings", icon: Cog },
 ];
 
@@ -81,9 +86,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
-          {visibleNav.map((item) => (
-            <NavLink key={item.href} item={item} collapsed={collapsed} />
-          ))}
+          {visibleNav.reduce<React.ReactNode[]>((acc, item, idx) => {
+            const prevGroup = idx > 0 ? visibleNav[idx - 1]?.group : undefined;
+            if (item.group && item.group !== prevGroup && !collapsed) {
+              acc.push(
+                <p key={`group-${item.group}`} className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                  {item.group}
+                </p>
+              );
+            }
+            acc.push(<NavLink key={item.href} item={item} collapsed={collapsed} />);
+            return acc;
+          }, [])}
         </nav>
 
         {/* User / collapse */}

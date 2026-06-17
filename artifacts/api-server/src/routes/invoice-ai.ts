@@ -87,7 +87,7 @@ router.get("/invoice-ai/:purchaseOrderId", ...guard, async (req, res): Promise<v
   const { businessId } = req as AuthedRequest;
   try {
     const [po] = await db.select().from(purchaseOrdersTable).where(
-      and(eq(purchaseOrdersTable.id, req.params["purchaseOrderId"]!), tenantWhere(purchaseOrdersTable.businessId, businessId))
+      and(eq(purchaseOrdersTable.id, req.params["purchaseOrderId"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
     );
     if (!po) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -118,7 +118,7 @@ router.patch("/invoice-ai/:purchaseOrderId/review", ...guard, requireRole("owner
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const [po] = await db.select().from(purchaseOrdersTable).where(
-      and(eq(purchaseOrdersTable.id, req.params["purchaseOrderId"]!), tenantWhere(purchaseOrdersTable.businessId, businessId))
+      and(eq(purchaseOrdersTable.id, req.params["purchaseOrderId"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
     );
     if (!po) { res.status(404).json({ error: "Not found" }); return; }
 

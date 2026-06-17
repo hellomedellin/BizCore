@@ -75,7 +75,7 @@ router.patch("/api-keys/:id", ...guard, async (req, res): Promise<void> => {
     const body = z.object({ name: z.string().optional(), active: z.boolean().optional(), scopes: z.array(z.string()).optional() }).safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     const [row] = await db.update(apiKeysTable).set(body.data)
-      .where(and(eq(apiKeysTable.id, req.params["id"]!), tenantWhere(apiKeysTable.businessId, businessId)))
+      .where(and(eq(apiKeysTable.id, req.params["id"] as string), tenantWhere(apiKeysTable.businessId, businessId)))
       .returning({ id: apiKeysTable.id, name: apiKeysTable.name, keyPrefix: apiKeysTable.keyPrefix, active: apiKeysTable.active, scopes: apiKeysTable.scopes });
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
@@ -88,7 +88,7 @@ router.delete("/api-keys/:id", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [row] = await db.delete(apiKeysTable)
-      .where(and(eq(apiKeysTable.id, req.params["id"]!), tenantWhere(apiKeysTable.businessId, businessId)))
+      .where(and(eq(apiKeysTable.id, req.params["id"] as string), tenantWhere(apiKeysTable.businessId, businessId)))
       .returning({ id: apiKeysTable.id });
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.status(204).send();

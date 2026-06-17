@@ -65,7 +65,7 @@ router.get("/consumption-profiles/:id", ...guard, async (req, res): Promise<void
   const { businessId } = req as AuthedRequest;
   try {
     const [profile] = await db.select().from(consumptionProfilesTable).where(
-      and(eq(consumptionProfilesTable.id, req.params["id"]!), tenantWhere(consumptionProfilesTable.businessId, businessId))
+      and(eq(consumptionProfilesTable.id, req.params["id"] as string), tenantWhere(consumptionProfilesTable.businessId, businessId))
     );
     if (!profile) { res.status(404).json({ error: "Not found" }); return; }
     const lines = await db.select().from(consumptionProfileLinesTable).where(eq(consumptionProfileLinesTable.profileId, profile.id));
@@ -95,7 +95,7 @@ router.post("/consumption-profiles/:id/lines", ...guard, requireRole("owner", "a
   const { businessId } = req as AuthedRequest;
   try {
     const [profile] = await db.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable).where(
-      and(eq(consumptionProfilesTable.id, req.params["id"]!), tenantWhere(consumptionProfilesTable.businessId, businessId))
+      and(eq(consumptionProfilesTable.id, req.params["id"] as string), tenantWhere(consumptionProfilesTable.businessId, businessId))
     );
     if (!profile) { res.status(404).json({ error: "Profile not found" }); return; }
 
@@ -113,11 +113,11 @@ router.delete("/consumption-profiles/:id/lines/:lineId", ...guard, requireRole("
   const { businessId } = req as AuthedRequest;
   try {
     const [profile] = await db.select({ id: consumptionProfilesTable.id }).from(consumptionProfilesTable).where(
-      and(eq(consumptionProfilesTable.id, req.params["id"]!), tenantWhere(consumptionProfilesTable.businessId, businessId))
+      and(eq(consumptionProfilesTable.id, req.params["id"] as string), tenantWhere(consumptionProfilesTable.businessId, businessId))
     );
     if (!profile) { res.status(404).json({ error: "Profile not found" }); return; }
     await db.delete(consumptionProfileLinesTable).where(
-      and(eq(consumptionProfileLinesTable.id, req.params["lineId"]!), eq(consumptionProfileLinesTable.profileId, profile.id))
+      and(eq(consumptionProfileLinesTable.id, req.params["lineId"] as string), eq(consumptionProfileLinesTable.profileId, profile.id))
     );
     res.status(204).end();
   } catch (err) {

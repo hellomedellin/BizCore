@@ -42,7 +42,7 @@ router.get("/locations/:id", requireAuth, loadBusiness, async (req, res): Promis
   const { businessId } = req as AuthedRequest;
   try {
     const [row] = await db.select().from(locationsTable).where(
-      and(eq(locationsTable.id, req.params["id"]!), tenantWhere(locationsTable.businessId, businessId))
+      and(eq(locationsTable.id, req.params["id"] as string), tenantWhere(locationsTable.businessId, businessId))
     );
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
@@ -67,7 +67,7 @@ router.patch("/locations/:id", requireAuth, loadBusiness, requireRole("owner", "
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     const [row] = await db.update(locationsTable)
       .set(body.data)
-      .where(and(eq(locationsTable.id, req.params["id"]!), tenantWhere(locationsTable.businessId, businessId)))
+      .where(and(eq(locationsTable.id, req.params["id"] as string), tenantWhere(locationsTable.businessId, businessId)))
       .returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);

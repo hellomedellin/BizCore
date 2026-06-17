@@ -79,7 +79,7 @@ router.get("/purchase-orders/:id", ...guard, async (req, res): Promise<void> => 
   const { businessId } = req as AuthedRequest;
   try {
     const [po] = await db.select().from(purchaseOrdersTable).where(
-      and(eq(purchaseOrdersTable.id, req.params["id"]!), tenantWhere(purchaseOrdersTable.businessId, businessId))
+      and(eq(purchaseOrdersTable.id, req.params["id"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
     );
     if (!po) { res.status(404).json({ error: "Not found" }); return; }
     const lines = await db.select().from(purchaseOrderLinesTable).where(eq(purchaseOrderLinesTable.purchaseOrderId, po.id));
@@ -94,7 +94,7 @@ router.post("/purchase-orders/:id/receive", ...guard, requireRole("owner", "admi
   const { businessId, userId } = req as AuthedRequest;
   try {
     const [po] = await db.select().from(purchaseOrdersTable).where(
-      and(eq(purchaseOrdersTable.id, req.params["id"]!), tenantWhere(purchaseOrdersTable.businessId, businessId))
+      and(eq(purchaseOrdersTable.id, req.params["id"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
     );
     if (!po) { res.status(404).json({ error: "Not found" }); return; }
     if (po.status === "received") { res.status(400).json({ error: "Already received" }); return; }
@@ -134,7 +134,7 @@ router.patch("/purchase-orders/:id/lines/:lineId", ...guard, requireRole("owner"
   const { businessId } = req as AuthedRequest;
   try {
     const [po] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable).where(
-      and(eq(purchaseOrdersTable.id, req.params["id"]!), tenantWhere(purchaseOrdersTable.businessId, businessId))
+      and(eq(purchaseOrdersTable.id, req.params["id"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
     );
     if (!po) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -145,7 +145,7 @@ router.patch("/purchase-orders/:id/lines/:lineId", ...guard, requireRole("owner"
       variantId: body.data.variantId,
       matched: body.data.matched ?? (body.data.variantId !== null),
     }).where(
-      and(eq(purchaseOrderLinesTable.id, req.params["lineId"]!), eq(purchaseOrderLinesTable.purchaseOrderId, po.id))
+      and(eq(purchaseOrderLinesTable.id, req.params["lineId"] as string), eq(purchaseOrderLinesTable.purchaseOrderId, po.id))
     ).returning();
     if (!row) { res.status(404).json({ error: "Line not found" }); return; }
     res.json(row);

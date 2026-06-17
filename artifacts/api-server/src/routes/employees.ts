@@ -46,7 +46,7 @@ router.patch("/employee-roles/:id", ...guard, requireRole("owner", "admin"), asy
     const body = roleSchema.partial().safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     const [row] = await db.update(employeeRolesTable).set(body.data)
-      .where(and(eq(employeeRolesTable.id, req.params["id"]!), tenantWhere(employeeRolesTable.businessId, businessId)))
+      .where(and(eq(employeeRolesTable.id, req.params["id"] as string), tenantWhere(employeeRolesTable.businessId, businessId)))
       .returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
@@ -105,7 +105,7 @@ router.get("/employees/:id", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [employee] = await db.select().from(employeesTable).where(
-      and(eq(employeesTable.id, req.params["id"]!), tenantWhere(employeesTable.businessId, businessId))
+      and(eq(employeesTable.id, req.params["id"] as string), tenantWhere(employeesTable.businessId, businessId))
     );
     if (!employee) { res.status(404).json({ error: "Not found" }); return; }
     const locations = await db.select().from(employeeLocationsTable).where(eq(employeeLocationsTable.employeeId, employee.id));
@@ -123,7 +123,7 @@ router.patch("/employees/:id", ...guard, requireRole("owner", "admin", "manager"
     const { locationIds, ...fields } = body.data;
 
     const [employee] = await db.update(employeesTable).set(fields)
-      .where(and(eq(employeesTable.id, req.params["id"]!), tenantWhere(employeesTable.businessId, businessId)))
+      .where(and(eq(employeesTable.id, req.params["id"] as string), tenantWhere(employeesTable.businessId, businessId)))
       .returning();
     if (!employee) { res.status(404).json({ error: "Not found" }); return; }
 

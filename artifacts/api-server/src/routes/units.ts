@@ -39,10 +39,10 @@ router.post("/units", requireAuth, loadBusiness, requireRole("owner", "admin"), 
 // System units cannot be deleted
 router.delete("/units/:id", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
   try {
-    const [unit] = await db.select().from(unitsTable).where(eq(unitsTable.id, req.params["id"]!));
+    const [unit] = await db.select().from(unitsTable).where(eq(unitsTable.id, req.params["id"] as string));
     if (!unit) { res.status(404).json({ error: "Not found" }); return; }
     if (unit.isSystem) { res.status(400).json({ error: "System units cannot be deleted" }); return; }
-    await db.delete(unitsTable).where(eq(unitsTable.id, req.params["id"]!));
+    await db.delete(unitsTable).where(eq(unitsTable.id, req.params["id"] as string));
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });

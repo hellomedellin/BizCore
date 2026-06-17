@@ -160,7 +160,7 @@ router.get("/orders/:id", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [order] = await db.select().from(ordersTable).where(
-      and(eq(ordersTable.id, req.params["id"]!), tenantWhere(ordersTable.businessId, businessId))
+      and(eq(ordersTable.id, req.params["id"] as string), tenantWhere(ordersTable.businessId, businessId))
     );
     if (!order) { res.status(404).json({ error: "Not found" }); return; }
     const lines = await db.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
@@ -189,7 +189,7 @@ router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => 
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
     const [order] = await db.select().from(ordersTable).where(
-      and(eq(ordersTable.id, req.params["id"]!), tenantWhere(ordersTable.businessId, businessId))
+      and(eq(ordersTable.id, req.params["id"] as string), tenantWhere(ordersTable.businessId, businessId))
     );
     if (!order) { res.status(404).json({ error: "Not found" }); return; }
 

@@ -24,7 +24,7 @@ router.get("/categories", ...guard, async (req, res): Promise<void> => {
 const createCategorySchema = z.object({
   name: z.string().min(1),
   parentId: z.string().uuid().nullable().optional(),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().int().optional().transform((v) => (v == null ? undefined : String(v))),
 });
 
 router.post("/categories", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
@@ -45,7 +45,7 @@ router.patch("/categories/:id", ...guard, requireRole("owner", "admin", "manager
     const body = createCategorySchema.partial().extend({ active: z.boolean().optional() }).safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     const [row] = await db.update(categoriesTable).set(body.data)
-      .where(and(eq(categoriesTable.id, req.params["id"]!), tenantWhere(categoriesTable.businessId, businessId)))
+      .where(and(eq(categoriesTable.id, req.params["id"] as string), tenantWhere(categoriesTable.businessId, businessId)))
       .returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
