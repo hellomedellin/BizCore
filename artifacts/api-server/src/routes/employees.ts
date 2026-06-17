@@ -62,7 +62,8 @@ router.get("/employees", ...guard, async (req, res): Promise<void> => {
   try {
     const conditions = [tenantWhere(employeesTable.businessId, businessId)];
     if (req.query["search"]) conditions.push(ilike(employeesTable.name, `%${req.query["search"]}%`));
-    if (req.query["active"] !== undefined) conditions.push(eq(employeesTable.active, req.query["active"] === "true"));
+    // Default to active-only; pass ?active=false to include removed employees.
+    conditions.push(eq(employeesTable.active, req.query["active"] === undefined ? true : req.query["active"] === "true"));
     if (req.query["roleId"]) conditions.push(eq(employeesTable.roleId, req.query["roleId"] as string));
     const rows = await db.select().from(employeesTable).where(and(...conditions)).orderBy(employeesTable.name);
     res.json(rows);
