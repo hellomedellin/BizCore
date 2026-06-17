@@ -23,7 +23,7 @@ const NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Menu", href: "/dashboard/menu", icon: UtensilsCrossed, module: "inventory" },
   { label: "Ingredients", href: "/dashboard/ingredients", icon: Carrot, module: "inventory" },
-  { label: "Inventory", href: "/dashboard/inventory", icon: Warehouse, module: "inventory" },
+  { label: "Stock", href: "/dashboard/stock", icon: Warehouse, module: "inventory" },
   { label: "Consumption Profiles", href: "/dashboard/consumption-profiles", icon: Layers, module: "consumption_profiles" },
   { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart, module: "orders" },
   { label: "Customers", href: "/dashboard/customers", icon: BookUser, module: "customers" },

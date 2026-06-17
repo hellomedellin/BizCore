@@ -11,7 +11,7 @@ import { OnboardingPage } from "@/pages/OnboardingPage";
 import { DashboardHomePage } from "@/pages/DashboardHomePage";
 import { MenuPage } from "@/pages/MenuPage";
 import { IngredientsPage } from "@/pages/IngredientsPage";
-import { InventoryPage } from "@/pages/InventoryPage";
+import { StockPage } from "@/pages/StockPage";
 import { OrdersPage } from "@/pages/OrdersPage";
 import { EmployeesPage } from "@/pages/EmployeesPage";
 import { TimeTrackingPage } from "@/pages/TimeTrackingPage";
@@ -88,9 +88,9 @@ export default function App() {
           <IngredientsPage />
         </DashboardLayout>
       </Route>
-      <Route path="/dashboard/inventory">
+      <Route path="/dashboard/stock">
         <DashboardLayout>
-          <InventoryPage />
+          <StockPage />
         </DashboardLayout>
       </Route>
       <Route path="/dashboard/orders">

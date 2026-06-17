@@ -69,6 +69,44 @@ router.get("/inventory", ...guard, async (req, res): Promise<void> => {
   }
 });
 
+// All trackable ingredients with their current stock at a location (0 if never stocked).
+// This is what the guided Stock page lists, so unstocked ingredients still show.
+router.get("/inventory/levels", ...guard, async (req, res): Promise<void> => {
+  const { businessId, allowedLocationIds } = req as AuthedRequest;
+  try {
+    const locationId = req.query["locationId"] as string | undefined;
+    if (!locationId) { res.status(400).json({ error: "locationId is required" }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
+
+    const rows = await db
+      .select({
+        itemId: itemsTable.id,
+        itemName: itemsTable.name,
+        variantId: itemVariantsTable.id,
+        variantName: itemVariantsTable.name,
+        quantity: inventoryTable.quantity,
+        lowStockThreshold: inventoryTable.lowStockThreshold,
+        unitId: inventoryTable.unitId,
+        unitAbbreviation: unitsTable.abbreviation,
+      })
+      .from(itemVariantsTable)
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .leftJoin(inventoryTable, and(eq(inventoryTable.variantId, itemVariantsTable.id), eq(inventoryTable.locationId, locationId)))
+      .leftJoin(unitsTable, eq(inventoryTable.unitId, unitsTable.id))
+      .where(and(tenantWhere(itemsTable.businessId, businessId), eq(itemsTable.type, "resource"), eq(itemsTable.active, true)))
+      .orderBy(itemsTable.name);
+
+    const result = rows.map((r) => ({
+      ...r,
+      quantity: r.quantity ?? "0",
+      isLowStock: r.lowStockThreshold != null && r.quantity != null && parseFloat(r.quantity) < parseFloat(r.lowStockThreshold),
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
 // Manual adjustment
 const adjustSchema = z.object({
   variantId: z.string().uuid(),
