@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DirectoryCatalog } from "@/components/DirectoryCatalog";
 import { Tag } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 interface Supplier {
   id: string;
@@ -17,6 +18,8 @@ type F = { name: string; contactName: string; phone: string; email: string; addr
 const EMPTY: F = { name: "", contactName: "", phone: "", email: "", address: "", notes: "" };
 
 export function SuppliersPage() {
+  const t = useT();
+
   return (
     <DirectoryCatalog<Supplier, F>
       queryKey={["suppliers"]}
@@ -38,47 +41,48 @@ export function SuppliersPage() {
         address: f.address || null,
         notes: f.notes || null,
       })}
-      title="Suppliers"
-      subtitle="The businesses you buy ingredients and supplies from."
+      title={t("suppliers.title")}
+      subtitle={t("suppliers.subtitle")}
       icon={Tag}
-      emptyTitle="No suppliers yet"
-      emptyDescription="Add the vendors you buy from. You'll pick a supplier when you create a purchase (a delivery) to restock ingredients."
-      addLabel="Add supplier"
-      entitySingular="supplier"
-      removeDescription="They'll be hidden from your list. Past purchases are kept."
+      emptyTitle={t("suppliers.emptyTitle")}
+      emptyDescription={t("suppliers.emptyDescription")}
+      addLabel={t("suppliers.addLabel")}
+      entitySingular={t("suppliers.entitySingular")}
+      removeDescription={t("suppliers.removeDescription")}
+      toastAdded={t("suppliers.toast.added")}
       columns={[
-        { header: "Name", render: (s) => s.name, className: "font-medium" },
-        { header: "Contact", render: (s) => s.contactName ?? "—" },
-        { header: "Phone", render: (s) => s.phone ?? "—" },
-        { header: "Email", render: (s) => s.email ?? "—" },
+        { header: t("suppliers.table.col.name"), render: (s) => s.name, className: "font-medium" },
+        { header: t("suppliers.table.col.contact"), render: (s) => s.contactName ?? "—" },
+        { header: t("suppliers.table.col.phone"), render: (s) => s.phone ?? "—" },
+        { header: t("suppliers.table.col.email"), render: (s) => s.email ?? "—" },
       ]}
       renderFields={(form, setForm) => (
         <div className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label>Name *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Roast Republic" />
+            <Label>{t("suppliers.form.label.name")}</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("suppliers.form.placeholder.name")} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Contact name</Label>
+              <Label>{t("suppliers.form.label.contactName")}</Label>
               <Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label>Phone</Label>
+              <Label>{t("suppliers.form.label.phone")}</Label>
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Email</Label>
+            <Label>{t("suppliers.form.label.email")}</Label>
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label>Address</Label>
+            <Label>{t("suppliers.form.label.address")}</Label>
             <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label>Notes</Label>
-            <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional — payment terms, what they supply…" />
+            <Label>{t("suppliers.form.label.notes")}</Label>
+            <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("suppliers.form.placeholder.notes")} />
           </div>
         </div>
       )}

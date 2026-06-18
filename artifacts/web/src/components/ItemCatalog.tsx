@@ -13,7 +13,9 @@ import { RecipeEditor } from "@/components/RecipeEditor";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Search, UtensilsCrossed, Carrot } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import { Plus, Search } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface Item {
   id: string;
@@ -33,43 +35,26 @@ interface Category {
 
 type Kind = "menu" | "ingredient";
 
-const CONFIG = {
-  menu: {
-    title: "Menu",
-    subtitle: "The dishes and drinks you sell.",
-    addLabel: "Add menu item",
-    editLabel: "menu item",
-    icon: UtensilsCrossed,
-    types: ["product", "service", "bundle"],
-    createType: "product",
-    amountLabel: "Price",
-    amountField: "basePrice" as const,
-    amountHint: "What the customer pays.",
-    emptyTitle: "No menu items yet",
-    emptyDesc: "Add the dishes and drinks you sell. Each one gets a price your staff can ring up on an order.",
-    namePlaceholder: "e.g. Cappuccino",
-  },
-  ingredient: {
-    title: "Ingredients",
-    subtitle: "What you stock and use to make menu items.",
-    addLabel: "Add ingredient",
-    editLabel: "ingredient",
-    icon: Carrot,
-    types: ["resource"],
-    createType: "resource",
-    amountLabel: "Cost per unit",
-    amountField: "cost" as const,
-    amountHint: "What you pay your supplier — optional.",
-    emptyTitle: "No ingredients yet",
-    emptyDesc: "Add the things you buy and track — coffee beans, milk, buns. You'll set stock levels and recipes next.",
-    namePlaceholder: "e.g. Coffee beans",
-  },
-};
+export interface ItemCatalogConfig {
+  title: string;
+  subtitle: string;
+  addLabel: string;
+  editLabel: string;
+  icon: LucideIcon;
+  types: string[];
+  createType: string;
+  amountLabel: string;
+  amountField: "basePrice" | "cost";
+  amountHint: string;
+  emptyTitle: string;
+  emptyDesc: string;
+  namePlaceholder: string;
+}
 
 const EMPTY = { name: "", amount: "", categoryId: "", description: "" };
 
-export function ItemCatalog({ kind }: { kind: Kind }) {
-  const cfg = CONFIG[kind];
+export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig }) {
+  const t = useT();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -88,7 +73,7 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
 
   const filtered = (items ?? []).filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
 
-  const errText = (e: any) => e?.response?.data?.error ?? "Please try again.";
+  const errText = (e: any) => e?.response?.data?.error ?? t("common.error");
 
   const create = useMutation({
     mutationFn: () =>
@@ -104,9 +89,14 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
       qc.invalidateQueries({ queryKey: ["items"] });
       setCreateOpen(false);
       setForm(EMPTY);
-      toast({ title: `${cfg.editLabel === "menu item" ? "Menu item" : "Ingredient"} added`, variant: "success" });
+      toast({
+        title: kind === "menu"
+          ? t("itemCatalog.toast.added.menuItem")
+          : t("itemCatalog.toast.added.ingredient"),
+        variant: "success",
+      });
     },
-    onError: (e) => toast({ title: "Couldn't save", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("itemCatalog.toast.couldntSave"), description: errText(e), variant: "destructive" }),
   });
 
   const update = useMutation({
@@ -120,9 +110,9 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items"] });
       setEditing(null);
-      toast({ title: "Saved", variant: "success" });
+      toast({ title: t("itemCatalog.toast.saved"), variant: "success" });
     },
-    onError: (e) => toast({ title: "Couldn't save", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("itemCatalog.toast.couldntSave"), description: errText(e), variant: "destructive" }),
   });
 
   const remove = useMutation({
@@ -131,11 +121,11 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
       qc.invalidateQueries({ queryKey: ["items"] });
       setConfirmDelete(false);
       setEditing(null);
-      toast({ title: "Removed", variant: "success" });
+      toast({ title: t("itemCatalog.toast.removed"), variant: "success" });
     },
     onError: (e) => {
       setConfirmDelete(false);
-      toast({ title: "Couldn't remove", description: errText(e), variant: "destructive" });
+      toast({ title: t("itemCatalog.toast.couldntRemove"), description: errText(e), variant: "destructive" });
     },
   });
 
@@ -157,22 +147,22 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
     return (
       <div className="space-y-4 pt-2">
         <div className="space-y-1.5">
-          <Label>Name *</Label>
+          <Label>{t("itemCatalog.form.label.name")}</Label>
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={cfg.namePlaceholder} />
         </div>
         <div className="space-y-1.5">
           <Label>{cfg.amountLabel}</Label>
-          <Input value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" inputMode="decimal" />
+          <Input value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder={t("itemCatalog.form.placeholder.amount")} inputMode="decimal" />
           <Hint>{cfg.amountHint}</Hint>
         </div>
         <div className="space-y-1.5">
-          <Label>Category</Label>
+          <Label>{t("itemCatalog.form.label.category")}</Label>
           <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
             <SelectTrigger>
-              <SelectValue placeholder="No category" />
+              <SelectValue placeholder={t("itemCatalog.form.category.none")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No category</SelectItem>
+              <SelectItem value="none">{t("itemCatalog.form.category.none")}</SelectItem>
               {(categories ?? []).map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
@@ -182,8 +172,8 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Description</Label>
-          <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional" />
+          <Label>{t("itemCatalog.form.label.description")}</Label>
+          <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("itemCatalog.form.placeholder.description")} />
         </div>
       </div>
     );
@@ -210,16 +200,16 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
           <CardHeader className="pb-3">
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <Input className="pl-9" placeholder={`Search ${cfg.title.toLowerCase()}…`} value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-9" placeholder={t("itemCatalog.search.placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Name</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.name")}</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">{cfg.amountLabel}</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Category</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.category")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -233,7 +223,7 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-8 text-center text-slate-400">
-                      No matches.
+                      {t("itemCatalog.table.noMatches")}
                     </td>
                   </tr>
                 )}
@@ -252,10 +242,10 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
           {renderFields()}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
+              {t("itemCatalog.btn.cancel")}
             </Button>
             <Button disabled={!form.name.trim() || create.isPending} onClick={() => create.mutate()}>
-              {create.isPending ? "Saving…" : "Add"}
+              {create.isPending ? t("itemCatalog.btn.saving") : t("itemCatalog.btn.add")}
             </Button>
           </div>
         </DialogContent>
@@ -271,14 +261,14 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
           {kind === "menu" && editing ? <RecipeEditor itemId={editing.id} itemName={editing.name} /> : null}
           <div className="flex items-center justify-between pt-1">
             <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmDelete(true)}>
-              Remove
+              {t("itemCatalog.btn.remove")}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setEditing(null)}>
-                Cancel
+                {t("itemCatalog.btn.cancel")}
               </Button>
               <Button disabled={!form.name.trim() || update.isPending} onClick={() => update.mutate()}>
-                {update.isPending ? "Saving…" : "Save"}
+                {update.isPending ? t("itemCatalog.btn.saving") : t("itemCatalog.btn.save")}
               </Button>
             </div>
           </div>
@@ -288,9 +278,9 @@ export function ItemCatalog({ kind }: { kind: Kind }) {
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={`Remove ${editing?.name ?? "this"}?`}
-        description="It will be hidden from your lists. Past orders and history are kept."
-        confirmLabel="Remove"
+        title={t("itemCatalog.confirmDelete.title", { name: editing?.name ?? "" })}
+        description={t("itemCatalog.confirmDelete.description")}
+        confirmLabel={t("itemCatalog.confirmDelete.confirmLabel")}
         destructive
         loading={remove.isPending}
         onConfirm={() => remove.mutate()}

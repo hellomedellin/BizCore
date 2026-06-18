@@ -13,6 +13,7 @@ import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { Warehouse, Carrot, Truck, Search } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 interface Level {
   itemId: string;
@@ -27,6 +28,7 @@ interface Level {
 }
 
 export function StockPage() {
+  const t = useT();
   const qc = useQueryClient();
   const { activeLocationId, locations, ready } = useLocationContext();
   const [search, setSearch] = useState("");
@@ -39,7 +41,7 @@ export function StockPage() {
     enabled: !!activeLocationId,
   });
 
-  const errText = (e: any) => e?.response?.data?.error ?? "Please try again.";
+  const errText = (e: any) => e?.response?.data?.error ?? t("common.error");
   const setCountM = useMutation({
     mutationFn: () => {
       const current = parseFloat(counting!.quantity || "0");
@@ -57,9 +59,9 @@ export function StockPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-levels"] });
       setCounting(null);
-      toast({ title: "Stock updated", variant: "success" });
+      toast({ title: t("stock.toast.updated"), variant: "success" });
     },
-    onError: (e) => toast({ title: "Couldn't update", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("stock.toast.couldntUpdate"), description: errText(e), variant: "destructive" }),
   });
 
   function openCount(l: Level) {
@@ -71,11 +73,11 @@ export function StockPage() {
   if (ready && !activeLocationId && locations.length > 1) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-900">Stock</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{t("stock.title")}</h1>
         <GuidedEmptyState
           icon={Warehouse}
-          title="Pick a location"
-          description="Stock is tracked per location. Choose a location from the switcher at the top to view and update its stock."
+          title={t("stock.locationPicker.emptyTitle")}
+          description={t("stock.locationPicker.emptyDesc")}
         />
       </div>
     );
@@ -87,12 +89,12 @@ export function StockPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Stock</h1>
-          <p className="text-sm text-slate-500">How much of each ingredient you have on hand.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t("stock.title")}</h1>
+          <p className="text-sm text-slate-500">{t("stock.subtitle")}</p>
         </div>
         <Button variant="outline" asChild>
           <Link href="/dashboard/purchasing">
-            <Truck className="mr-1 h-4 w-4" /> Receive delivery
+            <Truck className="mr-1 h-4 w-4" /> {t("stock.btn.receiveDelivery")}
           </Link>
         </Button>
       </div>
@@ -100,9 +102,9 @@ export function StockPage() {
       {isLoading ? null : (levels ?? []).length === 0 ? (
         <GuidedEmptyState
           icon={Carrot}
-          title="No ingredients to stock yet"
-          description="Stock is what you have on hand of each ingredient — and it's created by counting it or receiving a delivery. First, add the ingredients you want to track."
-          actionLabel="Add an ingredient"
+          title={t("stock.emptyState.title")}
+          description={t("stock.emptyState.description")}
+          actionLabel={t("stock.emptyState.actionLabel")}
           actionHref="/dashboard/ingredients"
         />
       ) : (
@@ -110,16 +112,16 @@ export function StockPage() {
           <CardHeader className="pb-3">
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <Input className="pl-9" placeholder="Search ingredients…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-9" placeholder={t("stock.search.placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Ingredient</th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">On hand</th>
-                  <th className="px-4 py-3 text-center font-medium text-slate-600">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("stock.table.col.ingredient")}</th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-600">{t("stock.table.col.onHand")}</th>
+                  <th className="px-4 py-3 text-center font-medium text-slate-600">{t("stock.table.col.status")}</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -131,11 +133,11 @@ export function StockPage() {
                       {parseFloat(l.quantity).toLocaleString()} {l.unitAbbreviation ?? ""}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {l.isLowStock ? <Badge variant="warning">Low</Badge> : <Badge variant="secondary">OK</Badge>}
+                      {l.isLowStock ? <Badge variant="warning">{t("stock.badge.low")}</Badge> : <Badge variant="secondary">{t("stock.badge.ok")}</Badge>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Button size="sm" variant="outline" onClick={() => openCount(l)}>
-                        Set count
+                        {t("stock.btn.setCount")}
                       </Button>
                     </td>
                   </tr>
@@ -143,7 +145,7 @@ export function StockPage() {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                      No matches.
+                      {t("stock.table.noMatches")}
                     </td>
                   </tr>
                 )}
@@ -156,20 +158,20 @@ export function StockPage() {
       <Dialog open={!!counting} onOpenChange={(o) => { if (!o) setCounting(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Set count — {counting?.itemName}</DialogTitle>
+            <DialogTitle>{counting ? t("stock.countDialog.title", { itemName: counting.itemName }) : ""}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label>Counted amount {counting?.unitAbbreviation ? `(${counting.unitAbbreviation})` : ""}</Label>
-              <Input value={count} onChange={(e) => setCount(e.target.value)} inputMode="decimal" placeholder="0" autoFocus />
-              <Hint>Enter what you actually have on hand right now — we'll record the adjustment.</Hint>
+              <Label>{counting ? t("stock.countDialog.label.counted", { unit: counting.unitAbbreviation ?? "" }) : ""}</Label>
+              <Input value={count} onChange={(e) => setCount(e.target.value)} inputMode="decimal" placeholder={t("stock.countDialog.placeholder.count")} autoFocus />
+              <Hint>{t("stock.countDialog.hint")}</Hint>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCounting(null)}>
-                Cancel
+                {t("stock.countDialog.btn.cancel")}
               </Button>
               <Button disabled={setCountM.isPending} onClick={() => setCountM.mutate()}>
-                {setCountM.isPending ? "Saving…" : "Save count"}
+                {setCountM.isPending ? t("stock.countDialog.btn.saving") : t("stock.countDialog.btn.save")}
               </Button>
             </div>
           </div>

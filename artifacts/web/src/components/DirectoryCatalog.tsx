@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { toast } from "@/hooks/use-toast";
+import { useT } from "@/lib/i18n";
 import { Plus, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode, Dispatch, SetStateAction } from "react";
@@ -34,6 +35,7 @@ interface Props<T extends { id: string; name: string }, F extends Record<string,
   addLabel: string;
   entitySingular: string;
   removeDescription: string;
+  toastAdded: string;
 
   columns: DirectoryColumn<T>[];
   renderFields: (form: F, setForm: Dispatch<SetStateAction<F>>) => ReactNode;
@@ -54,10 +56,12 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
   addLabel,
   entitySingular,
   removeDescription,
+  toastAdded,
   columns,
   renderFields,
   searchPlaceholder,
 }: Props<T, F>) {
+  const t = useT();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -71,7 +75,7 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
   });
 
   const filtered = (items ?? []).filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
-  const errText = (e: unknown) => (e as any)?.response?.data?.error ?? "Please try again.";
+  const errText = (e: unknown) => (e as any)?.response?.data?.error ?? t("common.error");
 
   const create = useMutation({
     mutationFn: () => api.post(endpoint, toPayload(form)),
@@ -79,9 +83,9 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
       qc.invalidateQueries({ queryKey });
       setCreateOpen(false);
       setForm(emptyForm);
-      toast({ title: `${entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1)} added`, variant: "success" });
+      toast({ title: toastAdded, variant: "success" });
     },
-    onError: (e) => toast({ title: "Couldn't save", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("directoryCatalog.toast.couldntSave"), description: errText(e), variant: "destructive" }),
   });
 
   const update = useMutation({
@@ -89,9 +93,9 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
     onSuccess: () => {
       qc.invalidateQueries({ queryKey });
       setEditing(null);
-      toast({ title: "Saved", variant: "success" });
+      toast({ title: t("directoryCatalog.toast.saved"), variant: "success" });
     },
-    onError: (e) => toast({ title: "Couldn't save", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("directoryCatalog.toast.couldntSave"), description: errText(e), variant: "destructive" }),
   });
 
   const remove = useMutation({
@@ -100,11 +104,11 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
       qc.invalidateQueries({ queryKey });
       setConfirmDelete(false);
       setEditing(null);
-      toast({ title: "Removed", variant: "success" });
+      toast({ title: t("directoryCatalog.toast.removed"), variant: "success" });
     },
     onError: (e) => {
       setConfirmDelete(false);
-      toast({ title: "Couldn't remove", description: errText(e), variant: "destructive" });
+      toast({ title: t("directoryCatalog.toast.couldntRemove"), description: errText(e), variant: "destructive" });
     },
   });
 
@@ -146,7 +150,7 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <Input
                 className="pl-9"
-                placeholder={searchPlaceholder ?? `Search ${title.toLowerCase()}…`}
+                placeholder={searchPlaceholder ?? t("directoryCatalog.search.placeholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -186,7 +190,7 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-400">
-                      No matches.
+                      {t("directoryCatalog.table.noMatches")}
                     </td>
                   </tr>
                 )}
@@ -205,10 +209,10 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
           {renderFields(form, setForm)}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
+              {t("directoryCatalog.btn.cancel")}
             </Button>
             <Button disabled={!form.name?.trim() || create.isPending} onClick={() => create.mutate()}>
-              {create.isPending ? "Saving…" : "Add"}
+              {create.isPending ? t("directoryCatalog.btn.saving") : t("directoryCatalog.btn.add")}
             </Button>
           </div>
         </DialogContent>
@@ -227,14 +231,14 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
               className="text-red-600 hover:bg-red-50 hover:text-red-700"
               onClick={() => setConfirmDelete(true)}
             >
-              Remove
+              {t("directoryCatalog.btn.remove")}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setEditing(null)}>
-                Cancel
+                {t("directoryCatalog.btn.cancel")}
               </Button>
               <Button disabled={!form.name?.trim() || update.isPending} onClick={() => update.mutate()}>
-                {update.isPending ? "Saving…" : "Save"}
+                {update.isPending ? t("directoryCatalog.btn.saving") : t("directoryCatalog.btn.save")}
               </Button>
             </div>
           </div>
@@ -244,9 +248,9 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={`Remove ${editing?.name ?? `this ${entitySingular}`}?`}
+        title={t("directoryCatalog.confirmDelete.title", { name: editing?.name ?? "" })}
         description={removeDescription}
-        confirmLabel="Remove"
+        confirmLabel={t("directoryCatalog.confirmDelete.confirmLabel")}
         destructive
         loading={remove.isPending}
         onConfirm={() => remove.mutate()}

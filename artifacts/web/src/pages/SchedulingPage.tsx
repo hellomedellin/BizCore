@@ -13,6 +13,7 @@ import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatDateTime } from "@/lib/utils";
 import { Plus, Calendar, Trash2 } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 interface Shift {
   id: string;
@@ -28,6 +29,7 @@ interface Location { id: string; name: string; active?: boolean }
 const EMPTY = { employeeId: "", locationId: "", startTime: "", endTime: "", notes: "" };
 
 export function SchedulingPage() {
+  const t = useT();
   const qc = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
   const [from] = useState(today);
@@ -64,9 +66,9 @@ export function SchedulingPage() {
       qc.invalidateQueries({ queryKey: ["shifts"] });
       setCreateOpen(false);
       setForm(EMPTY);
-      toast({ title: "Shift scheduled", variant: "success" });
+      toast({ title: t("scheduling.toast.scheduled"), variant: "success" });
     },
-    onError: (e: any) => toast({ title: "Couldn't schedule", description: e?.response?.data?.error ?? "Please try again.", variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("scheduling.toast.couldntSchedule"), description: e?.response?.data?.error ?? t("common.error"), variant: "destructive" }),
   });
 
   const remove = useMutation({
@@ -74,11 +76,11 @@ export function SchedulingPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["shifts"] });
       setDeleteTarget(null);
-      toast({ title: "Shift removed", variant: "success" });
+      toast({ title: t("scheduling.toast.removed"), variant: "success" });
     },
     onError: () => {
       setDeleteTarget(null);
-      toast({ title: "Couldn't remove shift", variant: "destructive" });
+      toast({ title: t("scheduling.toast.couldntRemove"), variant: "destructive" });
     },
   });
 
@@ -90,12 +92,12 @@ export function SchedulingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Scheduling</h1>
-          <p className="text-sm text-slate-500">Upcoming shifts for your team.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t("scheduling.title")}</h1>
+          <p className="text-sm text-slate-500">{t("scheduling.subtitle")}</p>
         </div>
         {!noEmployees && (
           <Button onClick={() => { setForm(EMPTY); setCreateOpen(true); }}>
-            <Plus className="mr-1 h-4 w-4" /> Schedule shift
+            <Plus className="mr-1 h-4 w-4" /> {t("scheduling.btn.scheduleShift")}
           </Button>
         )}
       </div>
@@ -103,17 +105,17 @@ export function SchedulingPage() {
       {noEmployees ? (
         <GuidedEmptyState
           icon={Calendar}
-          title="Add employees first"
-          description="You need at least one employee before you can schedule shifts. Head to the Team section to add your staff."
-          actionLabel="Go to Employees"
+          title={t("scheduling.emptyState.noEmployees.title")}
+          description={t("scheduling.emptyState.noEmployees.description")}
+          actionLabel={t("scheduling.emptyState.noEmployees.actionLabel")}
           onAction={() => { window.location.href = "/dashboard/employees"; }}
         />
       ) : shiftsLoading ? null : (shifts ?? []).length === 0 ? (
         <GuidedEmptyState
           icon={Calendar}
-          title="No upcoming shifts"
-          description="Schedule a shift to assign an employee to a time slot at a location."
-          actionLabel="Schedule shift"
+          title={t("scheduling.emptyState.noShifts.title")}
+          description={t("scheduling.emptyState.noShifts.description")}
+          actionLabel={t("scheduling.emptyState.noShifts.actionLabel")}
           onAction={() => { setForm(EMPTY); setCreateOpen(true); }}
         />
       ) : (
@@ -122,11 +124,11 @@ export function SchedulingPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Employee</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Location</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Start</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">End</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Notes</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("scheduling.table.col.employee")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("scheduling.table.col.location")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("scheduling.table.col.start")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("scheduling.table.col.end")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("scheduling.table.col.notes")}</th>
                   <th className="px-4 py-3 w-10" />
                 </tr>
               </thead>
@@ -158,15 +160,15 @@ export function SchedulingPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Schedule a shift</DialogTitle>
+            <DialogTitle>{t("scheduling.createDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label>Employee *</Label>
+              <Label>{t("scheduling.createDialog.label.employee")}</Label>
               <Select value={form.employeeId || "none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="Choose an employee" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("scheduling.createDialog.placeholder.employee")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Choose an employee</SelectItem>
+                  <SelectItem value="none">{t("scheduling.createDialog.placeholder.employee")}</SelectItem>
                   {activeEmployees.map((e) => (
                     <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                   ))}
@@ -174,11 +176,11 @@ export function SchedulingPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Location *</Label>
+              <Label>{t("scheduling.createDialog.label.location")}</Label>
               <Select value={form.locationId || "none"} onValueChange={(v) => setForm({ ...form, locationId: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="Choose a location" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("scheduling.createDialog.placeholder.location")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Choose a location</SelectItem>
+                  <SelectItem value="none">{t("scheduling.createDialog.placeholder.location")}</SelectItem>
                   {activeLocations.map((l) => (
                     <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                   ))}
@@ -187,7 +189,7 @@ export function SchedulingPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Start *</Label>
+                <Label>{t("scheduling.createDialog.label.start")}</Label>
                 <input
                   type="datetime-local"
                   value={form.startTime}
@@ -196,7 +198,7 @@ export function SchedulingPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>End *</Label>
+                <Label>{t("scheduling.createDialog.label.end")}</Label>
                 <input
                   type="datetime-local"
                   value={form.endTime}
@@ -206,15 +208,15 @@ export function SchedulingPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Notes</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional" />
-              <Hint>Add any special instructions for this shift.</Hint>
+              <Label>{t("scheduling.createDialog.label.notes")}</Label>
+              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("scheduling.createDialog.placeholder.notes")} />
+              <Hint>{t("scheduling.createDialog.hint.notes")}</Hint>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t("scheduling.createDialog.btn.cancel")}</Button>
             <Button disabled={!canSubmit} onClick={() => create.mutate()}>
-              {create.isPending ? "Scheduling…" : "Schedule"}
+              {create.isPending ? t("scheduling.createDialog.btn.scheduling") : t("scheduling.createDialog.btn.schedule")}
             </Button>
           </div>
         </DialogContent>
@@ -223,9 +225,9 @@ export function SchedulingPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}
-        title="Remove this shift?"
+        title={t("scheduling.deleteDialog.title")}
         description={deleteTarget ? `${empName(deleteTarget.employeeId)} on ${formatDateTime(deleteTarget.startTime)}` : ""}
-        confirmLabel="Remove"
+        confirmLabel={t("scheduling.deleteDialog.confirmLabel")}
         destructive
         loading={remove.isPending}
         onConfirm={() => deleteTarget && remove.mutate(deleteTarget.id)}

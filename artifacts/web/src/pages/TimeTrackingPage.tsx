@@ -8,6 +8,7 @@ import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { toast } from "@/hooks/use-toast";
 import { formatDateTime } from "@/lib/utils";
 import { Download, CheckCircle, XCircle, Clock } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 interface TimeEntry {
   id: string;
@@ -27,6 +28,7 @@ const STATUS_BADGE: Record<string, "secondary" | "success" | "destructive" | "wa
 };
 
 export function TimeTrackingPage() {
+  const t = useT();
   const qc = useQueryClient();
   const [from, setFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().slice(0, 10);
@@ -49,9 +51,9 @@ export function TimeTrackingPage() {
       api.post(`/time-entries/${id}/review`, { action }),
     onSuccess: (_d, { action }) => {
       qc.invalidateQueries({ queryKey: ["time-entries"] });
-      toast({ title: action === "approve" ? "Entry approved" : "Entry rejected", variant: "success" });
+      toast({ title: action === "approve" ? t("timeTracking.toast.approved") : t("timeTracking.toast.rejected"), variant: "success" });
     },
-    onError: () => toast({ title: "Action failed", variant: "destructive" }),
+    onError: () => toast({ title: t("timeTracking.toast.actionFailed"), variant: "destructive" }),
   });
 
   const exportCsv = async () => {
@@ -61,7 +63,7 @@ export function TimeTrackingPage() {
       const a = document.createElement("a"); a.href = url; a.download = "time-export.csv"; a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast({ title: "Export failed", variant: "destructive" });
+      toast({ title: t("timeTracking.toast.exportFailed"), variant: "destructive" });
     }
   };
 
@@ -69,18 +71,18 @@ export function TimeTrackingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Time Tracking</h1>
-          <p className="text-sm text-slate-500">Clock-in / clock-out records. Approve or reject entries.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t("timeTracking.title")}</h1>
+          <p className="text-sm text-slate-500">{t("timeTracking.subtitle")}</p>
         </div>
         <Button variant="outline" onClick={exportCsv}>
-          <Download className="mr-1 h-4 w-4" /> Export CSV
+          <Download className="mr-1 h-4 w-4" /> {t("timeTracking.btn.exportCsv")}
         </Button>
       </div>
 
       {/* Date range filter */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-slate-700">From</label>
+          <label className="text-sm font-medium text-slate-700">{t("timeTracking.filter.label.from")}</label>
           <input
             type="date"
             value={from}
@@ -89,7 +91,7 @@ export function TimeTrackingPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-slate-700">To</label>
+          <label className="text-sm font-medium text-slate-700">{t("timeTracking.filter.label.to")}</label>
           <input
             type="date"
             value={to}
@@ -102,8 +104,8 @@ export function TimeTrackingPage() {
       {isLoading ? null : !(entries ?? []).length ? (
         <GuidedEmptyState
           icon={Clock}
-          title="No time entries in this range"
-          description="Employees clock in and out from their staff portal. Once they do, their entries appear here for you to review."
+          title={t("timeTracking.emptyState.title")}
+          description={t("timeTracking.emptyState.description")}
         />
       ) : (
         <Card>
@@ -111,12 +113,12 @@ export function TimeTrackingPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Employee</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Type</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Clock In</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Clock Out</th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">Minutes</th>
-                  <th className="px-4 py-3 text-center font-medium text-slate-600">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("timeTracking.table.col.employee")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("timeTracking.table.col.type")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("timeTracking.table.col.clockIn")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("timeTracking.table.col.clockOut")}</th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-600">{t("timeTracking.table.col.minutes")}</th>
+                  <th className="px-4 py-3 text-center font-medium text-slate-600">{t("timeTracking.table.col.status")}</th>
                   <th className="px-4 py-3 w-16" />
                 </tr>
               </thead>
@@ -127,11 +129,11 @@ export function TimeTrackingPage() {
                     <td className="px-4 py-3 capitalize text-slate-500">{e.entryType.replace("_", " ")}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{formatDateTime(e.clockIn)}</td>
                     <td className="px-4 py-3 text-xs">
-                      {e.clockOut ? formatDateTime(e.clockOut) : <span className="font-semibold text-green-600">Active</span>}
+                      {e.clockOut ? formatDateTime(e.clockOut) : <span className="font-semibold text-green-600">{t("timeTracking.clockOut.active")}</span>}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-600">{e.totalMinutes ?? "—"}</td>
                     <td className="px-4 py-3 text-center">
-                      <Badge variant={STATUS_BADGE[e.status] ?? "secondary"}>{e.status}</Badge>
+                      <Badge variant={STATUS_BADGE[e.status] ?? "secondary"}>{t(`timeTracking.status.${e.status}` as any)}</Badge>
                     </td>
                     <td className="px-4 py-3">
                       {e.status === "pending" && (
@@ -139,14 +141,14 @@ export function TimeTrackingPage() {
                           <button
                             onClick={() => review.mutate({ id: e.id, action: "approve" })}
                             className="text-green-500 hover:text-green-700 transition-colors"
-                            title="Approve"
+                            title={t("timeTracking.btn.approve.title")}
                           >
                             <CheckCircle className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => review.mutate({ id: e.id, action: "reject" })}
                             className="text-red-400 hover:text-red-600 transition-colors"
-                            title="Reject"
+                            title={t("timeTracking.btn.reject.title")}
                           >
                             <XCircle className="h-4 w-4" />
                           </button>

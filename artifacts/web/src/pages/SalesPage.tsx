@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useLocationContext } from "@/hooks/useLocation";
+import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,9 +25,6 @@ interface Customer { id: string; name: string }
 interface CartLine { variantId: string; name: string; unitPrice: number; quantity: number }
 
 const ORDER_TYPES = ["dine_in", "pickup", "delivery", "retail"];
-const TYPE_LABEL: Record<string, string> = { dine_in: "Dine-in", pickup: "Pickup", delivery: "Delivery", retail: "Retail", service: "Service" };
-const STATUS_LABEL: Record<string, string> = { pending: "Pending", confirmed: "Confirmed", in_progress: "In progress", ready: "Ready", completed: "Completed", cancelled: "Cancelled" };
-const METHOD_LABEL: Record<string, string> = { cash: "Cash", card: "Card", transfer: "Transfer", nequi: "Nequi", daviplata: "Daviplata", other: "Other" };
 const statusVariant = (s: string): "success" | "secondary" | "warning" => (s === "completed" ? "success" : s === "cancelled" ? "secondary" : "warning");
 const PAYMENT_METHODS = ["cash", "card", "transfer", "nequi", "daviplata", "other"];
 const TIP_RATE = 0.10; // 10% Colombian propina
@@ -34,6 +32,7 @@ const TIP_RATE = 0.10; // 10% Colombian propina
 const EMPTY_PAY = { method: "cash", amount: "", addTip: false, tip: "", notes: "" };
 
 export function SalesPage() {
+  const t = useT();
   const qc = useQueryClient();
   const { activeLocationId, locations } = useLocationContext();
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -45,6 +44,30 @@ export function SalesPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payForm, setPayForm] = useState(EMPTY_PAY);
+
+  const TYPE_LABEL: Record<string, string> = {
+    dine_in: t("sales.orderType.dineIn"),
+    pickup: t("sales.orderType.pickup"),
+    delivery: t("sales.orderType.delivery"),
+    retail: t("sales.orderType.retail"),
+    service: t("sales.orderType.service"),
+  };
+  const STATUS_LABEL: Record<string, string> = {
+    pending: t("sales.status.pending"),
+    confirmed: t("sales.status.confirmed"),
+    in_progress: t("sales.status.inProgress"),
+    ready: t("sales.status.ready"),
+    completed: t("sales.status.completed"),
+    cancelled: t("sales.status.cancelled"),
+  };
+  const METHOD_LABEL: Record<string, string> = {
+    cash: t("sales.paymentMethod.cash"),
+    card: t("sales.paymentMethod.card"),
+    transfer: t("sales.paymentMethod.transfer"),
+    nequi: t("sales.paymentMethod.nequi"),
+    daviplata: t("sales.paymentMethod.daviplata"),
+    other: t("sales.paymentMethod.other"),
+  };
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ["orders", activeLocationId],
@@ -68,7 +91,7 @@ export function SalesPage() {
 
   function openBuilder() {
     if (!activeLocationId && locations.length > 1) {
-      toast({ title: "Choose a location", description: "Pick a location at the top before taking an order.", variant: "destructive" });
+      toast({ title: t("sales.locationToast.title"), description: t("sales.locationToast.description"), variant: "destructive" });
       return;
     }
     setCart([]);
@@ -119,9 +142,9 @@ export function SalesPage() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       setBuilderOpen(false);
       setCart([]);
-      toast({ title: "Sale created", variant: "success" });
+      toast({ title: t("sales.toast.created"), variant: "success" });
     },
-    onError: (e) => toast({ title: "Couldn't create sale", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("sales.toast.couldntCreate"), description: errText(e), variant: "destructive" }),
   });
 
   const cancelOrder = useMutation({
@@ -130,11 +153,11 @@ export function SalesPage() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["order", detailId] });
       setConfirmCancel(false);
-      toast({ title: "Order cancelled", variant: "success" });
+      toast({ title: t("sales.toast.cancelled"), variant: "success" });
     },
     onError: (e) => {
       setConfirmCancel(false);
-      toast({ title: "Couldn't cancel", description: errText(e), variant: "destructive" });
+      toast({ title: t("sales.toast.couldntCancel"), description: errText(e), variant: "destructive" });
     },
   });
 
@@ -153,9 +176,9 @@ export function SalesPage() {
       qc.invalidateQueries({ queryKey: ["payments", detailId] });
       qc.invalidateQueries({ queryKey: ["stock-levels"] });
       setPayOpen(false);
-      toast({ title: "Payment recorded — sale complete!", variant: "success" });
+      toast({ title: t("sales.toast.paymentRecorded"), variant: "success" });
     },
-    onError: (e) => toast({ title: "Couldn't record payment", description: errText(e), variant: "destructive" }),
+    onError: (e) => toast({ title: t("sales.toast.couldntPayment"), description: errText(e), variant: "destructive" }),
   });
 
   const noMenu = (menu ?? []).length === 0;
@@ -185,20 +208,20 @@ export function SalesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
-          <p className="text-sm text-slate-500">Take orders and collect payment — completing a sale updates your stock.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t("sales.title")}</h1>
+          <p className="text-sm text-slate-500">{t("sales.subtitle")}</p>
         </div>
         <Button onClick={openBuilder}>
-          <Plus className="mr-1 h-4 w-4" /> New sale
+          <Plus className="mr-1 h-4 w-4" /> {t("sales.btn.newSale")}
         </Button>
       </div>
 
       {isLoading ? null : (orders ?? []).length === 0 ? (
         <GuidedEmptyState
           icon={ShoppingCart}
-          title="No sales yet"
-          description={noMenu ? "Add a few menu items first, then you can take orders here." : "Take your first order — pick items, set quantities, and collect payment."}
-          actionLabel={noMenu ? "Go to Menu" : "New sale"}
+          title={noMenu ? t("sales.emptyState.noMenu.title") : t("sales.emptyState.hasMenu.title")}
+          description={noMenu ? t("sales.emptyState.noMenu.description") : t("sales.emptyState.hasMenu.description")}
+          actionLabel={noMenu ? t("sales.emptyState.noMenu.actionLabel") : t("sales.emptyState.hasMenu.actionLabel")}
           actionHref={noMenu ? "/dashboard/menu" : undefined}
           onAction={noMenu ? undefined : openBuilder}
         />
@@ -208,11 +231,11 @@ export function SalesPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">When</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Customer</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Type</th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">Total</th>
-                  <th className="px-4 py-3 text-center font-medium text-slate-600">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("sales.table.col.when")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("sales.table.col.customer")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("sales.table.col.type")}</th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-600">{t("sales.table.col.total")}</th>
+                  <th className="px-4 py-3 text-center font-medium text-slate-600">{t("sales.table.col.status")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -235,16 +258,16 @@ export function SalesPage() {
       <Dialog open={builderOpen} onOpenChange={setBuilderOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>New sale</DialogTitle>
+            <DialogTitle>{t("sales.builderDialog.title")}</DialogTitle>
           </DialogHeader>
           {noMenu ? (
             <div className="py-6">
-              <GuidedEmptyState icon={ShoppingCart} title="No menu items yet" description="Add dishes/drinks on the Menu first, then come back to take an order." actionLabel="Go to Menu" actionHref="/dashboard/menu" />
+              <GuidedEmptyState icon={ShoppingCart} title={t("sales.builderDialog.noMenu.title")} description={t("sales.builderDialog.noMenu.description")} actionLabel={t("sales.builderDialog.noMenu.actionLabel")} actionHref="/dashboard/menu" />
             </div>
           ) : (
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Input placeholder="Search the menu…" value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} />
+                <Input placeholder={t("sales.builderDialog.search.placeholder")} value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} />
                 <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
                   {filteredMenu.map((v) => (
                     <button
@@ -259,20 +282,20 @@ export function SalesPage() {
                       <div className="text-xs text-slate-500">{v.price ? formatCurrency(v.price) : "—"}</div>
                     </button>
                   ))}
-                  {filteredMenu.length === 0 && <p className="px-1 py-4 text-sm text-slate-400">No matches.</p>}
+                  {filteredMenu.length === 0 && <p className="px-1 py-4 text-sm text-slate-400">{t("sales.builderDialog.menu.noMatches")}</p>}
                 </div>
               </div>
 
               <div className="rounded-lg border border-slate-200">
                 {cart.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-slate-400">Tap items above to add them to the order.</p>
+                  <p className="px-4 py-6 text-center text-sm text-slate-400">{t("sales.builderDialog.cart.empty")}</p>
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {cart.map((c) => (
                       <div key={c.variantId} className="flex items-center gap-3 px-3 py-2">
                         <div className="flex-1">
                           <p className="text-sm font-medium">{c.name}</p>
-                          <p className="text-xs text-slate-500">{formatCurrency(c.unitPrice)} each</p>
+                          <p className="text-xs text-slate-500">{formatCurrency(c.unitPrice)} {t("sales.builderDialog.each")}</p>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setQty(c.variantId, c.quantity - 1)}><Minus className="h-3 w-3" /></Button>
@@ -289,34 +312,34 @@ export function SalesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Customer</Label>
+                  <Label>{t("sales.builderDialog.label.customer")}</Label>
                   <Select value={customerId || "none"} onValueChange={(v) => setCustomerId(v === "none" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Walk-in" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t("sales.builderDialog.customer.walkin")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Walk-in</SelectItem>
+                      <SelectItem value="none">{t("sales.builderDialog.customer.walkin")}</SelectItem>
                       {(customers ?? []).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Order type</Label>
+                  <Label>{t("sales.builderDialog.label.orderType")}</Label>
                   <Select value={orderType} onValueChange={setOrderType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ORDER_TYPES.map((t) => <SelectItem key={t} value={t}>{TYPE_LABEL[t]}</SelectItem>)}
+                      {ORDER_TYPES.map((tp) => <SelectItem key={tp} value={tp}>{TYPE_LABEL[tp]}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                <span className="text-sm text-slate-500">Total</span>
+                <span className="text-sm text-slate-500">{t("sales.builderDialog.summary.total")}</span>
                 <span className="text-lg font-bold">{formatCurrency(cartTotal)}</span>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setBuilderOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setBuilderOpen(false)}>{t("sales.builderDialog.btn.cancel")}</Button>
                 <Button disabled={cart.length === 0 || createOrder.isPending} onClick={() => createOrder.mutate()}>
-                  {createOrder.isPending ? "Saving…" : "Create sale"}
+                  {createOrder.isPending ? t("sales.builderDialog.btn.saving") : t("sales.builderDialog.btn.create")}
                 </Button>
               </div>
             </div>
@@ -329,7 +352,7 @@ export function SalesPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              Order
+              {t("sales.detailDialog.title")}
               {detail ? <Badge variant={statusVariant(detail.status)}>{STATUS_LABEL[detail.status] ?? detail.status}</Badge> : null}
               {payment ? (
                 <Badge variant="secondary" className="gap-1">
@@ -357,14 +380,14 @@ export function SalesPage() {
               </div>
 
               <div className="space-y-1 text-sm">
-                <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{formatCurrency(detail.subtotal, detail.currencyCode)}</span></div>
-                {parseFloat(detail.discount) > 0 && <div className="flex justify-between text-slate-500"><span>Discount</span><span>−{formatCurrency(detail.discount, detail.currencyCode)}</span></div>}
-                {parseFloat(detail.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span>{formatCurrency(detail.tax, detail.currencyCode)}</span></div>}
+                <div className="flex justify-between text-slate-500"><span>{t("sales.detailDialog.summary.subtotal")}</span><span>{formatCurrency(detail.subtotal, detail.currencyCode)}</span></div>
+                {parseFloat(detail.discount) > 0 && <div className="flex justify-between text-slate-500"><span>{t("sales.detailDialog.summary.discount")}</span><span>−{formatCurrency(detail.discount, detail.currencyCode)}</span></div>}
+                {parseFloat(detail.tax) > 0 && <div className="flex justify-between text-slate-500"><span>{t("sales.detailDialog.summary.tax")}</span><span>{formatCurrency(detail.tax, detail.currencyCode)}</span></div>}
                 {payment && parseFloat(payment.tip) > 0 && (
-                  <div className="flex justify-between text-slate-500"><span>Propina (10%)</span><span>{formatCurrency(payment.tip, detail.currencyCode)}</span></div>
+                  <div className="flex justify-between text-slate-500"><span>{t("sales.detailDialog.summary.propina")}</span><span>{formatCurrency(payment.tip, detail.currencyCode)}</span></div>
                 )}
                 <div className="flex justify-between border-t border-slate-100 pt-1 text-base font-bold">
-                  <span>Total</span>
+                  <span>{t("sales.detailDialog.summary.total")}</span>
                   <span>{formatCurrency(payment ? (parseFloat(detail.total) + parseFloat(payment.tip)).toFixed(2) : detail.total, detail.currencyCode)}</span>
                 </div>
               </div>
@@ -378,7 +401,7 @@ export function SalesPage() {
                     className="flex-1"
                     onClick={() => window.open(`/api/v1/receipts/${detail.id}`, "_blank")}
                   >
-                    <Printer className="mr-1.5 h-4 w-4" /> Print receipt
+                    <Printer className="mr-1.5 h-4 w-4" /> {t("sales.detailDialog.btn.printReceipt")}
                   </Button>
                   <Button
                     variant="outline"
@@ -386,7 +409,7 @@ export function SalesPage() {
                     className="flex-1 text-green-700 border-green-200 hover:bg-green-50"
                     onClick={() => window.open(`https://wa.me/?text=${buildWhatsAppText()}`, "_blank")}
                   >
-                    <MessageCircle className="mr-1.5 h-4 w-4" /> WhatsApp
+                    <MessageCircle className="mr-1.5 h-4 w-4" /> {t("sales.detailDialog.btn.whatsapp")}
                   </Button>
                 </div>
               )}
@@ -395,16 +418,16 @@ export function SalesPage() {
               {!terminal && (
                 <div className="flex items-center justify-between pt-1">
                   <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmCancel(true)}>
-                    Cancel order
+                    {t("sales.detailDialog.btn.cancelOrder")}
                   </Button>
                   <Button onClick={openPayDialog}>
-                    <CreditCard className="mr-1.5 h-4 w-4" /> Take payment
+                    <CreditCard className="mr-1.5 h-4 w-4" /> {t("sales.detailDialog.btn.takePayment")}
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="py-8 text-center text-sm text-slate-400">Loading…</div>
+            <div className="py-8 text-center text-sm text-slate-400">{t("sales.detailDialog.loading")}</div>
           )}
         </DialogContent>
       </Dialog>
@@ -413,11 +436,11 @@ export function SalesPage() {
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Take payment</DialogTitle>
+            <DialogTitle>{t("sales.payDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label>Payment method</Label>
+              <Label>{t("sales.payDialog.label.method")}</Label>
               <Select value={payForm.method} onValueChange={(v) => setPayForm({ ...payForm, method: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -427,7 +450,7 @@ export function SalesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Amount collected</Label>
+              <Label>{t("sales.payDialog.label.amount")}</Label>
               <Input
                 value={payForm.amount}
                 onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
@@ -436,19 +459,19 @@ export function SalesPage() {
               />
               {payForm.method === "cash" && amountCollected > 0 && !isShort && (
                 <p className="text-sm text-slate-600">
-                  Change due: <span className="font-semibold">{formatCurrency(changeDue, detail?.currencyCode)}</span>
+                  {t("sales.payDialog.changeDue")} <span className="font-semibold">{formatCurrency(changeDue, detail?.currencyCode)}</span>
                 </p>
               )}
               {isShort && amountCollected > 0 && (
                 <p className="text-sm text-red-600">
-                  Short by {formatCurrency(orderTotal - amountCollected, detail?.currencyCode)}
+                  {t("sales.payDialog.shortBy", { amount: formatCurrency(orderTotal - amountCollected, detail?.currencyCode) })}
                 </p>
               )}
             </div>
 
             <div className="rounded-lg border border-slate-100 p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Add propina (10%)</span>
+                <span className="text-sm font-medium">{t("sales.payDialog.addPropina")}</span>
                 <button
                   onClick={() => setPayForm((f) => ({ ...f, addTip: !f.addTip }))}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${payForm.addTip ? "bg-slate-900" : "bg-slate-200"}`}
@@ -463,29 +486,29 @@ export function SalesPage() {
                     onChange={(e) => setPayForm({ ...payForm, tip: e.target.value })}
                     inputMode="decimal"
                   />
-                  <Hint>Adjust the tip amount if needed.</Hint>
+                  <Hint>{t("sales.payDialog.propina.hint")}</Hint>
                 </div>
               )}
             </div>
 
             <div className="rounded-lg bg-slate-50 p-3 text-sm space-y-1">
-              <div className="flex justify-between text-slate-500"><span>Order total</span><span>{formatCurrency(orderTotal, detail?.currencyCode)}</span></div>
-              {payForm.addTip && <div className="flex justify-between text-slate-500"><span>Propina</span><span>{formatCurrency(parseFloat(payForm.tip || "0"), detail?.currencyCode)}</span></div>}
-              <div className="flex justify-between font-bold border-t border-slate-200 pt-1"><span>Grand total</span><span>{formatCurrency(orderTotal + tipAmount, detail?.currencyCode)}</span></div>
+              <div className="flex justify-between text-slate-500"><span>{t("sales.payDialog.summary.orderTotal")}</span><span>{formatCurrency(orderTotal, detail?.currencyCode)}</span></div>
+              {payForm.addTip && <div className="flex justify-between text-slate-500"><span>{t("sales.payDialog.summary.propina")}</span><span>{formatCurrency(parseFloat(payForm.tip || "0"), detail?.currencyCode)}</span></div>}
+              <div className="flex justify-between font-bold border-t border-slate-200 pt-1"><span>{t("sales.payDialog.summary.grandTotal")}</span><span>{formatCurrency(orderTotal + tipAmount, detail?.currencyCode)}</span></div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Notes</Label>
-              <Input value={payForm.notes} onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} placeholder="Optional" />
+              <Label>{t("sales.payDialog.label.notes")}</Label>
+              <Input value={payForm.notes} onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} placeholder={t("sales.payDialog.notes.placeholder")} />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPayOpen(false)}>{t("sales.payDialog.btn.cancel")}</Button>
             <Button
               disabled={!payForm.amount || isShort || recordPayment.isPending}
               onClick={() => recordPayment.mutate()}
             >
-              {recordPayment.isPending ? "Processing…" : "Confirm payment"}
+              {recordPayment.isPending ? t("sales.payDialog.btn.processing") : t("sales.payDialog.btn.confirm")}
             </Button>
           </div>
         </DialogContent>
@@ -494,9 +517,9 @@ export function SalesPage() {
       <ConfirmDialog
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
-        title="Cancel this order?"
-        description="It will be marked cancelled. Stock is not deducted for cancelled orders."
-        confirmLabel="Cancel order"
+        title={t("sales.cancelDialog.title")}
+        description={t("sales.cancelDialog.description")}
+        confirmLabel={t("sales.cancelDialog.confirmLabel")}
         destructive
         loading={cancelOrder.isPending}
         onConfirm={() => cancelOrder.mutate()}

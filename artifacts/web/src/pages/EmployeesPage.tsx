@@ -7,6 +7,7 @@ import { Hint } from "@/components/ui/hint";
 import { DirectoryCatalog } from "@/components/DirectoryCatalog";
 import { formatCurrency } from "@/lib/utils";
 import { Users } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 interface Employee {
   id: string;
@@ -24,6 +25,8 @@ type F = { name: string; email: string; phone: string; roleId: string; hourlyRat
 const EMPTY: F = { name: "", email: "", phone: "", roleId: "", hourlyRate: "", primaryLocationId: "" };
 
 export function EmployeesPage() {
+  const t = useT();
+
   const { data: roles } = useQuery({
     queryKey: ["employee-roles"],
     queryFn: () => api.get("/employee-roles").then((r) => r.data as Role[]),
@@ -56,45 +59,46 @@ export function EmployeesPage() {
         hourlyRate: f.hourlyRate || null,
         primaryLocationId: f.primaryLocationId || null,
       })}
-      title="Employees"
-      subtitle="Your team and their roles."
+      title={t("employees.title")}
+      subtitle={t("employees.subtitle")}
       icon={Users}
-      emptyTitle="No employees yet"
-      emptyDescription="Add your team so you can schedule shifts and track hours. Give each person a role and pay rate."
-      addLabel="Add employee"
-      entitySingular="employee"
-      removeDescription="They'll be hidden from your team list. Past shifts and hours are kept."
+      emptyTitle={t("employees.emptyTitle")}
+      emptyDescription={t("employees.emptyDescription")}
+      addLabel={t("employees.addLabel")}
+      entitySingular={t("employees.entitySingular")}
+      removeDescription={t("employees.removeDescription")}
+      toastAdded={t("employees.toast.added")}
       columns={[
-        { header: "Name", render: (e) => e.name, className: "font-medium" },
-        { header: "Role", render: (e) => roleName(e.roleId) },
-        { header: "Phone", render: (e) => e.phone ?? "—" },
-        { header: "Pay", render: (e) => (e.hourlyRate ? `${formatCurrency(e.hourlyRate)}/hr` : "—"), align: "right" },
+        { header: t("employees.table.col.name"), render: (e) => e.name, className: "font-medium" },
+        { header: t("employees.table.col.role"), render: (e) => roleName(e.roleId) },
+        { header: t("employees.table.col.phone"), render: (e) => e.phone ?? "—" },
+        { header: t("employees.table.col.pay"), render: (e) => (e.hourlyRate ? `${formatCurrency(e.hourlyRate)}/hr` : "—"), align: "right" },
       ]}
       renderFields={(form, setForm) => (
         <div className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label>Name *</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Sofia Garcia" />
+            <Label>{t("employees.form.label.name")}</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("employees.form.placeholder.name")} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Phone</Label>
+              <Label>{t("employees.form.label.phone")}</Label>
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
+              <Label>{t("employees.form.label.email")}</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Role</Label>
+              <Label>{t("employees.form.label.role")}</Label>
               <Select value={form.roleId || "none"} onValueChange={(v) => setForm({ ...form, roleId: v === "none" ? "" : v })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="No role" />
+                  <SelectValue placeholder={t("employees.form.role.noRole")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No role</SelectItem>
+                  <SelectItem value="none">{t("employees.form.role.noRole")}</SelectItem>
                   {(roles ?? []).map((r) => (
                     <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                   ))}
@@ -102,27 +106,27 @@ export function EmployeesPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Hourly rate</Label>
-              <Input value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} placeholder="0.00" inputMode="decimal" />
+              <Label>{t("employees.form.label.hourlyRate")}</Label>
+              <Input value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} placeholder={t("employees.form.placeholder.hourlyRate")} inputMode="decimal" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Primary location</Label>
+            <Label>{t("employees.form.label.primaryLocation")}</Label>
             <Select
               value={form.primaryLocationId || "none"}
               onValueChange={(v) => setForm({ ...form, primaryLocationId: v === "none" ? "" : v })}
             >
               <SelectTrigger>
-                <SelectValue placeholder="No location" />
+                <SelectValue placeholder={t("employees.form.location.noLocation")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No location</SelectItem>
+                <SelectItem value="none">{t("employees.form.location.noLocation")}</SelectItem>
                 {(locations ?? []).filter((l) => l.active !== false).map((l) => (
                   <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Hint>Where this person usually works. You can change it anytime.</Hint>
+            <Hint>{t("employees.form.hint.primaryLocation")}</Hint>
           </div>
         </div>
       )}

@@ -3,8 +3,10 @@ import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShoppingCart, Package, Users, Clock } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 export function DashboardHomePage() {
+  const t = useT();
   const { data: orders } = useQuery({
     queryKey: ["orders-recent"],
     queryFn: () => api.get("/orders?limit=5").then((r) => r.data),
@@ -21,7 +23,7 @@ export function DashboardHomePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{business?.name ?? "Dashboard"}</h1>
-        <p className="text-sm text-slate-500 mt-1">Welcome back. Here's what's happening today.</p>
+        <p className="text-sm text-slate-500 mt-1">{t("dashboard.subtitle")}</p>
       </div>
 
       {/* KPI cards */}
@@ -29,7 +31,7 @@ export function DashboardHomePage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" /> Active Orders
+              <ShoppingCart className="h-4 w-4" /> {t("dashboard.kpi.activeOrders")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -40,7 +42,7 @@ export function DashboardHomePage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-              <Package className="h-4 w-4" /> Total Orders Today
+              <Package className="h-4 w-4" /> {t("dashboard.kpi.totalOrdersToday")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -51,7 +53,7 @@ export function DashboardHomePage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Currency
+              <Clock className="h-4 w-4" /> {t("dashboard.kpi.currency")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -62,7 +64,7 @@ export function DashboardHomePage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
-              <Users className="h-4 w-4" /> Revenue Today
+              <Users className="h-4 w-4" /> {t("dashboard.kpi.revenueToday")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -79,10 +81,10 @@ export function DashboardHomePage() {
       {/* Recent orders */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Orders</CardTitle>
+          <CardTitle>{t("dashboard.recentOrders.title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {!(orders ?? []).length && <p className="text-sm text-slate-500">No orders yet.</p>}
+          {!(orders ?? []).length && <p className="text-sm text-slate-500">{t("dashboard.recentOrders.empty")}</p>}
           <div className="space-y-2">
             {(orders ?? []).map((order: any) => (
               <div key={order.id} className="flex items-center justify-between rounded-md border border-slate-100 p-3">
