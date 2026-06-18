@@ -1,8 +1,8 @@
-import { Switch, Route, Redirect } from "wouter";
-import { SignIn, SignUp, useAuth } from "@clerk/react";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useAuthToken } from "@/hooks/useAuth";
+import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { LoginPage } from "@/pages/LoginPage";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { EmployeePortalLayout } from "@/components/layout/EmployeePortalLayout";
 
@@ -27,8 +27,8 @@ import { MeTimeOffPage } from "@/pages/me/MeTimeOffPage";
 import { MeSchedulePage } from "@/pages/me/MeSchedulePage";
 
 export default function App() {
-  useAuthToken();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { user, isLoaded } = useAuth();
+  const [, navigate] = useLocation();
 
   if (!isLoaded) {
     return (
@@ -38,16 +38,12 @@ export default function App() {
     );
   }
 
-  if (!isSignedIn) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Switch>
-          <Route path="/sign-up" component={() => <SignUp routing="hash" />} />
-          <Route component={() => <SignIn routing="hash" />} />
-        </Switch>
-      </div>
-    );
+  if (!user) {
+    return <LoginPage onLogin={() => navigate("/dashboard")} />;
   }
+
+  // Staff go to employee portal, admins/managers to dashboard
+  const isStaff = user.role === "staff";
 
   return (
     <Switch>
@@ -78,72 +74,47 @@ export default function App() {
         </DashboardLayout>
       </Route>
       <Route path="/dashboard/menu">
-        <DashboardLayout>
-          <MenuPage />
-        </DashboardLayout>
+        <DashboardLayout><MenuPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/ingredients">
-        <DashboardLayout>
-          <IngredientsPage />
-        </DashboardLayout>
+        <DashboardLayout><IngredientsPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/stock">
-        <DashboardLayout>
-          <StockPage />
-        </DashboardLayout>
+        <DashboardLayout><StockPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/sales">
-        <DashboardLayout>
-          <SalesPage />
-        </DashboardLayout>
+        <DashboardLayout><SalesPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/employees">
-        <DashboardLayout>
-          <EmployeesPage />
-        </DashboardLayout>
+        <DashboardLayout><EmployeesPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/time-tracking">
-        <DashboardLayout>
-          <TimeTrackingPage />
-        </DashboardLayout>
+        <DashboardLayout><TimeTrackingPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/scheduling">
-        <DashboardLayout>
-          <SchedulingPage />
-        </DashboardLayout>
+        <DashboardLayout><SchedulingPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/purchasing">
-        <DashboardLayout>
-          <PurchasesPage />
-        </DashboardLayout>
+        <DashboardLayout><PurchasesPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/suppliers">
-        <DashboardLayout>
-          <SuppliersPage />
-        </DashboardLayout>
+        <DashboardLayout><SuppliersPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/customers">
-        <DashboardLayout>
-          <CustomersPage />
-        </DashboardLayout>
+        <DashboardLayout><CustomersPage /></DashboardLayout>
       </Route>
       <Route path="/dashboard/settings">
-        <DashboardLayout>
-          <SettingsPage />
-        </DashboardLayout>
+        <DashboardLayout><SettingsPage /></DashboardLayout>
       </Route>
 
-      {/* Default redirect — route new users without a business through onboarding */}
       <Route>
-        <PostAuthRedirect />
+        <PostAuthRedirect isStaff={isStaff} />
       </Route>
     </Switch>
   );
 }
 
-// Decide where a freshly-authenticated user lands: the dashboard if they already
-// have a business, otherwise the onboarding wizard to create their first one.
-function PostAuthRedirect() {
+function PostAuthRedirect({ isStaff }: { isStaff: boolean }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["businesses", "me"],
     queryFn: () => api.get("/businesses/me").then((r) => r.data),
@@ -158,5 +129,6 @@ function PostAuthRedirect() {
     );
   }
 
-  return <Redirect to={isError || !data ? "/onboarding" : "/dashboard"} />;
+  if (isError || !data) return <Redirect to="/onboarding" />;
+  return <Redirect to={isStaff ? "/me" : "/dashboard"} />;
 }

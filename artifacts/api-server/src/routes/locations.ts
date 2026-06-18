@@ -26,7 +26,7 @@ const createLocationSchema = z.object({
   timezone: z.string().default("America/New_York"),
 });
 
-router.post("/locations", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.post("/locations", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = createLocationSchema.safeParse(req.body);
@@ -60,7 +60,7 @@ const updateLocationSchema = z.object({
   active: z.boolean().optional(),
 });
 
-router.patch("/locations/:id", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.patch("/locations/:id", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = updateLocationSchema.safeParse(req.body);

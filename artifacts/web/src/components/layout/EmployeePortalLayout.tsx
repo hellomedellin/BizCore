@@ -1,6 +1,6 @@
 import { Link, useRoute } from "wouter";
-import { UserButton } from "@clerk/react";
-import { Home, Clock, Calendar } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { Home, Clock, Calendar, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -10,12 +10,19 @@ const NAV = [
 ];
 
 export function EmployeePortalLayout({ children }: { children: React.ReactNode }) {
+  const { logout } = useAuth();
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
       {/* Top bar */}
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
         <span className="font-bold text-slate-900">BizCore — My Portal</span>
-        <UserButton />
+        <button
+          onClick={logout}
+          className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+          title="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </header>
 
       {/* Content */}

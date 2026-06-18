@@ -1,11 +1,12 @@
 import express from "express";
 import cors from "cors";
 import { pinoHttp } from "pino-http";
-import { clerkMiddleware } from "./middlewares/auth";
 import logger from "./lib/logger";
 
 // Routes
 import healthRouter from "./routes/health";
+import authRouter from "./routes/auth";
+import appUsersRouter from "./routes/app-users";
 import businessesRouter from "./routes/businesses";
 import locationsRouter from "./routes/locations";
 import modulesRouter from "./routes/modules";
@@ -38,10 +39,11 @@ app.use(cors({
 
 app.use(pinoHttp({ logger }));
 app.use(express.json({ limit: "10mb" }));
-app.use(clerkMiddleware());
 
 // Routes
 app.use("/api/v1", healthRouter);
+app.use("/api/v1", authRouter);
+app.use("/api/v1", appUsersRouter);
 app.use("/api/v1", businessesRouter);
 app.use("/api/v1", locationsRouter);
 app.use("/api/v1", modulesRouter);
@@ -73,3 +75,36 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 export default app;
+
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
+// On first deploy (no app_users exist), auto-create the admin account from env vars.
+
+import { db } from "@bizcore/db";
+import { appUsersTable, businessesTable } from "@bizcore/db/schema";
+import bcrypt from "bcryptjs";
+
+export async function bootstrapAdminUser(): Promise<void> {
+  const username = process.env["ADMIN_USERNAME"];
+  const password = process.env["ADMIN_PASSWORD"];
+  if (!username || !password) return;
+
+  try {
+    const existing = await db.select({ id: appUsersTable.id }).from(appUsersTable).limit(1);
+    if (existing.length > 0) return; // already bootstrapped
+
+    const [business] = await db.select({ id: businessesTable.id }).from(businessesTable).limit(1);
+    if (!business) { console.warn("[bootstrap] No business found — skipping admin user creation"); return; }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await db.insert(appUsersTable).values({
+      businessId: business.id,
+      username,
+      passwordHash,
+      role: "admin",
+      displayName: "Admin",
+    });
+    console.log(`[bootstrap] Created admin user: ${username}`);
+  } catch (err) {
+    console.error("[bootstrap] Failed to create admin user:", err);
+  }
+}

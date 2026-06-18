@@ -1,122 +1,47 @@
 import type { Request, Response, NextFunction } from "express";
-import { clerkMiddleware, getAuth, clerkClient } from "@clerk/express";
+import { verifyToken } from "../lib/jwt";
 import { db } from "@bizcore/db";
-import {
-  usersTable,
-  businessUsersTable,
-  businessUserLocationsTable,
-  businessModulesTable,
-  employeesTable,
-} from "@bizcore/db/schema";
+import { appUsersTable, businessModulesTable, employeesTable } from "@bizcore/db/schema";
 import { eq, and } from "drizzle-orm";
 
-export { clerkMiddleware };
-
 export interface AuthedRequest extends Request {
-  userId: string;
+  userId: string;          // appUser.id
   businessId: string;
-  businessUserId: string;
   userRole: string;
-  allowedLocationIds: string[] | null; // null = all locations
-  employeeId?: string; // set on /me/* routes
+  allowedLocationIds: string[] | null;
+  employeeId?: string;
+  // legacy compat
+  businessUserId?: string;
 }
 
 // ─── requireAuth ─────────────────────────────────────────────────────────────
-// Validates Clerk JWT, syncs user to local users table, injects userId.
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const auth = getAuth(req);
-  if (!auth.userId) {
+  const header = req.headers["authorization"];
+  if (!header?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-
-  void (async () => {
-    try {
-      const userId = auth.userId!;
-      const [existing] = await db
-        .select({ id: usersTable.id, email: usersTable.email })
-        .from(usersTable)
-        .where(eq(usersTable.id, userId))
-        .limit(1);
-
-      // Clerk session claims omit email by default, so fetch it from the Backend
-      // API on first sign-in (and backfill any previously-stored empty email).
-      if (!existing || !existing.email) {
-        let email = (auth as any).sessionClaims?.email ?? "";
-        let name = (auth as any).sessionClaims?.name ?? null;
-        try {
-          const u = await clerkClient.users.getUser(userId);
-          email =
-            u.emailAddresses.find((e) => e.id === u.primaryEmailAddressId)?.emailAddress ??
-            u.emailAddresses[0]?.emailAddress ??
-            email;
-          name = [u.firstName, u.lastName].filter(Boolean).join(" ") || name;
-        } catch {
-          /* fall back to session claims */
-        }
-        await db
-          .insert(usersTable)
-          .values({ id: userId, email, name })
-          .onConflictDoUpdate({ target: usersTable.id, set: { email, name } });
-      }
-
-      (req as AuthedRequest).userId = userId;
-      next();
-    } catch (err) {
-      next(err);
-    }
-  })();
+  try {
+    const token = header.slice(7);
+    const payload = verifyToken(token);
+    const authed = req as AuthedRequest;
+    authed.userId = payload.sub;
+    authed.businessId = payload.businessId;
+    authed.userRole = payload.role;
+    authed.employeeId = payload.employeeId;
+    authed.allowedLocationIds = null; // all locations; location scoping added later
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
 }
 
-// ─── loadBusiness ────────────────────────────────────────────────────────────
-// Resolves businessId from the authenticated user. Requires requireAuth first.
-// Injects: businessId, businessUserId, userRole, allowedLocationIds.
+// ─── loadBusiness ─────────────────────────────────────────────────────────────
+// businessId is already in the JWT — this is a no-op kept for route compatibility.
 
 export function loadBusiness(req: Request, res: Response, next: NextFunction): void {
-  const authed = req as AuthedRequest;
-
-  void (async () => {
-    try {
-      // Honor an explicit business selection (multi-business users); otherwise pick
-      // deterministically (oldest membership) rather than an arbitrary row.
-      const requestedBusinessId = req.header("X-Business-Id");
-      const memberConditions = [
-        eq(businessUsersTable.userId, authed.userId),
-        eq(businessUsersTable.active, true),
-      ];
-      if (requestedBusinessId) memberConditions.push(eq(businessUsersTable.businessId, requestedBusinessId));
-
-      const [businessUser] = await db
-        .select()
-        .from(businessUsersTable)
-        .where(and(...memberConditions))
-        .orderBy(businessUsersTable.createdAt)
-        .limit(1);
-
-      if (!businessUser) {
-        res.status(403).json({ error: "No business account found" });
-        return;
-      }
-
-      // Location scoping: 0 rows = all locations; rows present = restricted
-      const locationRows = await db
-        .select({ locationId: businessUserLocationsTable.locationId })
-        .from(businessUserLocationsTable)
-        .where(eq(businessUserLocationsTable.businessUserId, businessUser.id));
-
-      authed.businessId = businessUser.businessId;
-      authed.businessUserId = businessUser.id;
-      authed.userRole = businessUser.role;
-      authed.allowedLocationIds = locationRows.length > 0
-        ? locationRows.map((r) => r.locationId)
-        : null;
-
-      next();
-    } catch (err) {
-      next(err);
-    }
-  })();
+  next();
 }
 
 // ─── requireRole ─────────────────────────────────────────────────────────────
@@ -132,12 +57,11 @@ export function requireRole(...roles: string[]) {
   };
 }
 
-// ─── requireModule ───────────────────────────────────────────────────────────
+// ─── requireModule ────────────────────────────────────────────────────────────
 
 export function requireModule(moduleName: string) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const authed = req as AuthedRequest;
-
     void (async () => {
       try {
         const [mod] = await db
@@ -151,9 +75,8 @@ export function requireModule(moduleName: string) {
             ),
           )
           .limit(1);
-
         if (!mod) {
-          res.status(403).json({ error: `Module '${moduleName}' is not enabled for this business` });
+          res.status(403).json({ error: `Module '${moduleName}' is not enabled` });
           return;
         }
         next();
@@ -164,51 +87,28 @@ export function requireModule(moduleName: string) {
   };
 }
 
-// ─── loadEmployee ────────────────────────────────────────────────────────────
-// For /me/* routes. Resolves employeeId from userId.
-// Requires X-Business-Id header if user works at multiple businesses.
+// ─── loadEmployee ─────────────────────────────────────────────────────────────
+// For /me/* routes. Uses employeeId already in the JWT payload.
 
 export function loadEmployee(req: Request, res: Response, next: NextFunction): void {
   const authed = req as AuthedRequest;
-
+  if (!authed.employeeId) {
+    // Admin/accountant users without an employee record can still access /me for profile
+    // but not clock-in/out. The individual route handlers check employeeId where needed.
+    next();
+    return;
+  }
   void (async () => {
     try {
-      const employees = await db
-        .select()
+      const [emp] = await db
+        .select({ id: employeesTable.id, businessId: employeesTable.businessId })
         .from(employeesTable)
-        .where(
-          and(
-            eq(employeesTable.userId, authed.userId),
-            eq(employeesTable.active, true),
-          ),
-        );
-
-      if (employees.length === 0) {
-        res.status(403).json({ error: "No employee profile found for this account" });
+        .where(and(eq(employeesTable.id, authed.employeeId!), eq(employeesTable.active, true)))
+        .limit(1);
+      if (!emp) {
+        res.status(403).json({ error: "Employee record not found or inactive" });
         return;
       }
-
-      let employee = employees[0]!;
-
-      if (employees.length > 1) {
-        const businessIdHeader = req.headers["x-business-id"] as string | undefined;
-        if (!businessIdHeader) {
-          res.status(400).json({
-            error: "Multiple businesses found. Provide X-Business-Id header.",
-            businesses: employees.map((e) => e.businessId),
-          });
-          return;
-        }
-        const match = employees.find((e) => e.businessId === businessIdHeader);
-        if (!match) {
-          res.status(403).json({ error: "Employee not found in specified business" });
-          return;
-        }
-        employee = match;
-      }
-
-      authed.businessId = employee.businessId;
-      authed.employeeId = employee.id;
       next();
     } catch (err) {
       next(err);
@@ -216,8 +116,7 @@ export function loadEmployee(req: Request, res: Response, next: NextFunction): v
   })();
 }
 
-// ─── requireApiKey ───────────────────────────────────────────────────────────
-// Alternative auth path for external POS integrations.
+// ─── requireApiKey ────────────────────────────────────────────────────────────
 
 import { apiKeysTable } from "@bizcore/db/schema";
 import crypto from "crypto";
@@ -228,35 +127,20 @@ export function requireApiKey(req: Request, res: Response, next: NextFunction): 
     res.status(401).json({ error: "API key required" });
     return;
   }
-
   void (async () => {
     try {
       const prefix = rawKey.substring(0, 8);
       const hash = crypto.createHash("sha256").update(rawKey).digest("hex");
-
       const [key] = await db
         .select()
         .from(apiKeysTable)
-        .where(
-          and(
-            eq(apiKeysTable.keyPrefix, prefix),
-            eq(apiKeysTable.keyHash, hash),
-            eq(apiKeysTable.active, true),
-          ),
-        )
+        .where(and(eq(apiKeysTable.keyPrefix, prefix), eq(apiKeysTable.keyHash, hash), eq(apiKeysTable.active, true)))
         .limit(1);
-
       if (!key) {
         res.status(401).json({ error: "Invalid or inactive API key" });
         return;
       }
-
-      // Update last used timestamp (fire and forget)
-      void db
-        .update(apiKeysTable)
-        .set({ lastUsedAt: new Date() })
-        .where(eq(apiKeysTable.id, key.id));
-
+      void db.update(apiKeysTable).set({ lastUsedAt: new Date() }).where(eq(apiKeysTable.id, key.id));
       const authed = req as AuthedRequest;
       authed.businessId = key.businessId;
       authed.userRole = "api";

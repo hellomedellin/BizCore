@@ -8,7 +8,7 @@ import { requireAuth, loadBusiness, requireRole, type AuthedRequest } from "../m
 import { tenantWhere } from "../lib/tenant";
 
 const router = Router();
-const guard = [requireAuth, loadBusiness, requireRole("owner", "admin")];
+const guard = [requireAuth, loadBusiness, requireRole("admin")];
 
 router.get("/api-keys", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;

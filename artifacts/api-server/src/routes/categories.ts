@@ -27,7 +27,7 @@ const createCategorySchema = z.object({
   sortOrder: z.number().int().optional().transform((v) => (v == null ? undefined : String(v))),
 });
 
-router.post("/categories", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/categories", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = createCategorySchema.safeParse(req.body);
@@ -39,7 +39,7 @@ router.post("/categories", ...guard, requireRole("owner", "admin", "manager"), a
   }
 });
 
-router.patch("/categories/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/categories/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = createCategorySchema.partial().extend({ active: z.boolean().optional() }).safeParse(req.body);

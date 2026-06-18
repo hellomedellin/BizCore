@@ -28,7 +28,7 @@ const roleSchema = z.object({
   hourlyRateDefault: z.string().nullable().optional(),
 });
 
-router.post("/employee-roles", ...guard, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.post("/employee-roles", ...guard, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = roleSchema.safeParse(req.body);
@@ -40,7 +40,7 @@ router.post("/employee-roles", ...guard, requireRole("owner", "admin"), async (r
   }
 });
 
-router.patch("/employee-roles/:id", ...guard, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.patch("/employee-roles/:id", ...guard, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = roleSchema.partial().safeParse(req.body);
@@ -84,7 +84,7 @@ const employeeSchema = z.object({
   locationIds: z.array(z.string().uuid()).optional(),
 });
 
-router.post("/employees", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/employees", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = employeeSchema.safeParse(req.body);
@@ -115,7 +115,7 @@ router.get("/employees/:id", ...guard, async (req, res): Promise<void> => {
   }
 });
 
-router.patch("/employees/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/employees/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = employeeSchema.partial().safeParse(req.body);

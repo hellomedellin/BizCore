@@ -2,6 +2,7 @@ packages:
   - "artifacts/*"
   - "lib/*"
 
+
 catalog:
   # Core
   typescript: "^5.9.0"
@@ -13,6 +14,12 @@ catalog:
   drizzle-kit: "^0.31.0"
   pg: "^8.13.0"
   "@types/pg": "^8.11.0"
+
+  # Auth
+  bcryptjs: "^2.4.3"
+  jsonwebtoken: "^9.0.0"
+  "@types/bcryptjs": "^2.4.6"
+  "@types/jsonwebtoken": "^9.0.0"
 
   # API server
   express: "^5.0.0"

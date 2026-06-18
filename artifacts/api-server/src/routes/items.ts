@@ -107,7 +107,7 @@ const createItemSchema = z.object({
   imageUrl: z.string().nullable().optional(),
 });
 
-router.post("/items", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/items", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = createItemSchema.safeParse(req.body);
@@ -167,7 +167,7 @@ router.get("/items/:id", ...guard, async (req, res): Promise<void> => {
 
 const updateItemSchema = createItemSchema.partial();
 
-router.patch("/items/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/items/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = updateItemSchema.safeParse(req.body);
@@ -202,7 +202,7 @@ const createVariantSchema = z.object({
   attributes: z.record(z.string()).nullable().optional(),
 });
 
-router.post("/items/:id/variants", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/items/:id/variants", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [item] = await db.select({ id: itemsTable.id }).from(itemsTable).where(
@@ -220,7 +220,7 @@ router.post("/items/:id/variants", ...guard, requireRole("owner", "admin", "mana
   }
 });
 
-router.patch("/items/:id/variants/:variantId", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/items/:id/variants/:variantId", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [item] = await db.select({ id: itemsTable.id }).from(itemsTable).where(

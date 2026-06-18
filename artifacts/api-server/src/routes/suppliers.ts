@@ -33,7 +33,7 @@ const supplierSchema = z.object({
   active: z.boolean().optional(),
 });
 
-router.post("/suppliers", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/suppliers", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = supplierSchema.safeParse(req.body);
@@ -56,7 +56,7 @@ router.get("/suppliers/:id", ...guard, async (req, res): Promise<void> => {
   }
 });
 
-router.patch("/suppliers/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/suppliers/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = supplierSchema.partial().safeParse(req.body);

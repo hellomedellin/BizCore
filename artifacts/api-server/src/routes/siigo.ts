@@ -23,7 +23,7 @@ import {
 } from "../lib/siigo-client";
 
 const router = Router();
-const ownerAdmin = [requireAuth, loadBusiness, requireRole("owner", "admin")];
+const ownerAdmin = [requireAuth, loadBusiness, requireRole("admin")];
 
 // ─── GET /siigo-connection ────────────────────────────────────────────────────
 

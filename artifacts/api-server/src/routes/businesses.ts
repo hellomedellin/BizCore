@@ -72,7 +72,7 @@ const updateBusinessSchema = z.object({
   logoUrl: z.string().nullable().optional(),
 });
 
-router.patch("/businesses/me", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.patch("/businesses/me", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = updateBusinessSchema.safeParse(req.body);

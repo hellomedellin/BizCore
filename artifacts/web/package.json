@@ -14,7 +14,6 @@
     "wouter": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-query-devtools": "catalog:",
-    "@clerk/react": "catalog:",
     "lucide-react": "catalog:",
     "recharts": "catalog:",
     "framer-motion": "catalog:",

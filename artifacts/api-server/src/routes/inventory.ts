@@ -117,7 +117,7 @@ const adjustSchema = z.object({
   notes: z.string().optional(),
 });
 
-router.post("/inventory/adjust", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/inventory/adjust", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId, userId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = adjustSchema.safeParse(req.body);

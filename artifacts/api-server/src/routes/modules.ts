@@ -27,7 +27,7 @@ const upsertModuleSchema = z.object({
   configuration: z.record(z.unknown()).optional(),
 });
 
-router.put("/modules", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.put("/modules", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = upsertModuleSchema.safeParse(req.body);
@@ -49,7 +49,7 @@ router.put("/modules", requireAuth, loadBusiness, requireRole("owner", "admin"),
 });
 
 // Bulk upsert — used during onboarding
-router.put("/modules/bulk", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.put("/modules/bulk", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = z.object({ modules: z.array(upsertModuleSchema) }).safeParse(req.body);

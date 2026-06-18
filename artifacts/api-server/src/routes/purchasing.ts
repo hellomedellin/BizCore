@@ -39,7 +39,7 @@ const createPOSchema = z.object({
   })).min(1),
 });
 
-router.post("/purchase-orders", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/purchase-orders", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId, userId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = createPOSchema.safeParse(req.body);
@@ -90,7 +90,7 @@ router.get("/purchase-orders/:id", ...guard, async (req, res): Promise<void> => 
 });
 
 // Receive PO — creates inventory transactions for matched lines
-router.post("/purchase-orders/:id/receive", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/purchase-orders/:id/receive", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId, userId } = req as AuthedRequest;
   try {
     const [po] = await db.select().from(purchaseOrdersTable).where(
@@ -130,7 +130,7 @@ router.post("/purchase-orders/:id/receive", ...guard, requireRole("owner", "admi
 });
 
 // Update line matching (used after AI review)
-router.patch("/purchase-orders/:id/lines/:lineId", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/purchase-orders/:id/lines/:lineId", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [po] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable).where(

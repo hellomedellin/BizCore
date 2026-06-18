@@ -11,7 +11,6 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Inject Clerk JWT on every request
 export function setAuthToken(token: string | null) {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -33,7 +32,7 @@ api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
-      window.location.href = "/sign-in";
+      window.location.href = "/login";
     }
     return Promise.reject(err);
   }

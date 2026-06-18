@@ -15,7 +15,8 @@
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-sqs": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
-    "@clerk/express": "catalog:",
+    "bcryptjs": "catalog:",
+    "jsonwebtoken": "catalog:",
     "cors": "catalog:",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
@@ -25,8 +26,10 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/bcryptjs": "catalog:",
     "@types/cors": "catalog:",
     "@types/express": "catalog:",
+    "@types/jsonwebtoken": "catalog:",
     "esbuild": "catalog:",
     "tsx": "^4.19.0",
     "typescript": "catalog:"

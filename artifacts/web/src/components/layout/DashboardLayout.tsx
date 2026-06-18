@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link, useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { UserButton } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import {
   LayoutDashboard, Warehouse, ShoppingCart,
   Users, Clock, Calendar, Truck, Building2,
   Cog, ChevronLeft, ChevronRight, BookUser,
-  Tag, UtensilsCrossed, Carrot,
+  Tag, UtensilsCrossed, Carrot, LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LocationProvider, LocationSwitcher } from "@/hooks/useLocation";
@@ -56,6 +56,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const t = useT();
   const { lang, setLang } = useLang();
+  const { user, logout } = useAuth();
 
   const { data: modules } = useQuery({
     queryKey: ["modules"],
@@ -100,7 +101,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         {/* User / language / collapse */}
         <div className={cn("flex items-center border-t border-slate-200 p-2", collapsed ? "flex-col gap-2" : "justify-between")}>
-          <UserButton />
+          <button
+            onClick={logout}
+            title={user?.username ?? "Sign out"}
+            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
           <div className="flex items-center gap-1">
             {!collapsed && (
               <button

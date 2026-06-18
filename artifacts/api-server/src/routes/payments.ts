@@ -108,7 +108,7 @@ router.get("/payments", ...guard, async (req, res): Promise<void> => {
 
 // ─── GET /pos-connection ─────────────────────────────────────────────────────
 
-router.get("/pos-connection", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.get("/pos-connection", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [conn] = await db
@@ -130,7 +130,7 @@ const posConnectionSchema = z.object({
   apiKey: z.string().optional().nullable(),
 });
 
-router.put("/pos-connection", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.put("/pos-connection", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = posConnectionSchema.safeParse(req.body);
@@ -157,7 +157,7 @@ router.put("/pos-connection", requireAuth, loadBusiness, requireRole("owner", "a
 // GET {apiUrl}/transactions?from=ISO&to=ISO
 // → { transactions: [{ id, bizcore_order_id?, amount, tip?, currency, method, processedAt }] }
 
-router.post("/payments/pos-sync", requireAuth, loadBusiness, requireRole("owner", "admin"), async (req, res): Promise<void> => {
+router.post("/payments/pos-sync", requireAuth, loadBusiness, requireRole("admin"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [conn] = await db
