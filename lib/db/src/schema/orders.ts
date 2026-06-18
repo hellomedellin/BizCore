@@ -35,6 +35,8 @@ export const ordersTable = pgTable("orders", {
   tax: numeric("tax", { precision: 10, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
   currencyCode: text("currency_code").notNull().default("USD"),
+  siigoInvoiceId: text("siigo_invoice_id"),
+  cufe: text("cufe"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

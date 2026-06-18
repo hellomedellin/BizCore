@@ -18,7 +18,7 @@ import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { Plus, Minus, Trash2, ShoppingCart, Printer, MessageCircle, CreditCard } from "lucide-react";
 
 interface MenuVariant { itemId: string; itemName: string; categoryName: string | null; variantId: string; variantName: string; price: string | null }
-interface Order { id: string; orderType: string; status: string; subtotal: string; tax: string; discount: string; total: string; currencyCode: string; customerId: string | null; createdAt: string }
+interface Order { id: string; orderType: string; status: string; subtotal: string; tax: string; discount: string; total: string; currencyCode: string; customerId: string | null; createdAt: string; siigoInvoiceId: string | null; cufe: string | null; externalRef: string | null }
 interface OrderLine { id: string; name: string; quantity: string; unitPrice: string; lineTotal: string }
 interface Payment { id: string; method: string; amount: string; tip: string; processedAt: string; posSource: string; externalTransactionId: string | null }
 interface Customer { id: string; name: string }
@@ -358,7 +358,12 @@ export function SalesPage() {
                 <Badge variant="secondary" className="gap-1">
                   <CreditCard className="h-3 w-3" />
                   {METHOD_LABEL[payment.method] ?? payment.method}
-                  {payment.posSource === "pos_sync" ? " · POS" : ""}
+                  {payment.posSource === "pos_sync" ? " · POS" : payment.posSource === "siigo_sync" ? " · Siigo" : ""}
+                </Badge>
+              ) : null}
+              {detail?.cufe ? (
+                <Badge variant="outline" className="font-mono text-[10px] text-green-700 border-green-300 max-w-[120px] truncate" title={`CUFE: ${detail.cufe}`}>
+                  CUFE ✓
                 </Badge>
               ) : null}
             </DialogTitle>
@@ -369,6 +374,13 @@ export function SalesPage() {
                 <span>{customerName(detail.customerId)} · {TYPE_LABEL[detail.orderType] ?? detail.orderType}</span>
                 <span>{formatDateTime(detail.createdAt)}</span>
               </div>
+
+              {detail.cufe && (
+                <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800">
+                  <span className="font-semibold">CUFE DIAN:</span>{" "}
+                  <span className="font-mono break-all">{detail.cufe}</span>
+                </div>
+              )}
 
               <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                 {(detail.lines ?? []).map((l) => (

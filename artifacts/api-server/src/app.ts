@@ -26,6 +26,7 @@ import invoiceAiRouter from "./routes/invoice-ai";
 import apiKeysRouter from "./routes/api-keys";
 import paymentsRouter from "./routes/payments";
 import receiptsRouter from "./routes/receipts";
+import siigoRouter from "./routes/siigo";
 import meRouter from "./routes/me";
 
 const app = express();
@@ -61,6 +62,7 @@ app.use("/api/v1", invoiceAiRouter);
 app.use("/api/v1", apiKeysRouter);
 app.use("/api/v1", paymentsRouter);
 app.use("/api/v1", receiptsRouter);
+app.use("/api/v1", siigoRouter);
 app.use("/api/v1/me", meRouter);
 
 // Global error handler

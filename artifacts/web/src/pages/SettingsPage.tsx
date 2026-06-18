@@ -164,6 +164,41 @@ export function SettingsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
   });
 
+  // ── Siigo integration ─────────────────────────────────────────────────────
+  const { data: siigoConn } = useQuery({ queryKey: ["siigo-connection"], queryFn: () => api.get("/siigo-connection").then((r) => r.data).catch(() => null) });
+  const [siigoForm, setSiigoForm] = useState({ username: "", accessKey: "" });
+  const [siigoKeyVisible, setSiigoKeyVisible] = useState(false);
+  const [siigoEditing, setSiigoEditing] = useState(false);
+  const [confirmSiigo, setConfirmSiigo] = useState(false);
+  function openSiigoEdit() {
+    setSiigoForm({ username: siigoConn?.username ?? "", accessKey: "" });
+    setSiigoEditing(true);
+  }
+  const saveSiigo = useMutation({
+    mutationFn: () => api.put("/siigo-connection", { username: siigoForm.username, accessKey: siigoForm.accessKey }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["siigo-connection"] }); setSiigoEditing(false); toast({ title: t("settings.siigo.toast.saved"), variant: "success" }); },
+    onError: (e) => toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+  const deleteSiigo = useMutation({
+    mutationFn: () => api.delete("/siigo-connection"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["siigo-connection"] }); toast({ title: t("settings.siigo.toast.disconnected"), variant: "success" }); },
+    onError: (e) => toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+  const syncSiigo = useMutation({
+    mutationFn: () => api.post("/siigo-sync"),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["siigo-connection"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      const { imported, skipped, errors } = res.data;
+      toast({
+        title: t("settings.siigo.toast.syncComplete", { imported, skipped }),
+        description: errors?.length ? errors.slice(0, 3).join("; ") : undefined,
+        variant: errors?.length ? "destructive" : "success",
+      });
+    },
+    onError: (e) => toast({ title: t("settings.siigo.toast.syncFailed"), description: errText(e), variant: "destructive" }),
+  });
+
   // ── POS integration ───────────────────────────────────────────────────────
   const { data: posConn } = useQuery({ queryKey: ["pos-connection"], queryFn: () => api.get("/pos-connection").then((r) => r.data).catch(() => null) });
   const [posForm, setPosForm] = useState({ name: "", apiUrl: "", apiKey: "" });
@@ -448,6 +483,81 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Siigo / DIAN Integration */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{t("settings.siigo.cardTitle")}</CardTitle>
+          {siigoConn && !siigoEditing && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={openSiigoEdit}><Pencil className="mr-1 h-3.5 w-3.5" /> {t("settings.siigo.btn.edit")}</Button>
+              <Button size="sm" variant="ghost" className="text-red-500 hover:bg-red-50" onClick={() => setConfirmSiigo(true)}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Hint>{t("settings.siigo.hint")}</Hint>
+
+          {!siigoConn && !siigoEditing ? (
+            <Button variant="outline" onClick={openSiigoEdit}><Plus className="mr-1 h-4 w-4" /> {t("settings.siigo.btn.connect")}</Button>
+          ) : siigoEditing ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>{t("settings.siigo.form.label.username")}</Label>
+                <Input
+                  type="email"
+                  value={siigoForm.username}
+                  onChange={(e) => setSiigoForm({ ...siigoForm, username: e.target.value })}
+                  placeholder={t("settings.siigo.form.placeholder.username")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{siigoConn ? t("settings.siigo.form.label.accessKeyCurrent") : t("settings.siigo.form.label.accessKey")}</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={siigoKeyVisible ? "text" : "password"}
+                    value={siigoForm.accessKey}
+                    onChange={(e) => setSiigoForm({ ...siigoForm, accessKey: e.target.value })}
+                    placeholder={siigoConn ? "•••••••••••••••" : t("settings.siigo.form.placeholder.accessKey")}
+                  />
+                  <Button size="icon" variant="outline" onClick={() => setSiigoKeyVisible(!siigoKeyVisible)}>
+                    {siigoKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500">{t("settings.siigo.form.hint.accessKey")}</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSiigoEditing(false)}>{t("settings.siigo.form.btn.cancel")}</Button>
+                <Button
+                  disabled={!siigoForm.username.trim() || (!siigoConn && !siigoForm.accessKey.trim()) || saveSiigo.isPending}
+                  onClick={() => saveSiigo.mutate()}
+                >
+                  {saveSiigo.isPending ? t("settings.siigo.form.btn.verifying") : t("settings.siigo.form.btn.save")}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-slate-100 divide-y divide-slate-100">
+                {[
+                  [t("settings.siigo.detail.field.username"), siigoConn!.username],
+                  [t("settings.siigo.detail.field.lastSync"), siigoConn!.lastSyncAt ? formatDateTime(siigoConn!.lastSyncAt) : t("settings.siigo.detail.lastSync.never")],
+                  [t("settings.siigo.detail.field.status"), siigoConn!.active ? t("settings.siigo.detail.status.active") : t("settings.siigo.detail.status.inactive")],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-4 px-3 py-2 text-sm">
+                    <span className="font-medium w-28 text-slate-600">{k}</span>
+                    <span className="text-slate-900 truncate">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <Button variant="outline" disabled={syncSiigo.isPending} onClick={() => syncSiigo.mutate()}>
+                <RefreshCw className={`mr-1.5 h-4 w-4 ${syncSiigo.isPending ? "animate-spin" : ""}`} />
+                {syncSiigo.isPending ? t("settings.siigo.btn.syncing") : t("settings.siigo.btn.syncNow")}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <ConfirmDialog
         open={confirmLoc}
         onOpenChange={setConfirmLoc}
@@ -457,6 +567,16 @@ export function SettingsPage() {
         destructive
         loading={toggleLocActive.isPending}
         onConfirm={() => toggleLocActive.mutate(false)}
+      />
+      <ConfirmDialog
+        open={confirmSiigo}
+        onOpenChange={setConfirmSiigo}
+        title={t("settings.siigo.disconnect.title")}
+        description={t("settings.siigo.disconnect.description")}
+        confirmLabel={t("settings.siigo.disconnect.confirmLabel")}
+        destructive
+        loading={deleteSiigo.isPending}
+        onConfirm={() => { deleteSiigo.mutate(); setConfirmSiigo(false); }}
       />
     </div>
   );
