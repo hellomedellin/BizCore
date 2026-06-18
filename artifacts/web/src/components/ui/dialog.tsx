@@ -33,9 +33,15 @@ export const DialogContent = React.forwardRef<
         className
       )}
       onPointerDownOutside={(e) => {
-        // Prevent dialog close when dismissing a Radix portal (Select, Popover, etc.)
-        // that rendered outside the dialog DOM tree.
-        if ((e.target as HTMLElement)?.closest("[data-radix-popper-content-wrapper]")) {
+        // Prevent dialog close when a Radix portal (Select, Popover, etc.) is open.
+        // Covers both: clicking inside the popper content, and clicking the trigger
+        // again to toggle it closed (which sends a dismiss through a Radix overlay
+        // that lives outside the Dialog's DOM tree).
+        const target = e.target as HTMLElement;
+        if (
+          target?.closest("[data-radix-popper-content-wrapper]") ||
+          document.querySelector("[data-radix-popper-content-wrapper]")
+        ) {
           e.preventDefault();
         }
       }}
