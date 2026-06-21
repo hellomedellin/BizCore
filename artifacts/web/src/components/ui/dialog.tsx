@@ -3,6 +3,19 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Snapshot whether a Radix popper is open at the moment of each pointerdown,
+// using capture phase so we read the DOM before Radix tears down the portal.
+let popperOpenAtPointerDown = false;
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "pointerdown",
+    () => {
+      popperOpenAtPointerDown = !!document.querySelector("[data-radix-popper-content-wrapper]");
+    },
+    true,
+  );
+}
+
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogPortal = DialogPrimitive.Portal;
@@ -33,14 +46,13 @@ export const DialogContent = React.forwardRef<
         className
       )}
       onPointerDownOutside={(e) => {
-        // Prevent dialog close when a Radix portal (Select, Popover, etc.) is open.
-        // Covers both: clicking inside the popper content, and clicking the trigger
-        // again to toggle it closed (which sends a dismiss through a Radix overlay
-        // that lives outside the Dialog's DOM tree).
+        // Block dialog dismiss when a Radix popper (Select, Popover, …) is involved.
+        // We use a capture-phase snapshot because Radix removes the popper from the
+        // DOM before this handler runs, making a live DOM query unreliable.
         const target = e.target as HTMLElement;
         if (
           target?.closest("[data-radix-popper-content-wrapper]") ||
-          document.querySelector("[data-radix-popper-content-wrapper]")
+          popperOpenAtPointerDown
         ) {
           e.preventDefault();
         }
