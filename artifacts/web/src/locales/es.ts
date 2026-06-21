@@ -360,6 +360,13 @@ const es = {
   "scheduling.toast.couldntSchedule": "No se pudo programar",
   "scheduling.toast.removed": "Turno eliminado",
   "scheduling.toast.couldntRemove": "No se pudo eliminar el turno",
+  "scheduling.btn.generateDefaults": "Generar desde plantilla",
+  "scheduling.btn.generating": "Generando…",
+  "scheduling.btn.thisWeek": "Esta semana",
+  "scheduling.calendar.team": "Equipo",
+  "scheduling.toast.generated": "Se generaron {count} turnos",
+  "scheduling.toast.nothingToGenerate": "Sin cambios — todos los turnos ya existen o no hay plantillas configuradas",
+  "scheduling.toast.couldntGenerate": "No se pudieron generar los turnos",
 
   // ── Time Tracking ────────────────────────────────────────────────────────────
   "timeTracking.title": "Control de horas",

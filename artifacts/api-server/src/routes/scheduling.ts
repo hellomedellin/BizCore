@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
-import { shiftsTable, employeesTable } from "@bizcore/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import {
+  shiftsTable, employeesTable, employeeRolesTable, employeeDefaultShiftsTable,
+} from "@bizcore/db/schema";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireModule, requireRole, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -10,6 +12,7 @@ import { isLocationAllowed } from "../lib/access";
 const router = Router();
 const guard = [requireAuth, loadBusiness, requireModule("scheduling")];
 
+// Returns shifts enriched with employee name + role color for the calendar.
 router.get("/shifts", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
@@ -17,17 +20,35 @@ router.get("/shifts", ...guard, async (req, res): Promise<void> => {
     if (req.query["employeeId"]) conditions.push(eq(shiftsTable.employeeId, req.query["employeeId"] as string));
     if (req.query["locationId"]) conditions.push(eq(shiftsTable.locationId, req.query["locationId"] as string));
     if (req.query["from"]) conditions.push(gte(shiftsTable.startTime, new Date(req.query["from"] as string)));
-    if (req.query["to"]) conditions.push(lte(shiftsTable.endTime, new Date(req.query["to"] as string)));
+    if (req.query["to"]) conditions.push(lte(shiftsTable.startTime, new Date(req.query["to"] as string)));
 
-    // Filter via employees join to ensure tenant scoping
-    const employeeIds = await db.select({ id: employeesTable.id }).from(employeesTable)
+    const rows = await db
+      .select({
+        id: shiftsTable.id,
+        employeeId: shiftsTable.employeeId,
+        locationId: shiftsTable.locationId,
+        startTime: shiftsTable.startTime,
+        endTime: shiftsTable.endTime,
+        notes: shiftsTable.notes,
+        createdAt: shiftsTable.createdAt,
+        employeeName: employeesTable.name,
+        roleId: employeesTable.roleId,
+        roleColor: employeeRolesTable.color,
+        roleName: employeeRolesTable.name,
+      })
+      .from(shiftsTable)
+      .leftJoin(employeesTable, eq(shiftsTable.employeeId, employeesTable.id))
+      .leftJoin(employeeRolesTable, eq(employeesTable.roleId, employeeRolesTable.id))
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(shiftsTable.startTime);
+
+    // Tenant scope: only return shifts for employees of this business.
+    const employeeIds = await db
+      .select({ id: employeesTable.id })
+      .from(employeesTable)
       .where(tenantWhere(employeesTable.businessId, businessId));
     const eidSet = new Set(employeeIds.map((e) => e.id));
-
-    let rows = await db.select().from(shiftsTable).where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(shiftsTable.startTime);
-    rows = rows.filter((s) => eidSet.has(s.employeeId));
-    res.json(rows);
+    res.json(rows.filter((s) => eidSet.has(s.employeeId)));
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
@@ -41,14 +62,13 @@ const shiftSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-router.post("/shifts", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.post("/shifts", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId, allowedLocationIds } = req as AuthedRequest;
   try {
     const body = shiftSchema.safeParse(req.body);
     if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
     if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
-    // Confirm employee belongs to this business
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable).where(
       and(eq(employeesTable.id, body.data.employeeId), tenantWhere(employeesTable.businessId, businessId))
     );
@@ -65,7 +85,7 @@ router.post("/shifts", ...guard, requireRole("owner", "admin", "manager"), async
   }
 });
 
-router.patch("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.patch("/shifts/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const body = shiftSchema.partial().safeParse(req.body);
@@ -75,7 +95,6 @@ router.patch("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"), 
       .where(eq(shiftsTable.id, req.params["id"] as string));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
-    // Tenant check via employee
     const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable)
       .where(and(eq(employeesTable.id, existing.employeeId), tenantWhere(employeesTable.businessId, businessId)));
     if (!employee) { res.status(403).json({ error: "Forbidden" }); return; }
@@ -91,7 +110,7 @@ router.patch("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"), 
   }
 });
 
-router.delete("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"), async (req, res): Promise<void> => {
+router.delete("/shifts/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const [existing] = await db.select({ id: shiftsTable.id, employeeId: shiftsTable.employeeId }).from(shiftsTable)
@@ -104,6 +123,87 @@ router.delete("/shifts/:id", ...guard, requireRole("owner", "admin", "manager"),
 
     await db.delete(shiftsTable).where(eq(shiftsTable.id, existing.id));
     res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Generate shifts for a full week from each employee's default schedule.
+// utcOffsetMinutes: browser's getTimezoneOffset() value (e.g. 300 for UTC-5 Colombia).
+// Skips days that already have a shift for that employee.
+router.post("/shifts/generate-week", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = z.object({
+      weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      utcOffsetMinutes: z.number().int().min(-840).max(840),
+    }).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const employees = await db
+      .select({ id: employeesTable.id, primaryLocationId: employeesTable.primaryLocationId })
+      .from(employeesTable)
+      .where(and(tenantWhere(employeesTable.businessId, businessId), eq(employeesTable.active, true)));
+
+    if (!employees.length) { res.json({ created: 0, skipped: 0 }); return; }
+
+    const empIds = employees.map((e) => e.id);
+    const defaults = await db.select().from(employeeDefaultShiftsTable)
+      .where(inArray(employeeDefaultShiftsTable.employeeId, empIds));
+
+    if (!defaults.length) { res.json({ created: 0, skipped: 0 }); return; }
+
+    const empMap = new Map(employees.map((e) => [e.id, e]));
+    const defaultsByEmp = new Map<string, typeof defaults>();
+    for (const d of defaults) {
+      if (!defaultsByEmp.has(d.employeeId)) defaultsByEmp.set(d.employeeId, []);
+      defaultsByEmp.get(d.employeeId)!.push(d);
+    }
+
+    // Week start midnight in local (Colombia) time expressed as UTC ms.
+    // utcOffsetMinutes = 300 for UTC-5 → midnight local = 05:00 UTC.
+    const weekStartMs = new Date(body.data.weekStart + "T00:00:00Z").getTime()
+      + body.data.utcOffsetMinutes * 60_000;
+
+    let created = 0, skipped = 0;
+
+    for (const [empId, empDefaults] of defaultsByEmp) {
+      const emp = empMap.get(empId);
+      if (!emp?.primaryLocationId) { skipped += empDefaults.length; continue; }
+
+      for (const ds of empDefaults) {
+        // dayOfWeek: 0=Sun, 1=Mon, …, 6=Sat. weekStart is Monday → Mon=1 → offset 0, Sun=0 → offset 6.
+        const dayOffset = ds.dayOfWeek === 0 ? 6 : ds.dayOfWeek - 1;
+        const dayMs = dayOffset * 86_400_000;
+
+        const [sh, sm] = ds.startTime.split(":").map(Number);
+        const [eh, em] = ds.endTime.split(":").map(Number);
+        const startTime = new Date(weekStartMs + dayMs + (sh! * 60 + sm!) * 60_000);
+        const endTime   = new Date(weekStartMs + dayMs + (eh! * 60 + em!) * 60_000);
+
+        // Skip if a shift already exists for this employee on this day.
+        const dayStart = new Date(weekStartMs + dayMs);
+        const dayEnd   = new Date(weekStartMs + dayMs + 86_400_000);
+        const [existing] = await db.select({ id: shiftsTable.id }).from(shiftsTable)
+          .where(and(
+            eq(shiftsTable.employeeId, empId),
+            gte(shiftsTable.startTime, dayStart),
+            lte(shiftsTable.startTime, dayEnd),
+          )).limit(1);
+
+        if (existing) { skipped++; continue; }
+
+        await db.insert(shiftsTable).values({
+          employeeId: empId,
+          locationId: emp.primaryLocationId,
+          startTime,
+          endTime,
+        });
+        created++;
+      }
+    }
+
+    res.json({ created, skipped });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }

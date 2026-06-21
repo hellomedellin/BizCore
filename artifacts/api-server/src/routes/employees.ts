@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
-import { employeesTable, employeeRolesTable, employeeLocationsTable } from "@bizcore/db/schema";
+import { employeesTable, employeeRolesTable, employeeLocationsTable, employeeDefaultShiftsTable } from "@bizcore/db/schema";
 import { eq, and, ilike } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireModule, requireRole, type AuthedRequest } from "../middlewares/auth";
@@ -25,6 +25,7 @@ router.get("/employee-roles", ...guard, async (req, res): Promise<void> => {
 
 const roleSchema = z.object({
   name: z.string().min(1),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   hourlyRateDefault: z.string().nullable().optional(),
 });
 
@@ -134,6 +135,59 @@ router.patch("/employees/:id", ...guard, requireRole("admin", "manager"), async 
       }
     }
     res.json(employee);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// ─── Default shifts ───────────────────────────────────────────────────────────
+
+router.get("/employees/:id/default-shifts", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable).where(
+      and(eq(employeesTable.id, req.params["id"] as string), tenantWhere(employeesTable.businessId, businessId))
+    );
+    if (!emp) { res.status(404).json({ error: "Not found" }); return; }
+    const rows = await db.select().from(employeeDefaultShiftsTable)
+      .where(eq(employeeDefaultShiftsTable.employeeId, emp.id))
+      .orderBy(employeeDefaultShiftsTable.dayOfWeek);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+const defaultShiftSchema = z.object({
+  shifts: z.array(z.object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  })),
+});
+
+// PUT replaces all default shifts for the employee atomically.
+router.put("/employees/:id/default-shifts", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [emp] = await db.select({ id: employeesTable.id }).from(employeesTable).where(
+      and(eq(employeesTable.id, req.params["id"] as string), tenantWhere(employeesTable.businessId, businessId))
+    );
+    if (!emp) { res.status(404).json({ error: "Not found" }); return; }
+
+    const body = defaultShiftSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    await db.delete(employeeDefaultShiftsTable).where(eq(employeeDefaultShiftsTable.employeeId, emp.id));
+    if (body.data.shifts.length) {
+      await db.insert(employeeDefaultShiftsTable).values(
+        body.data.shifts.map((s) => ({ employeeId: emp.id, ...s }))
+      );
+    }
+    const rows = await db.select().from(employeeDefaultShiftsTable)
+      .where(eq(employeeDefaultShiftsTable.employeeId, emp.id))
+      .orderBy(employeeDefaultShiftsTable.dayOfWeek);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }

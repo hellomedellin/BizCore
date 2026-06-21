@@ -65,6 +65,24 @@ export async function runStartupMigrations(): Promise<void> {
       CREATE INDEX IF NOT EXISTS app_users_business_id_idx ON app_users(business_id)
     `);
 
+    // ── Column: employee_roles.color ──────────────────────────────────────────
+    await db.execute(sql`ALTER TABLE employee_roles ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#6366f1'`);
+
+    // ── Table: employee_default_shifts ────────────────────────────────────────
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS employee_default_shifts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        day_of_week INTEGER NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        CONSTRAINT employee_default_shifts_day_unique UNIQUE(employee_id, day_of_week)
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS employee_default_shifts_employee_id_idx ON employee_default_shifts(employee_id)
+    `);
+
     console.log("[migrate] Startup migrations complete");
   } catch (err) {
     console.error("[migrate] Startup migration failed:", err);

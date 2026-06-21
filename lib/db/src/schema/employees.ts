@@ -27,6 +27,7 @@ export const employeeRolesTable = pgTable("employee_roles", {
   id: uuid("id").primaryKey().defaultRandom(),
   businessId: uuid("business_id").notNull().references(() => businessesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  color: text("color").default("#6366f1"),
   hourlyRateDefault: numeric("hourly_rate_default", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -150,3 +151,20 @@ export const timeOffRequestsTable = pgTable("time_off_requests", {
 export const insertTimeOffRequestSchema = createInsertSchema(timeOffRequestsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertTimeOffRequest = z.infer<typeof insertTimeOffRequestSchema>;
 export type TimeOffRequest = typeof timeOffRequestsTable.$inferSelect;
+
+// ─── employee_default_shifts ──────────────────────────────────────────────────
+// One row per employee per day-of-week. 0 = Sunday, 1 = Monday, …, 6 = Saturday.
+// startTime / endTime stored as "HH:MM" 24-hour strings.
+
+export const employeeDefaultShiftsTable = pgTable("employee_default_shifts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  employeeId: uuid("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  dayOfWeek: integer("day_of_week").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+}, (t) => [
+  unique("employee_default_shifts_day_unique").on(t.employeeId, t.dayOfWeek),
+  index("employee_default_shifts_employee_id_idx").on(t.employeeId),
+]);
+
+export type EmployeeDefaultShift = typeof employeeDefaultShiftsTable.$inferSelect;

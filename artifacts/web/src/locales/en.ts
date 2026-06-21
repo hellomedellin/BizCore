@@ -351,6 +351,13 @@ const en: Record<keyof Translations, string> = {
   "scheduling.toast.couldntSchedule": "Couldn't schedule",
   "scheduling.toast.removed": "Shift removed",
   "scheduling.toast.couldntRemove": "Couldn't remove shift",
+  "scheduling.btn.generateDefaults": "Generate from defaults",
+  "scheduling.btn.generating": "Generating…",
+  "scheduling.btn.thisWeek": "This week",
+  "scheduling.calendar.team": "Team",
+  "scheduling.toast.generated": "Generated {count} shifts",
+  "scheduling.toast.nothingToGenerate": "Nothing to generate — all shifts already exist or no defaults are set",
+  "scheduling.toast.couldntGenerate": "Couldn't generate shifts",
 
   "timeTracking.title": "Time Tracking",
   "timeTracking.subtitle": "Clock-in / clock-out records. Approve or reject entries.",
