@@ -65,8 +65,9 @@ export async function runStartupMigrations(): Promise<void> {
       CREATE INDEX IF NOT EXISTS app_users_business_id_idx ON app_users(business_id)
     `);
 
-    // ── Column: employee_roles.color ──────────────────────────────────────────
+    // ── Column: employee_roles.color + permission_level ───────────────────────
     await db.execute(sql`ALTER TABLE employee_roles ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#6366f1'`);
+    await db.execute(sql`ALTER TABLE employee_roles ADD COLUMN IF NOT EXISTS permission_level TEXT DEFAULT 'staff'`);
 
     // ── Table: employee_default_shifts ────────────────────────────────────────
     await db.execute(sql`

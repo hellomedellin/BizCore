@@ -12,45 +12,60 @@ import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Users, Settings2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Plus, Users, Pencil, Trash2, ShieldCheck } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 interface Employee {
   id: string; name: string; email: string | null; phone: string | null;
   roleId: string | null; primaryLocationId: string | null; hourlyRate: string | null; active: boolean;
 }
-interface Role { id: string; name: string; color: string | null; hourlyRateDefault: string | null }
+interface Role {
+  id: string; name: string; color: string | null;
+  permissionLevel: string | null; hourlyRateDefault: string | null;
+}
 interface Location { id: string; name: string; active?: boolean }
 interface DefaultShift { dayOfWeek: number; startTime: string; endTime: string }
 
 type EmpForm = { name: string; email: string; phone: string; roleId: string; hourlyRate: string; primaryLocationId: string };
-const EMPTY_FORM: EmpForm = { name: "", email: "", phone: "", roleId: "", hourlyRate: "", primaryLocationId: "" };
+const EMPTY_EMP_FORM: EmpForm = { name: "", email: "", phone: "", roleId: "", hourlyRate: "", primaryLocationId: "" };
+type RoleForm = { name: string; color: string; permissionLevel: string; hourlyRateDefault: string };
+const EMPTY_ROLE_FORM: RoleForm = { name: "", color: "#6366f1", permissionLevel: "staff", hourlyRateDefault: "" };
 
 const COLOR_PALETTE = [
-  "#f97316", "#ef4444", "#f59e0b", "#84cc16",
-  "#10b981", "#06b6d4", "#3b82f6", "#6366f1",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#94a3b8",
+  "#f97316", "#ef4444", "#f59e0b", "#eab308",
+  "#84cc16", "#10b981", "#06b6d4", "#3b82f6",
+  "#6366f1", "#8b5cf6", "#ec4899", "#94a3b8",
+];
+
+const PERMISSION_OPTIONS = [
+  { value: "staff",      label: "Staff",       desc: "Basic access — view schedule, clock in/out" },
+  { value: "manager",    label: "Manager",     desc: "Manage orders, schedule, and team" },
+  { value: "admin",      label: "Admin",       desc: "Full access to everything" },
+  { value: "accountant", label: "Accountant",  desc: "Financial reports and invoices only" },
 ];
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-// Display order: Mon(1) Tue(2) Wed(3) Thu(4) Fri(5) Sat(6) Sun(0)
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 export function EmployeesPage() {
   const t = useT();
   const qc = useQueryClient();
 
-  // ── Employee dialog state ───────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"team" | "roles">("team");
+
+  // Employee dialog
   const [editing, setEditing] = useState<Employee | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [form, setForm] = useState<EmpForm>(EMPTY_FORM);
+  const [confirmDeleteEmp, setConfirmDeleteEmp] = useState(false);
+  const [empForm, setEmpForm] = useState<EmpForm>(EMPTY_EMP_FORM);
   const [defaultShifts, setDefaultShifts] = useState<DefaultShift[]>([]);
 
-  // ── Roles dialog state ──────────────────────────────────────────────────────
-  const [rolesOpen, setRolesOpen] = useState(false);
-  const [roleForm, setRoleForm] = useState({ name: "", color: "#6366f1", hourlyRateDefault: "" });
+  // Role dialog
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [roleForm, setRoleForm] = useState<RoleForm>(EMPTY_ROLE_FORM);
+  const [confirmDeleteRole, setConfirmDeleteRole] = useState<Role | null>(null);
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ["employees"],
@@ -70,7 +85,6 @@ export function EmployeesPage() {
   const errText = (e: any) => e?.response?.data?.error ?? t("common.error");
   const activeLocations = (locations ?? []).filter((l) => l.active !== false);
 
-  // ── Load default shifts when opening edit ───────────────────────────────────
   useEffect(() => {
     if (editing) {
       api.get(`/employees/${editing.id}/default-shifts`)
@@ -79,19 +93,21 @@ export function EmployeesPage() {
     }
   }, [editing?.id]);
 
-  function openCreate() {
-    setForm(EMPTY_FORM);
-    setDefaultShifts([]);
-    setCreateOpen(true);
-  }
+  function openCreate() { setEmpForm(EMPTY_EMP_FORM); setDefaultShifts([]); setCreateOpen(true); }
   function openEdit(emp: Employee) {
-    setForm({
+    setEmpForm({
       name: emp.name, email: emp.email ?? "", phone: emp.phone ?? "",
       roleId: emp.roleId ?? "", hourlyRate: emp.hourlyRate ?? "",
       primaryLocationId: emp.primaryLocationId ?? "",
     });
     setDefaultShifts([]);
     setEditing(emp);
+  }
+  function openRoleCreate() { setEditingRole(null); setRoleForm(EMPTY_ROLE_FORM); setRoleDialogOpen(true); }
+  function openRoleEdit(r: Role) {
+    setEditingRole(r);
+    setRoleForm({ name: r.name, color: r.color ?? "#6366f1", permissionLevel: r.permissionLevel ?? "staff", hourlyRateDefault: r.hourlyRateDefault ?? "" });
+    setRoleDialogOpen(true);
   }
 
   // ── Employee mutations ──────────────────────────────────────────────────────
@@ -102,16 +118,16 @@ export function EmployeesPage() {
   const createEmp = useMutation({
     mutationFn: async () => {
       const r = await api.post("/employees", {
-        name: form.name.trim(), email: form.email || null, phone: form.phone || null,
-        roleId: form.roleId || null, hourlyRate: form.hourlyRate || null,
-        primaryLocationId: form.primaryLocationId || null,
+        name: empForm.name.trim(), email: empForm.email || null, phone: empForm.phone || null,
+        roleId: empForm.roleId || null, hourlyRate: empForm.hourlyRate || null,
+        primaryLocationId: empForm.primaryLocationId || null,
       });
       await saveDefaultShifts(r.data.id);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employees"] });
       setCreateOpen(false);
-      setForm(EMPTY_FORM);
+      setEmpForm(EMPTY_EMP_FORM);
       toast({ title: t("employees.toast.added"), variant: "success" });
     },
     onError: (e) => toast({ title: t("employees.toast.couldntSave"), description: errText(e), variant: "destructive" }),
@@ -120,9 +136,9 @@ export function EmployeesPage() {
   const updateEmp = useMutation({
     mutationFn: async () => {
       await api.patch(`/employees/${editing!.id}`, {
-        name: form.name.trim(), email: form.email || null, phone: form.phone || null,
-        roleId: form.roleId || null, hourlyRate: form.hourlyRate || null,
-        primaryLocationId: form.primaryLocationId || null,
+        name: empForm.name.trim(), email: empForm.email || null, phone: empForm.phone || null,
+        roleId: empForm.roleId || null, hourlyRate: empForm.hourlyRate || null,
+        primaryLocationId: empForm.primaryLocationId || null,
       });
       await saveDefaultShifts(editing!.id);
     },
@@ -138,11 +154,11 @@ export function EmployeesPage() {
     mutationFn: () => api.patch(`/employees/${editing!.id}`, { active: false }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employees"] });
-      setConfirmDelete(false);
+      setConfirmDeleteEmp(false);
       setEditing(null);
       toast({ title: t("employees.toast.removed"), variant: "success" });
     },
-    onError: (e) => { setConfirmDelete(false); toast({ title: t("employees.toast.couldntRemove"), description: errText(e), variant: "destructive" }); },
+    onError: (e) => { setConfirmDeleteEmp(false); toast({ title: t("employees.toast.couldntRemove"), description: errText(e), variant: "destructive" }); },
   });
 
   // ── Role mutations ──────────────────────────────────────────────────────────
@@ -152,11 +168,23 @@ export function EmployeesPage() {
       : api.post("/employee-roles", roleForm),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employee-roles"] });
+      setRoleDialogOpen(false);
       setEditingRole(null);
-      setRoleForm({ name: "", color: "#6366f1", hourlyRateDefault: "" });
+      setRoleForm(EMPTY_ROLE_FORM);
       toast({ title: t("employees.roles.toast.saved"), variant: "success" });
     },
     onError: (e) => toast({ title: t("employees.roles.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+
+  const deleteRole = useMutation({
+    mutationFn: (id: string) => api.delete(`/employee-roles/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employee-roles"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      setConfirmDeleteRole(null);
+      toast({ title: t("employees.roles.toast.deleted"), variant: "success" });
+    },
+    onError: (e) => { setConfirmDeleteRole(null); toast({ title: t("employees.roles.toast.couldntDelete"), description: errText(e), variant: "destructive" }); },
   });
 
   // ── Default shift helpers ───────────────────────────────────────────────────
@@ -171,28 +199,28 @@ export function EmployeesPage() {
     setDefaultShifts(defaultShifts.map((d) => d.dayOfWeek === dow ? { ...d, [field]: val } : d));
   }
 
-  // ── Render employee form fields ─────────────────────────────────────────────
+  // ── Employee form ───────────────────────────────────────────────────────────
   function renderEmpFields() {
     return (
       <div className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto pr-1">
         <div className="space-y-1.5">
           <Label>{t("employees.form.label.name")}</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("employees.form.placeholder.name")} />
+          <Input value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} placeholder={t("employees.form.placeholder.name")} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>{t("employees.form.label.phone")}</Label>
-            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} />
           </div>
           <div className="space-y-1.5">
             <Label>{t("employees.form.label.email")}</Label>
-            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input type="email" value={empForm.email} onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>{t("employees.form.label.role")}</Label>
-            <Select value={form.roleId || "none"} onValueChange={(v) => setForm({ ...form, roleId: v === "none" ? "" : v })}>
+            <Select value={empForm.roleId || "none"} onValueChange={(v) => setEmpForm({ ...empForm, roleId: v === "none" ? "" : v })}>
               <SelectTrigger>
                 <SelectValue placeholder={t("employees.form.role.noRole")} />
               </SelectTrigger>
@@ -201,7 +229,7 @@ export function EmployeesPage() {
                 {(roles ?? []).map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     <span className="flex items-center gap-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color ?? "#6366f1" }} />
+                      <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color ?? "#6366f1" }} />
                       {r.name}
                     </span>
                   </SelectItem>
@@ -211,12 +239,12 @@ export function EmployeesPage() {
           </div>
           <div className="space-y-1.5">
             <Label>{t("employees.form.label.hourlyRate")}</Label>
-            <Input value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} placeholder={t("employees.form.placeholder.hourlyRate")} inputMode="decimal" />
+            <Input value={empForm.hourlyRate} onChange={(e) => setEmpForm({ ...empForm, hourlyRate: e.target.value })} placeholder={t("employees.form.placeholder.hourlyRate")} inputMode="decimal" />
           </div>
         </div>
         <div className="space-y-1.5">
           <Label>{t("employees.form.label.primaryLocation")}</Label>
-          <Select value={form.primaryLocationId || "none"} onValueChange={(v) => setForm({ ...form, primaryLocationId: v === "none" ? "" : v })}>
+          <Select value={empForm.primaryLocationId || "none"} onValueChange={(v) => setEmpForm({ ...empForm, primaryLocationId: v === "none" ? "" : v })}>
             <SelectTrigger><SelectValue placeholder={t("employees.form.location.noLocation")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="none">{t("employees.form.location.noLocation")}</SelectItem>
@@ -236,30 +264,32 @@ export function EmployeesPage() {
             {DAY_ORDER.map((dow) => {
               const ds = defaultShifts.find((d) => d.dayOfWeek === dow);
               return (
-                <div key={dow} className="flex items-center gap-2.5">
+                <div key={dow} className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={!!ds}
                     onChange={() => toggleDay(dow)}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 cursor-pointer flex-shrink-0"
                   />
-                  <span className="w-8 text-sm font-medium text-slate-700">{DAY_LABELS[dow]}</span>
+                  <span className="w-8 text-sm font-medium text-slate-700 flex-shrink-0">{DAY_LABELS[dow]}</span>
                   {ds ? (
-                    <>
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <input
                         type="time"
                         value={ds.startTime}
                         onChange={(e) => updateDayTime(dow, "startTime", e.target.value)}
-                        className="h-7 w-24 rounded border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="h-8 rounded border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        style={{ minWidth: "7.5rem" }}
                       />
-                      <span className="text-slate-400 text-sm">–</span>
+                      <span className="text-slate-400 text-sm flex-shrink-0">–</span>
                       <input
                         type="time"
                         value={ds.endTime}
                         onChange={(e) => updateDayTime(dow, "endTime", e.target.value)}
-                        className="h-7 w-24 rounded border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="h-8 rounded border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        style={{ minWidth: "7.5rem" }}
                       />
-                    </>
+                    </div>
                   ) : (
                     <span className="text-xs text-slate-400 italic">{t("employees.defaultSchedule.dayOff")}</span>
                   )}
@@ -272,167 +302,278 @@ export function EmployeesPage() {
     );
   }
 
-  const isPending = createEmp.isPending || updateEmp.isPending;
+  const empPending = createEmp.isPending || updateEmp.isPending;
 
+  // ── Roles tab ───────────────────────────────────────────────────────────────
+  const empCountByRole = (roleId: string) => (employees ?? []).filter((e) => e.roleId === roleId).length;
+  const permLabel = (level: string | null) => PERMISSION_OPTIONS.find((p) => p.value === level)?.label ?? "Staff";
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{t("employees.title")}</h1>
           <p className="text-sm text-slate-500">{t("employees.subtitle")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditingRole(null); setRoleForm({ name: "", color: "#6366f1", hourlyRateDefault: "" }); setRolesOpen(true); }}>
-            <Settings2 className="mr-1 h-3.5 w-3.5" /> {t("employees.roles.btn.manage")}
-          </Button>
+        {activeTab === "team" ? (
           <Button onClick={openCreate}>
             <Plus className="mr-1 h-4 w-4" /> {t("employees.addLabel")}
           </Button>
-        </div>
+        ) : (
+          <Button onClick={openRoleCreate}>
+            <Plus className="mr-1 h-4 w-4" /> {t("employees.roles.btn.add")}
+          </Button>
+        )}
       </div>
 
-      {isLoading ? null : (employees ?? []).length === 0 ? (
-        <GuidedEmptyState icon={Users} title={t("employees.emptyTitle")} description={t("employees.emptyDescription")} actionLabel={t("employees.addLabel")} onAction={openCreate} />
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.table.col.name")}</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.table.col.role")}</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.table.col.phone")}</th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">{t("employees.table.col.pay")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(employees ?? []).map((emp) => (
-                  <tr key={emp.id} onClick={() => openEdit(emp)} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{emp.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="flex items-center gap-2">
-                        <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: roleColor(emp.roleId) }} />
-                        <span className="text-slate-600">{roleName(emp.roleId)}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{emp.phone ?? "—"}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{emp.hourlyRate ? `${formatCurrency(emp.hourlyRate)}/hr` : "—"}</td>
+      {/* Tabs */}
+      <div className="flex gap-0 border-b border-slate-200">
+        {(["team", "roles"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+              activeTab === tab
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800",
+            )}
+          >
+            {tab === "team" ? t("employees.tabs.team") : t("employees.tabs.roles")}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Team tab ── */}
+      {activeTab === "team" && (
+        isLoading ? null : (employees ?? []).length === 0 ? (
+          <GuidedEmptyState
+            icon={Users}
+            title={t("employees.emptyTitle")}
+            description={t("employees.emptyDescription")}
+            actionLabel={t("employees.addLabel")}
+            onAction={openCreate}
+          />
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead className="border-b border-slate-100 bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.table.col.name")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.table.col.role")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.table.col.phone")}</th>
+                    <th className="px-4 py-3 text-right font-medium text-slate-600">{t("employees.table.col.pay")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+                </thead>
+                <tbody>
+                  {(employees ?? []).map((emp) => (
+                    <tr key={emp.id} onClick={() => openEdit(emp)} className="cursor-pointer border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900">{emp.name}</td>
+                      <td className="px-4 py-3">
+                        <span className="flex items-center gap-2">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: roleColor(emp.roleId) }} />
+                          <span className="text-slate-600">{roleName(emp.roleId)}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{emp.phone ?? "—"}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">{emp.hourlyRate ? `${formatCurrency(emp.hourlyRate)}/hr` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )
       )}
 
-      {/* Create dialog */}
+      {/* ── Roles tab ── */}
+      {activeTab === "roles" && (
+        (roles ?? []).length === 0 ? (
+          <GuidedEmptyState
+            icon={ShieldCheck}
+            title={t("employees.roles.emptyTitle")}
+            description={t("employees.roles.emptyDescription")}
+            actionLabel={t("employees.roles.btn.add")}
+            onAction={openRoleCreate}
+          />
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead className="border-b border-slate-100 bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.roles.table.col.name")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.roles.table.col.permission")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.roles.table.col.rate")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">{t("employees.roles.table.col.employees")}</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(roles ?? []).map((r) => (
+                    <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <span className="flex items-center gap-2.5">
+                          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: r.color ?? "#6366f1" }} />
+                          <span className="font-medium text-slate-900">{r.name}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                          r.permissionLevel === "admin"       && "bg-red-50 text-red-700",
+                          r.permissionLevel === "manager"     && "bg-amber-50 text-amber-700",
+                          r.permissionLevel === "accountant"  && "bg-blue-50 text-blue-700",
+                          (!r.permissionLevel || r.permissionLevel === "staff") && "bg-slate-100 text-slate-600",
+                        )}>
+                          {permLabel(r.permissionLevel)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {r.hourlyRateDefault ? `${formatCurrency(r.hourlyRateDefault)}/hr` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {empCountByRole(r.id)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openRoleEdit(r)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => setConfirmDeleteRole(r)} className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )
+      )}
+
+      {/* ── Employee create dialog ── */}
       <Dialog open={createOpen} onOpenChange={(o) => { if (!o) setCreateOpen(false); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t("employees.addLabel")}</DialogTitle></DialogHeader>
           {renderEmpFields()}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button>
-            <Button disabled={!form.name.trim() || isPending} onClick={() => createEmp.mutate()}>
-              {isPending ? t("common.saving") : t("employees.addLabel")}
+            <Button disabled={!empForm.name.trim() || empPending} onClick={() => createEmp.mutate()}>
+              {empPending ? t("common.saving") : t("employees.addLabel")}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Edit dialog */}
+      {/* ── Employee edit dialog ── */}
       <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t("employees.entitySingular")}</DialogTitle></DialogHeader>
           {renderEmpFields()}
           <div className="flex items-center justify-between pt-1">
-            <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmDelete(true)}>
+            <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmDeleteEmp(true)}>
               {t("employees.removeLabel")}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setEditing(null)}>{t("common.cancel")}</Button>
-              <Button disabled={!form.name.trim() || isPending} onClick={() => updateEmp.mutate()}>
-                {isPending ? t("common.saving") : t("common.save")}
+              <Button disabled={!empForm.name.trim() || empPending} onClick={() => updateEmp.mutate()}>
+                {empPending ? t("common.saving") : t("common.save")}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Roles management dialog */}
-      <Dialog open={rolesOpen} onOpenChange={setRolesOpen}>
-        <DialogContent className="max-w-md">
+      {/* ── Role add/edit dialog ── */}
+      <Dialog open={roleDialogOpen} onOpenChange={(o) => { if (!o) { setRoleDialogOpen(false); setEditingRole(null); } }}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("employees.roles.title")}</DialogTitle>
+            <DialogTitle>{editingRole ? t("employees.roles.editRole") : t("employees.roles.newRole")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            {/* Existing roles */}
-            {(roles ?? []).length > 0 && (
-              <div className="space-y-1 rounded-lg border border-slate-100 overflow-hidden">
-                {(roles ?? []).map((r) => (
-                  <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer" onClick={() => { setEditingRole(r); setRoleForm({ name: r.name, color: r.color ?? "#6366f1", hourlyRateDefault: r.hourlyRateDefault ?? "" }); }}>
-                    <span className="inline-block w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: r.color ?? "#6366f1" }} />
-                    <span className="flex-1 text-sm font-medium text-slate-800">{r.name}</span>
-                    {r.hourlyRateDefault && <span className="text-xs text-slate-400">{formatCurrency(r.hourlyRateDefault)}/hr</span>}
-                    <span className="text-xs text-indigo-500">{t("common.edit")}</span>
-                  </div>
+            <div className="space-y-1.5">
+              <Label>{t("employees.roles.label.name")}</Label>
+              <Input value={roleForm.name} onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })} placeholder={t("employees.roles.placeholder.name")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("employees.roles.label.color")}</Label>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_PALETTE.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setRoleForm({ ...roleForm, color: c })}
+                    className="w-8 h-8 rounded-full transition-transform hover:scale-110 flex-shrink-0"
+                    style={{
+                      backgroundColor: c,
+                      boxShadow: roleForm.color === c ? `0 0 0 2px white, 0 0 0 4px ${c}` : undefined,
+                    }}
+                  />
                 ))}
               </div>
-            )}
-
-            {/* Add / edit role form */}
-            <div className="rounded-lg border border-slate-200 p-3 space-y-3">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                {editingRole ? t("employees.roles.editRole") : t("employees.roles.newRole")}
-              </p>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("employees.roles.label.name")}</Label>
-                <Input value={roleForm.name} onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })} placeholder={t("employees.roles.placeholder.name")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("employees.roles.label.color")}</Label>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_PALETTE.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setRoleForm({ ...roleForm, color: c })}
-                      className="w-7 h-7 rounded-full transition-transform hover:scale-110"
-                      style={{
-                        backgroundColor: c,
-                        boxShadow: roleForm.color === c ? `0 0 0 2px white, 0 0 0 4px ${c}` : undefined,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("employees.roles.label.defaultRate")}</Label>
-                <Input value={roleForm.hourlyRateDefault} onChange={(e) => setRoleForm({ ...roleForm, hourlyRateDefault: e.target.value })} placeholder={t("employees.roles.placeholder.rate")} inputMode="decimal" />
-              </div>
-              <div className="flex gap-2 justify-end">
-                {editingRole && (
-                  <Button variant="ghost" size="sm" onClick={() => { setEditingRole(null); setRoleForm({ name: "", color: "#6366f1", hourlyRateDefault: "" }); }}>
-                    {t("common.cancel")}
-                  </Button>
-                )}
-                <Button size="sm" disabled={!roleForm.name.trim() || saveRole.isPending} onClick={() => saveRole.mutate()}>
-                  {saveRole.isPending ? t("common.saving") : editingRole ? t("common.save") : t("employees.roles.btn.add")}
-                </Button>
-              </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Label>{t("employees.roles.label.permission")}</Label>
+              <Select value={roleForm.permissionLevel} onValueChange={(v) => setRoleForm({ ...roleForm, permissionLevel: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PERMISSION_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{p.label}</span>
+                        <span className="text-xs text-slate-400">{p.desc}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Hint>{t("employees.roles.hint.permission")}</Hint>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t("employees.roles.label.defaultRate")}</Label>
+              <Input value={roleForm.hourlyRateDefault} onChange={(e) => setRoleForm({ ...roleForm, hourlyRateDefault: e.target.value })} placeholder={t("employees.roles.placeholder.rate")} inputMode="decimal" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => { setRoleDialogOpen(false); setEditingRole(null); }}>{t("common.cancel")}</Button>
+            <Button disabled={!roleForm.name.trim() || saveRole.isPending} onClick={() => saveRole.mutate()}>
+              {saveRole.isPending ? t("common.saving") : t("common.save")}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* ── Confirm remove employee ── */}
       <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title={t("employees.confirmRemove.title", { name: editing?.name ?? "" })}
+        open={confirmDeleteEmp}
+        onOpenChange={setConfirmDeleteEmp}
+        title={t("employees.confirmRemove.title")}
         description={t("employees.removeDescription")}
         confirmLabel={t("employees.confirmRemove.confirmLabel")}
         destructive
         loading={removeEmp.isPending}
         onConfirm={() => removeEmp.mutate()}
+      />
+
+      {/* ── Confirm delete role ── */}
+      <ConfirmDialog
+        open={!!confirmDeleteRole}
+        onOpenChange={(o) => { if (!o) setConfirmDeleteRole(null); }}
+        title={t("employees.roles.confirmDelete.title")}
+        description={t("employees.roles.confirmDelete.description")}
+        confirmLabel={t("employees.roles.confirmDelete.confirmLabel")}
+        destructive
+        loading={deleteRole.isPending}
+        onConfirm={() => confirmDeleteRole && deleteRole.mutate(confirmDeleteRole.id)}
       />
     </div>
   );

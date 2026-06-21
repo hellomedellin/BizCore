@@ -28,6 +28,7 @@ export const employeeRolesTable = pgTable("employee_roles", {
   businessId: uuid("business_id").notNull().references(() => businessesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   color: text("color").default("#6366f1"),
+  permissionLevel: text("permission_level").default("staff"),
   hourlyRateDefault: numeric("hourly_rate_default", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

@@ -26,6 +26,7 @@ router.get("/employee-roles", ...guard, async (req, res): Promise<void> => {
 const roleSchema = z.object({
   name: z.string().min(1),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  permissionLevel: z.enum(["admin", "manager", "staff", "accountant"]).optional(),
   hourlyRateDefault: z.string().nullable().optional(),
 });
 
@@ -51,6 +52,24 @@ router.patch("/employee-roles/:id", ...guard, requireRole("admin"), async (req, 
       .returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+router.delete("/employee-roles/:id", ...guard, requireRole("admin"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [existing] = await db.select({ id: employeeRolesTable.id }).from(employeeRolesTable)
+      .where(and(eq(employeeRolesTable.id, req.params["id"] as string), tenantWhere(employeeRolesTable.businessId, businessId)));
+    if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Unassign any employees using this role before deleting.
+    await db.update(employeesTable).set({ roleId: null })
+      .where(and(eq(employeesTable.roleId, existing.id), tenantWhere(employeesTable.businessId, businessId)));
+
+    await db.delete(employeeRolesTable).where(eq(employeeRolesTable.id, existing.id));
+    res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
