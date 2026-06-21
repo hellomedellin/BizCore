@@ -129,6 +129,52 @@ router.post("/purchase-orders/:id/receive", ...guard, requireRole("admin", "mana
   }
 });
 
+// Edit PO header — blocked once received
+router.patch("/purchase-orders/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [po] = await db.select({ id: purchaseOrdersTable.id, status: purchaseOrdersTable.status }).from(purchaseOrdersTable).where(
+      and(eq(purchaseOrdersTable.id, req.params["id"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
+    );
+    if (!po) { res.status(404).json({ error: "Not found" }); return; }
+    if (po.status === "received") { res.status(400).json({ error: "Cannot edit a received purchase order" }); return; }
+
+    const body = z.object({
+      supplierId: z.string().uuid().nullable().optional(),
+      notes: z.string().nullable().optional(),
+      expectedAt: z.string().nullable().optional(),
+    }).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const [row] = await db.update(purchaseOrdersTable).set({
+      supplierId: body.data.supplierId ?? null,
+      notes: body.data.notes ?? null,
+      expectedAt: body.data.expectedAt ? new Date(body.data.expectedAt) : null,
+    }).where(eq(purchaseOrdersTable.id, po.id)).returning();
+
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Cancel PO — blocked once received
+router.delete("/purchase-orders/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [po] = await db.select({ id: purchaseOrdersTable.id, status: purchaseOrdersTable.status }).from(purchaseOrdersTable).where(
+      and(eq(purchaseOrdersTable.id, req.params["id"] as string), tenantWhere(purchaseOrdersTable.businessId, businessId))
+    );
+    if (!po) { res.status(404).json({ error: "Not found" }); return; }
+    if (po.status === "received") { res.status(400).json({ error: "Cannot cancel a received purchase order" }); return; }
+
+    await db.update(purchaseOrdersTable).set({ status: "cancelled" }).where(eq(purchaseOrdersTable.id, po.id));
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
 // Update line matching (used after AI review)
 router.patch("/purchase-orders/:id/lines/:lineId", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
