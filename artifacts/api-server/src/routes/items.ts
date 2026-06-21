@@ -165,7 +165,7 @@ router.get("/items/:id", ...guard, async (req, res): Promise<void> => {
   }
 });
 
-const updateItemSchema = createItemSchema.partial();
+const updateItemSchema = createItemSchema.partial().extend({ active: z.boolean().optional() });
 
 router.patch("/items/:id", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
