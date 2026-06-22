@@ -15,7 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { Carrot, Search, Truck, Plus, Info } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { Link } from "wouter";
-import { formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface Ingredient {
   id: string;
@@ -45,6 +45,7 @@ export function IngredientsPage() {
   const t = useT();
   const qc = useQueryClient();
   const { activeLocationId } = useLocationContext();
+  const { fmt } = useCurrency();
 
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -301,7 +302,7 @@ export function IngredientsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600 tabular-nums">
-                        {ing.cost ? formatCurrency(ing.cost) : <span className="text-slate-300">—</span>}
+                        {ing.cost ? fmt(ing.cost) : <span className="text-slate-300">—</span>}
                         {ing.cost && unit && <span className="text-slate-400 text-xs"> / {unit}</span>}
                       </td>
                       {showStock && (

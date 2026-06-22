@@ -12,7 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import { cn } from "@/lib/utils";
 import { Plus, Users, Pencil, Trash2, ShieldCheck, Eye, EyeOff, KeyRound, LogIn } from "lucide-react";
 import { useT } from "@/lib/i18n";
@@ -65,6 +65,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 export function EmployeesPage() {
   const t = useT();
   const qc = useQueryClient();
+  const { fmt } = useCurrency();
   const { user: authUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"team" | "roles">("team");
@@ -645,7 +646,7 @@ export function EmployeesPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-500">{emp.phone ?? "—"}</td>
-                        <td className="px-4 py-3 text-right text-slate-500">{emp.hourlyRate ? `${formatCurrency(emp.hourlyRate)}/hr` : "—"}</td>
+                        <td className="px-4 py-3 text-right text-slate-500">{emp.hourlyRate ? `${fmt(emp.hourlyRate)}/hr` : "—"}</td>
                       </tr>
                     );
                   })}
@@ -687,7 +688,7 @@ export function EmployeesPage() {
                           {permLabel(r.permissionLevel)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-500">{r.hourlyRateDefault ? `${formatCurrency(r.hourlyRateDefault)}/hr` : "—"}</td>
+                      <td className="px-4 py-3 text-slate-500">{r.hourlyRateDefault ? `${fmt(r.hourlyRateDefault)}/hr` : "—"}</td>
                       <td className="px-4 py-3 text-slate-500">{empCountByRole(r.id)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">

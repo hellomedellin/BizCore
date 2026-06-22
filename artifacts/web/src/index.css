@@ -19,6 +19,17 @@
   --color-input: hsl(214.3 31.8% 91.4%);
   --color-ring: hsl(222.2 84% 4.9%);
   --radius: 0.5rem;
+
+  /* Semantic status tokens — one meaning, one color, app-wide.
+     Used by StatusBadge and any status text/border (low-stock red, etc.). */
+  --color-danger: hsl(0 72% 51%);
+  --color-danger-soft: hsl(0 86% 97%);
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-soft: hsl(48 96% 95%);
+  --color-positive: hsl(160 84% 39%);
+  --color-positive-soft: hsl(152 76% 96%);
+  --color-info: hsl(217 91% 60%);
+  --color-info-soft: hsl(214 95% 96%);
 }
 
 * {

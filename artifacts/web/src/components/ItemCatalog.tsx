@@ -12,7 +12,7 @@ import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { RecipeEditor } from "@/components/RecipeEditor";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import { useT } from "@/lib/i18n";
 import { Plus, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -56,6 +56,7 @@ const EMPTY = { name: "", amount: "", categoryId: "", description: "" };
 export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig }) {
   const t = useT();
   const qc = useQueryClient();
+  const { fmt } = useCurrency();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
@@ -218,7 +219,7 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                 {filtered.map((it) => (
                   <tr key={it.id} onClick={() => openEdit(it)} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50">
                     <td className="px-4 py-3 font-medium">{it.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{amountOf(it) ? formatCurrency(amountOf(it)!) : "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{amountOf(it) ? fmt(amountOf(it)!) : "—"}</td>
                     {kind === "menu" && <td className="px-4 py-3 text-slate-500">{it.categoryName ?? "—"}</td>}
                   </tr>
                 ))}

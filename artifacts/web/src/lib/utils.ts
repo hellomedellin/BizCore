@@ -5,8 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: string | number, currencyCode = "USD") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(Number(amount));
+export function formatCurrency(amount: string | number, currencyCode = "USD", locale?: string) {
+  // Intl already knows each currency's minor unit (COP → 0 decimals, USD → 2),
+  // so we only pick a locale that reads naturally for the currency.
+  const loc = locale ?? (currencyCode === "COP" ? "es-CO" : "en-US");
+  return new Intl.NumberFormat(loc, { style: "currency", currency: currencyCode }).format(Number(amount));
 }
 
 export function formatDate(date: string | Date) {

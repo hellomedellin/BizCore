@@ -14,7 +14,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Pencil, Plus, Trash2, Truck } from "lucide-react";
 
 interface PO { id: string; supplierId: string | null; status: string; expectedAt: string | null; receivedAt: string | null; notes: string | null; createdAt: string }
@@ -29,6 +30,7 @@ const statusVariant = (s: string): "success" | "secondary" | "warning" => (s ===
 export function PurchasesPage() {
   const t = useT();
   const qc = useQueryClient();
+  const { fmt } = useCurrency();
   const { activeLocationId, locations } = useLocationContext();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supplierId, setSupplierId] = useState("");
@@ -210,8 +212,8 @@ export function PurchasesPage() {
                     {lines.map((l, i) => (
                       <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
                         <span className="flex-1 font-medium">{l.description}</span>
-                        <span className="text-slate-500">{parseFloat(l.quantity)} {unitAbbr(l.unitId)} × {formatCurrency(l.unitCost)}</span>
-                        <span className="w-20 text-right font-medium">{formatCurrency(parseFloat(l.quantity) * parseFloat(l.unitCost))}</span>
+                        <span className="text-slate-500">{parseFloat(l.quantity)} {unitAbbr(l.unitId)} × {fmt(l.unitCost)}</span>
+                        <span className="w-20 text-right font-medium">{fmt(parseFloat(l.quantity) * parseFloat(l.unitCost))}</span>
                         <button onClick={() => setLines((prev) => prev.filter((_, x) => x !== i))} className="text-slate-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     ))}
@@ -242,7 +244,7 @@ export function PurchasesPage() {
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                 <span className="text-sm text-slate-500">{t("purchases.builderDialog.summary.total")}</span>
-                <span className="text-lg font-bold">{formatCurrency(builderTotal)}</span>
+                <span className="text-lg font-bold">{fmt(builderTotal)}</span>
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setBuilderOpen(false)}>{t("purchases.builderDialog.btn.cancel")}</Button>
@@ -297,11 +299,11 @@ export function PurchasesPage() {
                   {(detail.lines ?? []).map((l) => (
                     <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
                       <span>{parseFloat(l.quantity)}× {l.description}</span>
-                      <span className="text-slate-600">{formatCurrency(l.lineTotal)}</span>
+                      <span className="text-slate-600">{fmt(l.lineTotal)}</span>
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between border-t border-slate-100 pt-1 text-base font-bold"><span>{t("purchases.detailDialog.summary.total")}</span><span>{formatCurrency(detailTotal)}</span></div>
+                <div className="flex justify-between border-t border-slate-100 pt-1 text-base font-bold"><span>{t("purchases.detailDialog.summary.total")}</span><span>{fmt(detailTotal)}</span></div>
                 {detail.status !== "received" && detail.status !== "cancelled" && (
                   <div className="flex items-center justify-between">
                     <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmCancel(true)}>

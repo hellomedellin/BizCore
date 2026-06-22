@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, orderTone } from "@/components/ui/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,7 @@ import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Plus, Minus, Trash2, ShoppingCart, Printer, MessageCircle, CreditCard } from "lucide-react";
 
 interface MenuVariant { itemId: string; itemName: string; categoryName: string | null; variantId: string; variantName: string; price: string | null }
@@ -25,7 +27,6 @@ interface Customer { id: string; name: string }
 interface CartLine { variantId: string; name: string; unitPrice: number; quantity: number }
 
 const ORDER_TYPES = ["dine_in", "pickup", "delivery", "retail"];
-const statusVariant = (s: string): "success" | "secondary" | "warning" => (s === "completed" ? "success" : s === "cancelled" ? "secondary" : "warning");
 const PAYMENT_METHODS = ["cash", "card", "transfer", "nequi", "daviplata", "other"];
 const TIP_RATE = 0.10; // 10% Colombian propina
 
@@ -34,6 +35,7 @@ const EMPTY_PAY = { method: "cash", amount: "", addTip: false, tip: "", notes: "
 export function SalesPage() {
   const t = useT();
   const qc = useQueryClient();
+  const { fmt } = useCurrency();
   const { activeLocationId, locations } = useLocationContext();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -245,7 +247,7 @@ export function SalesPage() {
                     <td className="px-4 py-3 text-slate-600">{customerName(o.customerId)}</td>
                     <td className="px-4 py-3 text-slate-500">{TYPE_LABEL[o.orderType] ?? o.orderType}</td>
                     <td className="px-4 py-3 text-right font-medium">{formatCurrency(o.total, o.currencyCode)}</td>
-                    <td className="px-4 py-3 text-center"><Badge variant={statusVariant(o.status)}>{STATUS_LABEL[o.status] ?? o.status}</Badge></td>
+                    <td className="px-4 py-3 text-center"><StatusBadge tone={orderTone(o.status)}>{STATUS_LABEL[o.status] ?? o.status}</StatusBadge></td>
                   </tr>
                 ))}
               </tbody>
@@ -279,7 +281,7 @@ export function SalesPage() {
                         {v.itemName}
                         {v.variantName && v.variantName !== "Default" ? <span className="text-slate-500"> · {v.variantName}</span> : null}
                       </div>
-                      <div className="text-xs text-slate-500">{v.price ? formatCurrency(v.price) : "—"}</div>
+                      <div className="text-xs text-slate-500">{v.price ? fmt(v.price) : "—"}</div>
                     </button>
                   ))}
                   {filteredMenu.length === 0 && <p className="px-1 py-4 text-sm text-slate-400">{t("sales.builderDialog.menu.noMatches")}</p>}
@@ -295,14 +297,14 @@ export function SalesPage() {
                       <div key={c.variantId} className="flex items-center gap-3 px-3 py-2">
                         <div className="flex-1">
                           <p className="text-sm font-medium">{c.name}</p>
-                          <p className="text-xs text-slate-500">{formatCurrency(c.unitPrice)} {t("sales.builderDialog.each")}</p>
+                          <p className="text-xs text-slate-500">{fmt(c.unitPrice)} {t("sales.builderDialog.each")}</p>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setQty(c.variantId, c.quantity - 1)}><Minus className="h-3 w-3" /></Button>
                           <span className="w-6 text-center text-sm">{c.quantity}</span>
                           <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setQty(c.variantId, c.quantity + 1)}><Plus className="h-3 w-3" /></Button>
                         </div>
-                        <span className="w-20 text-right text-sm font-medium">{formatCurrency(c.unitPrice * c.quantity)}</span>
+                        <span className="w-20 text-right text-sm font-medium">{fmt(c.unitPrice * c.quantity)}</span>
                         <button onClick={() => setQty(c.variantId, 0)} className="text-slate-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     ))}
@@ -334,7 +336,7 @@ export function SalesPage() {
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                 <span className="text-sm text-slate-500">{t("sales.builderDialog.summary.total")}</span>
-                <span className="text-lg font-bold">{formatCurrency(cartTotal)}</span>
+                <span className="text-lg font-bold">{fmt(cartTotal)}</span>
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setBuilderOpen(false)}>{t("sales.builderDialog.btn.cancel")}</Button>
@@ -353,7 +355,7 @@ export function SalesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {t("sales.detailDialog.title")}
-              {detail ? <Badge variant={statusVariant(detail.status)}>{STATUS_LABEL[detail.status] ?? detail.status}</Badge> : null}
+              {detail ? <StatusBadge tone={orderTone(detail.status)}>{STATUS_LABEL[detail.status] ?? detail.status}</StatusBadge> : null}
               {payment ? (
                 <Badge variant="secondary" className="gap-1">
                   <CreditCard className="h-3 w-3" />
