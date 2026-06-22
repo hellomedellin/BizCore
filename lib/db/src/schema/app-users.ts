@@ -3,7 +3,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { businessesTable } from "./businesses";
 
-export const appUserRoleEnum = pgEnum("app_user_role", ["admin", "manager", "staff", "accountant"]);
+export const appUserRoleEnum = pgEnum("app_user_role", ["owner", "admin", "manager", "staff", "accountant"]);
 
 export const appUsersTable = pgTable("app_users", {
   id: uuid("id").primaryKey().defaultRandom(),

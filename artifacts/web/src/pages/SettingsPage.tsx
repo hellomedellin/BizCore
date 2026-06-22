@@ -14,6 +14,7 @@ import { Hint } from "@/components/ui/hint";
 import { Plus, Trash2, Copy, Eye, EyeOff, Pencil, RefreshCw, Check, X } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const CURRENCIES = ["COP", "USD", "EUR", "MXN", "BRL", "ARS", "CLP", "PEN", "CRC", "GBP"];
 const TIMEZONES = [
@@ -164,6 +165,49 @@ export function SettingsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
   });
 
+  // ── team management ──────────────────────────────────────────────────────
+  interface AppUser { id: string; username: string; displayName: string | null; role: string; active: boolean; createdAt: string }
+  const { data: appUsers } = useQuery({ queryKey: ["app-users"], queryFn: () => api.get("/app-users").then((r) => r.data as AppUser[]) });
+  const { user: currentUser } = useAuth();
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [newUser, setNewUser] = useState({ username: "", displayName: "", role: "staff", password: "" });
+  const [editUser, setEditUser] = useState({ displayName: "", role: "", password: "" });
+  const ROLES_FOR_SELECT = (callerRole: string) =>
+    callerRole === "owner"
+      ? ["owner", "admin", "manager", "accountant", "staff"]
+      : ["admin", "manager", "accountant", "staff"];
+  function roleLabel(role: string) {
+    const map: Record<string, string> = {
+      owner: t("settings.team.role.owner"),
+      admin: t("settings.team.role.admin"),
+      manager: t("settings.team.role.manager"),
+      accountant: t("settings.team.role.accountant"),
+      staff: t("settings.team.role.staff"),
+    };
+    return map[role] ?? role;
+  }
+  const createUser = useMutation({
+    mutationFn: () => api.post("/app-users", { username: newUser.username.trim(), displayName: newUser.displayName.trim() || null, role: newUser.role, password: newUser.password }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["app-users"] }); setAddUserOpen(false); setNewUser({ username: "", displayName: "", role: "staff", password: "" }); toast({ title: t("settings.team.toast.added"), variant: "success" }); },
+    onError: (e) => toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+  const updateUser = useMutation({
+    mutationFn: (extra?: Record<string, any>) => api.patch(`/app-users/${editingUser!.id}`, { displayName: editUser.displayName || null, role: editUser.role, ...(editUser.password ? { password: editUser.password } : {}), ...extra }),
+    onSuccess: (_, extra) => {
+      qc.invalidateQueries({ queryKey: ["app-users"] });
+      const title = extra?.active === false ? t("settings.team.toast.deactivated") : extra?.active === true ? t("settings.team.toast.reactivated") : t("settings.team.toast.saved");
+      setEditingUser(null);
+      toast({ title, variant: "success" });
+    },
+    onError: (e) => toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+  function openEditUser(u: AppUser) {
+    setEditUser({ displayName: u.displayName ?? "", role: u.role, password: "" });
+    setEditingUser(u);
+  }
+  const isOwner = currentUser?.role === "owner";
+
   // ── categories ────────────────────────────────────────────────────────────
   interface Category { id: string; name: string; active: boolean; sortOrder: string | null }
   const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => api.get("/categories").then((r) => r.data as Category[]) });
@@ -270,6 +314,46 @@ export function SettingsPage() {
               <span className="text-slate-900">{v || "—"}</span>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Team */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{t("settings.team.cardTitle")}</CardTitle>
+          <Button size="sm" onClick={() => setAddUserOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" />{t("settings.team.btn.addUser")}</Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-slate-500 leading-relaxed">{t("settings.team.hint")}</p>
+          <div className="space-y-1.5">
+            {(appUsers ?? []).map((u) => (
+              <button key={u.id} onClick={() => openEditUser(u)}
+                className="flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                    u.role === "owner" ? "bg-amber-500" : "bg-slate-700"
+                  }`}>
+                    {(u.displayName ?? u.username).charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{u.displayName ?? u.username}</p>
+                    <p className="text-xs text-slate-400 truncate">@{u.username}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                    u.role === "owner"      ? "bg-amber-100 text-amber-700"   :
+                    u.role === "admin"      ? "bg-violet-100 text-violet-700" :
+                    u.role === "manager"    ? "bg-blue-100 text-blue-700"     :
+                    u.role === "accountant" ? "bg-emerald-100 text-emerald-700" :
+                    "bg-slate-100 text-slate-500"
+                  }`}>{roleLabel(u.role)}</span>
+                  {!u.active && <Badge variant="secondary">{t("settings.team.badge.inactive")}</Badge>}
+                </div>
+              </button>
+            ))}
+            {!(appUsers ?? []).length && <p className="text-sm text-slate-400">{t("settings.team.empty")}</p>}
+          </div>
         </CardContent>
       </Card>
 
@@ -654,6 +738,103 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Add user dialog */}
+      <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("settings.team.createDialog.title")}</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.createDialog.label.username")}</Label>
+              <Input value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} placeholder={t("settings.team.createDialog.placeholder.username")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.createDialog.label.displayName")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
+              <Input value={newUser.displayName} onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })} placeholder={t("settings.team.createDialog.placeholder.displayName")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.createDialog.label.role")}</Label>
+              <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES_FOR_SELECT(currentUser?.role ?? "admin").map((r) => (
+                    <SelectItem key={r} value={r}>{roleLabel(r)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.createDialog.label.password")}</Label>
+              <Input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAddUserOpen(false)}>{t("settings.team.createDialog.btn.cancel")}</Button>
+              <Button disabled={!newUser.username.trim() || !newUser.password || createUser.isPending} onClick={() => createUser.mutate()}>
+                {createUser.isPending ? t("settings.team.createDialog.btn.adding") : t("settings.team.createDialog.btn.add")}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit user dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(o) => { if (!o) setEditingUser(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("settings.team.editDialog.title")}</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            {editingUser?.role === "owner" && !isOwner && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                {t("settings.team.editDialog.ownerNote")}
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.editDialog.label.displayName")}</Label>
+              <Input value={editUser.displayName} onChange={(e) => setEditUser({ ...editUser, displayName: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.editDialog.label.role")}</Label>
+              <Select
+                value={editUser.role}
+                disabled={editingUser?.role === "owner" && !isOwner}
+                onValueChange={(v) => setEditUser({ ...editUser, role: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES_FOR_SELECT(currentUser?.role ?? "admin").map((r) => (
+                    <SelectItem key={r} value={r}>{roleLabel(r)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("settings.team.editDialog.label.newPassword")}</Label>
+              <Input type="password" value={editUser.password} onChange={(e) => setEditUser({ ...editUser, password: e.target.value })} placeholder={t("settings.team.editDialog.placeholder.newPassword")} />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              {editingUser && editingUser.id !== currentUser?.id && (
+                editingUser.active ? (
+                  <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    disabled={editingUser.role === "owner" && !isOwner}
+                    onClick={() => updateUser.mutate({ active: false })}>
+                    {t("settings.team.editDialog.btn.deactivate")}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" className="text-green-700 hover:bg-green-50"
+                    onClick={() => updateUser.mutate({ active: true })}>
+                    {t("settings.team.editDialog.btn.reactivate")}
+                  </Button>
+                )
+              )}
+              <div className="flex gap-2 ml-auto">
+                <Button variant="outline" onClick={() => setEditingUser(null)}>{t("settings.team.editDialog.btn.cancel")}</Button>
+                <Button disabled={updateUser.isPending} onClick={() => updateUser.mutate(undefined)}>
+                  {updateUser.isPending ? t("settings.team.editDialog.btn.saving") : t("settings.team.editDialog.btn.save")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={confirmLoc}

@@ -49,11 +49,12 @@ export function loadBusiness(req: Request, res: Response, next: NextFunction): v
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const authed = req as AuthedRequest;
-    if (!roles.includes(authed.userRole)) {
-      res.status(403).json({ error: "Insufficient permissions" });
+    // owner bypasses every role check — they have full access
+    if (authed.userRole === "owner" || roles.includes(authed.userRole)) {
+      next();
       return;
     }
-    next();
+    res.status(403).json({ error: "Insufficient permissions" });
   };
 }
 

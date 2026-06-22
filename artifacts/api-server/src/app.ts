@@ -104,10 +104,10 @@ export async function bootstrapAdminUser(): Promise<void> {
       businessId: business.id,
       username,
       passwordHash,
-      role: "admin",
-      displayName: "Admin",
+      role: "owner",
+      displayName: "Owner",
     });
-    console.log(`[bootstrap] Created admin user: ${username}`);
+    console.log(`[bootstrap] Created owner user: ${username}`);
   } catch (err) {
     console.error("[bootstrap] Failed to create admin user:", err);
   }

@@ -105,7 +105,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {/* Avatar + info row */}
           <div className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5", !collapsed && "bg-slate-50")}>
             {/* Avatar */}
-            <div className="h-7 w-7 flex-shrink-0 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-bold select-none">
+            <div className={`h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold select-none ${user?.role === "owner" ? "bg-amber-500" : "bg-slate-900"}`}>
               {(user?.displayName ?? user?.username ?? "?").charAt(0).toUpperCase()}
             </div>
             {!collapsed && (
@@ -115,6 +115,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </p>
                 <span className={cn(
                   "inline-block mt-0.5 rounded px-1 py-0 text-[10px] font-semibold uppercase tracking-wide leading-4",
+                  user?.role === "owner"      && "bg-amber-100 text-amber-700",
                   user?.role === "admin"      && "bg-violet-100 text-violet-700",
                   user?.role === "manager"    && "bg-blue-100 text-blue-700",
                   user?.role === "accountant" && "bg-emerald-100 text-emerald-700",

@@ -39,8 +39,25 @@ export async function runStartupMigrations(): Promise<void> {
     // ── Enum: app_user_role ───────────────────────────────────────────────────
     await db.execute(sql`
       DO $$ BEGIN
-        CREATE TYPE app_user_role AS ENUM ('admin', 'manager', 'staff', 'accountant');
+        CREATE TYPE app_user_role AS ENUM ('owner', 'admin', 'manager', 'staff', 'accountant');
       EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    // Add owner value to existing enum if not present
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TYPE app_user_role ADD VALUE IF NOT EXISTS 'owner' BEFORE 'admin';
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
+    `);
+
+    // Auto-promote: if no owner exists, make the oldest admin the owner
+    await db.execute(sql`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM app_users WHERE role = 'owner' LIMIT 1) THEN
+          UPDATE app_users SET role = 'owner'
+          WHERE id = (SELECT id FROM app_users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1);
+        END IF;
       END $$;
     `);
 
