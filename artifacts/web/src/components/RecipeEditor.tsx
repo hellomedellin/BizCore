@@ -11,8 +11,8 @@ import { Plus, Trash2 } from "lucide-react";
 
 interface Profile { id: string; outputItemId: string }
 interface Line { id: string; lineType: string; resourceVariantId: string | null; quantity: string | null; unitId: string | null }
-interface Ingredient { itemId: string; itemName: string; variantId: string; variantName: string; cost: string | null }
-interface Unit { id: string; name: string; abbreviation: string }
+interface Ingredient { itemId: string; itemName: string; variantId: string; variantName: string; cost: string | null; costUnitId: string | null }
+interface Unit { id: string; name: string; abbreviation: string; conversionToBase: string; unitType: string }
 
 // Inline recipe editor shown on a menu item: list the ingredients it consumes so
 // selling the item auto-deducts stock. Optional, with a nudge. Shows live plate
@@ -35,20 +35,36 @@ export function RecipeEditor({ itemId, itemName, price }: { itemId: string; item
   const { data: units } = useQuery({ queryKey: ["units"], queryFn: () => api.get("/units").then((r) => r.data as Unit[]) });
 
   const errText = (e: any) => e?.response?.data?.error ?? "Please try again.";
-  const ingredientName = (vid: string | null) => ingredients?.find((i) => i.variantId === vid)?.itemName ?? "Ingredient";
-  const ingredientCost = (vid: string | null) => ingredients?.find((i) => i.variantId === vid)?.cost ?? null;
-  const unitAbbr = (uid: string | null) => units?.find((u) => u.id === uid)?.abbreviation ?? "";
+  const ingredientOf = (vid: string | null) => ingredients?.find((i) => i.variantId === vid);
+  const ingredientName = (vid: string | null) => ingredientOf(vid)?.itemName ?? "Ingredient";
+  const unitById = (uid: string | null | undefined) => units?.find((u) => u.id === uid);
+  const unitAbbr = (uid: string | null) => unitById(uid)?.abbreviation ?? "";
   const resourceLines = (detail?.lines ?? []).filter((l) => l.lineType === "resource");
 
-  // Live plate cost: Σ (line quantity × ingredient unit cost). Margin needs a price.
-  const plateCost = resourceLines.reduce((sum, l) => {
-    const c = parseFloat(ingredientCost(l.resourceVariantId) ?? "0");
-    const q = parseFloat(l.quantity ?? "0");
-    return sum + (Number.isFinite(c) && Number.isFinite(q) ? c * q : 0);
-  }, 0);
+  // Live plate cost: for each line, convert the recipe quantity into the
+  // ingredient's cost unit (e.g. 220 ml → gal), then × unit cost. A line whose
+  // units don't share a type, or whose cost is missing, makes the cost
+  // "incomplete" — we then withhold the margin rather than show a wrong one.
+  let plateCost = 0;
+  let complete = resourceLines.length > 0;
+  let hasCost = false;
+  for (const l of resourceLines) {
+    const ing = ingredientOf(l.resourceVariantId);
+    const unitCost = parseFloat(ing?.cost ?? "");
+    const qty = parseFloat(l.quantity ?? "");
+    if (!Number.isFinite(unitCost) || !Number.isFinite(qty)) { complete = false; continue; }
+    hasCost = true;
+    const recipeU = unitById(l.unitId);
+    const costU = unitById(ing?.costUnitId ?? null);
+    let q: number | null;
+    if (!recipeU || !costU || recipeU.id === costU.id) q = qty;
+    else if (recipeU.unitType === costU.unitType) q = qty * (parseFloat(recipeU.conversionToBase) / parseFloat(costU.conversionToBase));
+    else q = null;
+    if (q == null) { complete = false; continue; }
+    plateCost += q * unitCost;
+  }
   const priceNum = price ? parseFloat(price) : null;
-  const hasCost = resourceLines.some((l) => ingredientCost(l.resourceVariantId));
-  const marginPct = priceNum && priceNum > 0 && hasCost ? Math.round(((priceNum - plateCost) / priceNum) * 100) : null;
+  const marginPct = complete && priceNum && priceNum > 0 ? Math.round(((priceNum - plateCost) / priceNum) * 100) : null;
 
   const addLine = useMutation({
     mutationFn: async () => {
@@ -102,13 +118,18 @@ export function RecipeEditor({ itemId, itemName, price }: { itemId: string; item
       )}
 
       {resourceLines.length > 0 && hasCost && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-white px-3 py-2 text-xs border border-slate-100">
-          <span className="text-slate-500">Plate cost <span className="font-semibold text-slate-800">{fmt(plateCost)}</span></span>
-          {priceNum != null && <span className="text-slate-500">Sells for <span className="font-semibold text-slate-800">{fmt(priceNum)}</span></span>}
-          {marginPct != null && (
-            <span className={`font-semibold ${marginPct >= 60 ? "text-emerald-600" : marginPct >= 30 ? "text-amber-600" : "text-red-600"}`}>
-              {marginPct}% margin
-            </span>
+        <div className="space-y-1 rounded-md bg-white px-3 py-2 text-xs border border-slate-100">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-slate-500">Plate cost <span className="font-semibold text-slate-800">{fmt(plateCost)}</span></span>
+            {priceNum != null && <span className="text-slate-500">Sells for <span className="font-semibold text-slate-800">{fmt(priceNum)}</span></span>}
+            {marginPct != null && (
+              <span className={`font-semibold ${marginPct >= 60 ? "text-emerald-600" : marginPct >= 30 ? "text-amber-600" : "text-red-600"}`}>
+                {marginPct}% margin
+              </span>
+            )}
+          </div>
+          {!complete && (
+            <p className="text-amber-600">Give every ingredient a cost and a compatible unit to see the margin.</p>
           )}
         </div>
       )}

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
-import { itemsTable, itemVariantsTable, categoriesTable, consumptionProfilesTable, consumptionProfileLinesTable } from "@bizcore/db/schema";
+import { itemsTable, itemVariantsTable, categoriesTable, consumptionProfilesTable, consumptionProfileLinesTable, unitsTable, inventoryTable } from "@bizcore/db/schema";
 import { eq, and, ilike, inArray, sql, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
@@ -93,6 +93,8 @@ router.get("/items/ingredients", ...guard, async (req, res): Promise<void> => {
         variantId: itemVariantsTable.id,
         variantName: itemVariantsTable.name,
         cost: sql<string | null>`coalesce(${itemVariantsTable.cost}, ${itemsTable.cost})`,
+        // The unit the cost is "per" — i.e. the unit this ingredient is stocked in.
+        costUnitId: sql<string | null>`(SELECT inv.unit_id FROM inventory inv WHERE inv.variant_id = ${itemVariantsTable.id} AND inv.unit_id IS NOT NULL LIMIT 1)`,
       })
       .from(itemVariantsTable)
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
@@ -105,8 +107,11 @@ router.get("/items/ingredients", ...guard, async (req, res): Promise<void> => {
 });
 
 // Plate cost + margin per menu item, computed from recipes (consumption profiles).
-// plateCost = Σ (recipe line quantity × ingredient unit cost). Null when no recipe.
-// Note: assumes recipe quantity and ingredient cost share a unit (no unit conversion yet).
+// plateCost = Σ (recipe qty → converted into the ingredient's cost unit) × unit cost.
+// The recipe line carries its own unit (e.g. ml); the ingredient cost is "per"
+// its stock unit (e.g. gal). We convert between them via units.conversionToBase.
+// `costComplete` is false when a line can't be costed (missing cost, or units
+// that don't share a type) so the UI can withhold a misleading margin.
 router.get("/menu/costing", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
@@ -119,10 +124,26 @@ router.get("/menu/costing", ...guard, async (req, res): Promise<void> => {
         eq(itemsTable.active, true),
       ));
 
+    // Unit conversion table (id → base factor + type).
+    const units = await db.select({ id: unitsTable.id, toBase: unitsTable.conversionToBase, type: unitsTable.unitType }).from(unitsTable);
+    const unitById = new Map(units.map((u) => [u.id, u]));
+
+    // Each resource variant's cost unit = the unit it's stocked in.
+    const stockUnits = await db
+      .select({ variantId: inventoryTable.variantId, unitId: inventoryTable.unitId })
+      .from(inventoryTable)
+      .innerJoin(itemVariantsTable, eq(inventoryTable.variantId, itemVariantsTable.id))
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .where(tenantWhere(itemsTable.businessId, businessId));
+    const costUnitByVariant = new Map<string, string>();
+    for (const s of stockUnits) if (s.unitId && !costUnitByVariant.has(s.variantId)) costUnitByVariant.set(s.variantId, s.unitId);
+
     const lines = await db
       .select({
         outputItemId: consumptionProfilesTable.outputItemId,
+        resourceVariantId: consumptionProfileLinesTable.resourceVariantId,
         quantity: consumptionProfileLinesTable.quantity,
+        recipeUnitId: consumptionProfileLinesTable.unitId,
         variantCost: itemVariantsTable.cost,
         itemCost: itemsTable.cost,
       })
@@ -136,24 +157,44 @@ router.get("/menu/costing", ...guard, async (req, res): Promise<void> => {
         eq(consumptionProfileLinesTable.lineType, "resource"),
       ));
 
-    const costByItem = new Map<string, number>();
+    const agg = new Map<string, { cost: number; hasLines: boolean; complete: boolean }>();
     for (const l of lines) {
-      if (!l.quantity) continue;
-      const unit = parseFloat(l.variantCost ?? l.itemCost ?? "0");
-      const qty = parseFloat(l.quantity);
-      if (!Number.isFinite(unit) || !Number.isFinite(qty)) continue;
-      costByItem.set(l.outputItemId, (costByItem.get(l.outputItemId) ?? 0) + unit * qty);
+      const e = agg.get(l.outputItemId) ?? { cost: 0, hasLines: false, complete: true };
+      e.hasLines = true;
+      const unitCost = parseFloat(l.variantCost ?? l.itemCost ?? "");
+      const qty = parseFloat(l.quantity ?? "");
+      if (!Number.isFinite(unitCost) || !Number.isFinite(qty)) { e.complete = false; agg.set(l.outputItemId, e); continue; }
+
+      const costUnitId = l.resourceVariantId ? costUnitByVariant.get(l.resourceVariantId) : undefined;
+      const recipeU = l.recipeUnitId ? unitById.get(l.recipeUnitId) : undefined;
+      const costU = costUnitId ? unitById.get(costUnitId) : undefined;
+
+      let qtyInCostUnit: number | null;
+      if (!recipeU || !costU || recipeU.id === costU.id) {
+        qtyInCostUnit = qty; // same unit, or unknown units → assume already in cost unit
+      } else if (recipeU.type === costU.type) {
+        qtyInCostUnit = qty * (parseFloat(recipeU.toBase) / parseFloat(costU.toBase));
+      } else {
+        qtyInCostUnit = null; // incompatible (e.g. recipe in ml, cost per kg)
+      }
+      if (qtyInCostUnit == null) { e.complete = false; agg.set(l.outputItemId, e); continue; }
+      e.cost += qtyInCostUnit * unitCost;
+      agg.set(l.outputItemId, e);
     }
 
     const result = menuItems.map((it) => {
-      const plateCost = costByItem.has(it.id) ? costByItem.get(it.id)! : null;
+      const e = agg.get(it.id);
+      const hasRecipe = !!e?.hasLines;
+      const complete = hasRecipe && (e?.complete ?? false);
+      const plateCost = hasRecipe ? (e!.cost) : null;
       const price = it.basePrice ? parseFloat(it.basePrice) : null;
-      const marginPct = plateCost != null && price != null && price > 0
+      const marginPct = complete && plateCost != null && price != null && price > 0
         ? Math.round(((price - plateCost) / price) * 100)
         : null;
       return {
         itemId: it.id,
         plateCost: plateCost != null ? plateCost.toFixed(2) : null,
+        costComplete: complete,
         price: it.basePrice ?? null,
         marginPct,
       };
