@@ -43,6 +43,8 @@ export function SalesPage() {
   const [customerId, setCustomerId] = useState("");
   const [orderType, setOrderType] = useState("dine_in");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [addingItems, setAddingItems] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payForm, setPayForm] = useState(EMPTY_PAY);
@@ -181,6 +183,28 @@ export function SalesPage() {
       toast({ title: t("sales.toast.paymentRecorded"), variant: "success" });
     },
     onError: (e) => toast({ title: t("sales.toast.couldntPayment"), description: errText(e), variant: "destructive" }),
+  });
+
+  const addLineToOrder = useMutation({
+    mutationFn: (v: MenuVariant) =>
+      api.post(`/orders/${detailId}/lines`, {
+        lines: [{ variantId: v.variantId, name: v.itemName + (v.variantName && v.variantName !== "Default" ? ` · ${v.variantName}` : ""), quantity: "1", unitPrice: v.price ?? "0" }],
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["order", detailId] });
+      toast({ title: t("sales.toast.itemAdded"), variant: "success" });
+    },
+    onError: (e) => toast({ title: t("sales.toast.couldntAddItem"), description: errText(e), variant: "destructive" }),
+  });
+
+  const removeLineFromOrder = useMutation({
+    mutationFn: (lineId: string) => api.delete(`/orders/${detailId}/lines/${lineId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["order", detailId] });
+    },
+    onError: (e) => toast({ title: t("sales.toast.couldntRemoveItem"), description: errText(e), variant: "destructive" }),
   });
 
   const noMenu = (menu ?? []).length === 0;
@@ -356,7 +380,7 @@ export function SalesPage() {
       </Dialog>
 
       {/* ── Order detail ── */}
-      <Dialog open={!!detailId} onOpenChange={(o) => { if (!o) { setDetailId(null); setPayOpen(false); } }}>
+      <Dialog open={!!detailId} onOpenChange={(o) => { if (!o) { setDetailId(null); setPayOpen(false); setAddingItems(false); setAddSearch(""); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -394,10 +418,57 @@ export function SalesPage() {
                 {(detail.lines ?? []).map((l) => (
                   <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span>{parseFloat(l.quantity)}× {l.name}</span>
-                    <span className="text-slate-600">{formatCurrency(l.lineTotal, detail.currencyCode)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-600">{formatCurrency(l.lineTotal, detail.currencyCode)}</span>
+                      {!terminal && (detail.lines ?? []).length > 1 && (
+                        <button
+                          onClick={() => removeLineFromOrder.mutate(l.id)}
+                          className="text-slate-300 hover:text-red-500"
+                          aria-label={t("sales.detailDialog.removeLine")}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
+
+              {/* Add items to an open order */}
+              {!terminal && (
+                addingItems ? (
+                  <div className="space-y-2 rounded-lg border border-slate-200 p-2">
+                    <Input
+                      autoFocus
+                      placeholder={t("sales.builderDialog.search.placeholder")}
+                      value={addSearch}
+                      onChange={(e) => setAddSearch(e.target.value)}
+                    />
+                    <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+                      {(menu ?? [])
+                        .filter((v) => v.isAvailable && v.itemName.toLowerCase().includes(addSearch.toLowerCase()))
+                        .map((v) => (
+                          <button
+                            key={v.variantId}
+                            disabled={addLineToOrder.isPending}
+                            onClick={() => addLineToOrder.mutate(v)}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-left text-sm hover:border-slate-900 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            <span className="font-medium text-slate-900">{v.itemName}</span>
+                            <span className="ml-2 text-xs text-slate-500">{v.price ? fmt(v.price) : "—"}</span>
+                          </button>
+                        ))}
+                    </div>
+                    <Button variant="ghost" size="sm" className="w-full" onClick={() => { setAddingItems(false); setAddSearch(""); }}>
+                      {t("sales.detailDialog.doneAdding")}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setAddingItems(true)}>
+                    <Plus className="mr-1.5 h-4 w-4" /> {t("sales.detailDialog.addItems")}
+                  </Button>
+                )
+              )}
 
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between text-slate-500"><span>{t("sales.detailDialog.summary.subtotal")}</span><span>{formatCurrency(detail.subtotal, detail.currencyCode)}</span></div>

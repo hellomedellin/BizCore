@@ -344,6 +344,12 @@ const en: Record<keyof Translations, string> = {
   "sales.toast.couldntCancel": "Couldn't cancel",
   "sales.toast.paymentRecorded": "Payment recorded — sale complete!",
   "sales.toast.couldntPayment": "Couldn't record payment",
+  "sales.toast.itemAdded": "Item added",
+  "sales.toast.couldntAddItem": "Couldn't add item",
+  "sales.toast.couldntRemoveItem": "Couldn't remove item",
+  "sales.detailDialog.addItems": "Add items",
+  "sales.detailDialog.doneAdding": "Done adding",
+  "sales.detailDialog.removeLine": "Remove item",
 
   "purchases.title": "Purchases",
   "purchases.subtitle": "Order from suppliers and receive deliveries — receiving adds to your stock.",

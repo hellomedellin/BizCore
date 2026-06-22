@@ -350,6 +350,12 @@ const es = {
   "sales.toast.couldntCancel": "No se pudo cancelar",
   "sales.toast.paymentRecorded": "Pago registrado — ¡venta completada!",
   "sales.toast.couldntPayment": "No se pudo registrar el pago",
+  "sales.toast.itemAdded": "Artículo agregado",
+  "sales.toast.couldntAddItem": "No se pudo agregar el artículo",
+  "sales.toast.couldntRemoveItem": "No se pudo quitar el artículo",
+  "sales.detailDialog.addItems": "Agregar artículos",
+  "sales.detailDialog.doneAdding": "Listo",
+  "sales.detailDialog.removeLine": "Quitar artículo",
 
   // ── Purchases ────────────────────────────────────────────────────────────────
   "purchases.title": "Compras",

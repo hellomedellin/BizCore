@@ -214,4 +214,82 @@ router.patch("/orders/:id/status", ...guard, async (req, res): Promise<void> => 
   }
 });
 
+// Recompute and persist an order's totals from its current lines. Keeps the
+// order's existing discount/tax. Returns the refreshed order.
+async function recomputeOrderTotals(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], orderId: string, discount: string, tax: string) {
+  const lines = await tx.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, orderId));
+  const totals = computeOrderTotals(
+    lines.map((l) => ({ unitPrice: l.unitPrice, quantity: l.quantity, modifiers: l.modifiers as any })),
+    discount,
+    tax,
+  );
+  await tx.update(ordersTable).set({
+    subtotal: centsToString(totals.subtotalCents),
+    total: centsToString(totals.totalCents),
+  }).where(eq(ordersTable.id, orderId));
+}
+
+const MODIFIABLE = (status: string) => status !== "completed" && status !== "cancelled";
+
+// Add line(s) to an open order — "and one more beer". Recomputes totals.
+router.post("/orders/:id/lines", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = z.object({ lines: z.array(orderLineInputSchema).min(1) }).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const [order] = await db.select().from(ordersTable).where(
+      and(eq(ordersTable.id, req.params["id"] as string), tenantWhere(ordersTable.businessId, businessId))
+    );
+    if (!order) { res.status(404).json({ error: "Not found" }); return; }
+    if (!MODIFIABLE(order.status)) { res.status(409).json({ error: `Cannot modify a ${order.status} order.` }); return; }
+
+    await db.transaction(async (tx) => {
+      const newTotals = computeOrderTotals(body.data.lines, "0", "0");
+      await tx.insert(orderLinesTable).values(body.data.lines.map((l, i) => ({
+        orderId: order.id,
+        variantId: l.variantId ?? null,
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: centsToString(newTotals.lineTotalsCents[i]!),
+        notes: l.notes ?? null,
+        modifiers: l.modifiers ?? null,
+      })));
+      await recomputeOrderTotals(tx, order.id, order.discount, order.tax);
+    });
+
+    const [updated] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id));
+    const lines = await db.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
+    res.status(201).json({ ...updated, lines });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Remove a line from an open order. Recomputes totals.
+router.delete("/orders/:id/lines/:lineId", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const [order] = await db.select().from(ordersTable).where(
+      and(eq(ordersTable.id, req.params["id"] as string), tenantWhere(ordersTable.businessId, businessId))
+    );
+    if (!order) { res.status(404).json({ error: "Not found" }); return; }
+    if (!MODIFIABLE(order.status)) { res.status(409).json({ error: `Cannot modify a ${order.status} order.` }); return; }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(orderLinesTable).where(
+        and(eq(orderLinesTable.id, req.params["lineId"] as string), eq(orderLinesTable.orderId, order.id))
+      );
+      await recomputeOrderTotals(tx, order.id, order.discount, order.tax);
+    });
+
+    const [updated] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id));
+    const lines = await db.select().from(orderLinesTable).where(eq(orderLinesTable.orderId, order.id));
+    res.json({ ...updated, lines });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
 export default router;
