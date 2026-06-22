@@ -100,31 +100,58 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           }, [])}
         </nav>
 
-        {/* User / language / collapse */}
-        <div className={cn("flex items-center border-t border-slate-200 p-2", collapsed ? "flex-col gap-2" : "justify-between")}>
-          <button
-            onClick={logout}
-            title={user?.username ?? "Sign out"}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-1">
+        {/* User card */}
+        <div className={cn("border-t border-slate-200 p-2", collapsed ? "flex flex-col items-center gap-2" : "space-y-2")}>
+          {/* Avatar + info row */}
+          <div className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5", !collapsed && "bg-slate-50")}>
+            {/* Avatar */}
+            <div className="h-7 w-7 flex-shrink-0 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-bold select-none">
+              {(user?.displayName ?? user?.username ?? "?").charAt(0).toUpperCase()}
+            </div>
             {!collapsed && (
-              <button
-                onClick={() => setLang(lang === "es" ? "en" : "es")}
-                className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                title={lang === "es" ? "Switch to English" : "Cambiar a Español"}
-              >
-                {t("nav.lang")}
-              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-slate-800 leading-tight">
+                  {user?.displayName ?? user?.username}
+                </p>
+                <span className={cn(
+                  "inline-block mt-0.5 rounded px-1 py-0 text-[10px] font-semibold uppercase tracking-wide leading-4",
+                  user?.role === "admin"      && "bg-violet-100 text-violet-700",
+                  user?.role === "manager"    && "bg-blue-100 text-blue-700",
+                  user?.role === "accountant" && "bg-emerald-100 text-emerald-700",
+                  user?.role === "staff"      && "bg-slate-100 text-slate-500",
+                )}>
+                  {user?.role}
+                </span>
+              </div>
             )}
+          </div>
+
+          {/* Controls row */}
+          <div className={cn("flex items-center", collapsed ? "flex-col gap-2" : "justify-between px-1")}>
             <button
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={logout}
+              title="Sign out"
               className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
             >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              <LogOut className="h-4 w-4" />
             </button>
+            <div className="flex items-center gap-1">
+              {!collapsed && (
+                <button
+                  onClick={() => setLang(lang === "es" ? "en" : "es")}
+                  className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  title={lang === "es" ? "Switch to English" : "Cambiar a Español"}
+                >
+                  {t("nav.lang")}
+                </button>
+              )}
+              <button
+                onClick={() => setCollapsed(!collapsed)}
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+              >
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
         </div>
       </aside>
