@@ -16,7 +16,7 @@ import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
-import { Pencil, Plus, Trash2, Truck } from "lucide-react";
+import { Pencil, Plus, Trash2, Truck, Sparkles } from "lucide-react";
 
 interface PO { id: string; supplierId: string | null; status: string; expectedAt: string | null; receivedAt: string | null; notes: string | null; createdAt: string }
 interface POLine { id: string; description: string; quantity: string; unitCost: string; lineTotal: string }
@@ -80,6 +80,30 @@ export function PurchasesPage() {
     setAdd({ variantId: "", quantity: "", unitId: "", unitCost: "" });
   }
   const builderTotal = lines.reduce((s, l) => s + parseFloat(l.quantity || "0") * parseFloat(l.unitCost || "0"), 0);
+
+  // Pre-fill the builder from below-threshold ingredients at this location.
+  const fromLowStock = useMutation({
+    mutationFn: () =>
+      api.get(`/inventory/reorder-suggestions?locationId=${activeLocationId}`).then(
+        (r) => r.data as Array<{ variantId: string; itemName: string; unitId: string | null; suggestedQty: string; unitCost: string }>,
+      ),
+    onSuccess: (sugs) => {
+      if (!sugs.length) { toast({ title: t("purchases.reorder.noneTitle"), description: t("purchases.reorder.noneDesc") }); return; }
+      setSupplierId("");
+      setLines(sugs.map((s) => ({ variantId: s.variantId, description: s.itemName, quantity: s.suggestedQty, unitId: s.unitId ?? "", unitCost: s.unitCost })));
+      setAdd({ variantId: "", quantity: "", unitId: "", unitCost: "" });
+      setBuilderOpen(true);
+    },
+    onError: (e) => toast({ title: t("purchases.reorder.couldnt"), description: errText(e), variant: "destructive" }),
+  });
+
+  function openFromLowStock() {
+    if (!activeLocationId) {
+      toast({ title: t("purchases.locationToast.title"), description: t("purchases.locationToast.description"), variant: "destructive" });
+      return;
+    }
+    fromLowStock.mutate();
+  }
 
   const createPO = useMutation({
     mutationFn: () =>
@@ -147,7 +171,12 @@ export function PurchasesPage() {
           <h1 className="text-2xl font-bold text-slate-900">{t("purchases.title")}</h1>
           <p className="text-sm text-slate-500">{t("purchases.subtitle")}</p>
         </div>
-        <Button onClick={openBuilder}><Plus className="mr-1 h-4 w-4" /> {t("purchases.btn.new")}</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" disabled={fromLowStock.isPending} onClick={openFromLowStock}>
+            <Sparkles className="mr-1 h-4 w-4 text-indigo-500" /> {t("purchases.btn.fromLowStock")}
+          </Button>
+          <Button onClick={openBuilder}><Plus className="mr-1 h-4 w-4" /> {t("purchases.btn.new")}</Button>
+        </div>
       </div>
 
       {isLoading ? null : visiblePOs.length === 0 ? (

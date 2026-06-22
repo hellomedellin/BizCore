@@ -4,7 +4,7 @@ import {
   inventoryTable, inventoryTransactionsTable, itemVariantsTable, itemsTable,
   categoriesTable, locationsTable, unitsTable,
 } from "@bizcore/db/schema";
-import { eq, and, ilike, sql, SQL, desc } from "drizzle-orm";
+import { eq, and, ilike, sql, SQL, desc, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -193,6 +193,60 @@ router.patch("/inventory/threshold", ...guard, requireRole("admin", "manager"), 
       });
 
     res.json({ message: "Threshold updated" });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Reorder suggestions: below-threshold ingredients at a location, with a
+// suggested top-up quantity (toward 2× the threshold) and the last price paid.
+// Feeds the "create order from low stock" button on Purchasing.
+router.get("/inventory/reorder-suggestions", ...guard, async (req, res): Promise<void> => {
+  const { businessId, allowedLocationIds } = req as AuthedRequest;
+  try {
+    const locationId = req.query["locationId"] as string | undefined;
+    if (!locationId) { res.status(400).json({ error: "locationId is required" }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
+
+    const rows = await db
+      .select({
+        variantId: itemVariantsTable.id,
+        itemName: itemsTable.name,
+        quantity: inventoryTable.quantity,
+        threshold: inventoryTable.lowStockThreshold,
+        unitId: inventoryTable.unitId,
+        unitAbbreviation: unitsTable.abbreviation,
+        lastUnitCost: sql<string | null>`(SELECT pol.unit_cost FROM purchase_order_lines pol JOIN purchase_orders po ON po.id = pol.purchase_order_id WHERE pol.variant_id = ${itemVariantsTable.id} AND po.business_id = ${businessId} ORDER BY pol.created_at DESC LIMIT 1)`,
+        fallbackCost: sql<string | null>`coalesce(${itemVariantsTable.cost}, ${itemsTable.cost})`,
+      })
+      .from(inventoryTable)
+      .innerJoin(itemVariantsTable, eq(inventoryTable.variantId, itemVariantsTable.id))
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .leftJoin(unitsTable, eq(inventoryTable.unitId, unitsTable.id))
+      .where(and(
+        tenantWhere(itemsTable.businessId, businessId),
+        eq(inventoryTable.locationId, locationId),
+        eq(itemsTable.active, true),
+        isNotNull(inventoryTable.lowStockThreshold),
+        sql`${inventoryTable.quantity} <= ${inventoryTable.lowStockThreshold}`,
+      ))
+      .orderBy(itemsTable.name);
+
+    const suggestions = rows.map((r) => {
+      const onHand = parseFloat(r.quantity);
+      const threshold = parseFloat(r.threshold ?? "0");
+      const topUp = threshold * 2 - onHand;
+      const suggestedQty = (topUp > 0 ? topUp : threshold).toFixed(2);
+      return {
+        variantId: r.variantId,
+        itemName: r.itemName,
+        unitId: r.unitId,
+        unitAbbreviation: r.unitAbbreviation,
+        suggestedQty,
+        unitCost: r.lastUnitCost ?? r.fallbackCost ?? "0",
+      };
+    });
+    res.json(suggestions);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
