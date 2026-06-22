@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/hooks/use-toast";
 import { Hint } from "@/components/ui/hint";
-import { Plus, Trash2, Copy, Eye, EyeOff, Pencil, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Copy, Eye, EyeOff, Pencil, RefreshCw, Check, X } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -164,6 +164,28 @@ export function SettingsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
   });
 
+  // ── categories ────────────────────────────────────────────────────────────
+  interface Category { id: string; name: string; active: boolean; sortOrder: string | null }
+  const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => api.get("/categories").then((r) => r.data as Category[]) });
+  const [newCatName, setNewCatName] = useState("");
+  const [editingCat, setEditingCat] = useState<{ id: string; name: string } | null>(null);
+  const [confirmCat, setConfirmCat] = useState<Category | null>(null);
+  const createCat = useMutation({
+    mutationFn: () => api.post("/categories", { name: newCatName.trim() }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["categories"] }); setNewCatName(""); toast({ title: t("settings.categories.toast.added"), variant: "success" }); },
+    onError: (e) => toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+  const renameCat = useMutation({
+    mutationFn: () => api.patch(`/categories/${editingCat!.id}`, { name: editingCat!.name.trim() }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["categories"] }); setEditingCat(null); toast({ title: t("settings.categories.toast.saved"), variant: "success" }); },
+    onError: (e) => toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+  const deleteCat = useMutation({
+    mutationFn: (id: string) => api.patch(`/categories/${id}`, { active: false }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["categories"] }); setConfirmCat(null); toast({ title: t("settings.categories.toast.removed"), variant: "success" }); },
+    onError: (e) => { setConfirmCat(null); toast({ title: t("settings.toast.couldntSave"), description: errText(e), variant: "destructive" }); },
+  });
+
   // ── Siigo integration ─────────────────────────────────────────────────────
   const { data: siigoConn } = useQuery({ queryKey: ["siigo-connection"], queryFn: () => api.get("/siigo-connection").then((r) => r.data).catch(() => null) });
   const [siigoForm, setSiigoForm] = useState({ username: "", accessKey: "" });
@@ -268,6 +290,81 @@ export function SettingsPage() {
             </button>
           ))}
           {!(locations ?? []).length && <p className="text-sm text-slate-400">{t("settings.locations.empty")}</p>}
+        </CardContent>
+      </Card>
+
+      {/* Categories */}
+      <Card>
+        <CardHeader><CardTitle>{t("settings.categories.cardTitle")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {/* Existing categories */}
+          <div className="space-y-1">
+            {(categories ?? []).filter((c) => c.active).map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2">
+                {editingCat?.id === c.id ? (
+                  <>
+                    <Input
+                      autoFocus
+                      className="h-7 text-sm"
+                      value={editingCat.name}
+                      onChange={(e) => setEditingCat({ ...editingCat, name: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && editingCat.name.trim()) renameCat.mutate();
+                        if (e.key === "Escape") setEditingCat(null);
+                      }}
+                    />
+                    <button
+                      disabled={!editingCat.name.trim() || renameCat.isPending}
+                      onClick={() => renameCat.mutate()}
+                      className="text-green-600 hover:text-green-700 disabled:opacity-40"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setEditingCat(null)} className="text-slate-400 hover:text-slate-600">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm text-slate-800">{c.name}</span>
+                    <button
+                      onClick={() => setEditingCat({ id: c.id, name: c.name })}
+                      className="text-slate-400 hover:text-slate-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmCat(c)}
+                      className="text-slate-300 hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+            {!(categories ?? []).filter((c) => c.active).length && (
+              <p className="text-sm text-slate-400 py-1">{t("settings.categories.empty")}</p>
+            )}
+          </div>
+
+          {/* Add new */}
+          <div className="flex gap-2">
+            <Input
+              placeholder={t("settings.categories.placeholder.new")}
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newCatName.trim()) createCat.mutate(); }}
+              className="text-sm"
+            />
+            <Button
+              size="sm"
+              disabled={!newCatName.trim() || createCat.isPending}
+              onClick={() => createCat.mutate()}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -577,6 +674,16 @@ export function SettingsPage() {
         destructive
         loading={deleteSiigo.isPending}
         onConfirm={() => { deleteSiigo.mutate(); setConfirmSiigo(false); }}
+      />
+      <ConfirmDialog
+        open={!!confirmCat}
+        onOpenChange={(o) => { if (!o) setConfirmCat(null); }}
+        title={t("settings.categories.confirmDelete.title", { name: confirmCat?.name ?? "" })}
+        description={t("settings.categories.confirmDelete.description")}
+        confirmLabel={t("settings.categories.confirmDelete.confirmLabel")}
+        destructive
+        loading={deleteCat.isPending}
+        onConfirm={() => confirmCat && deleteCat.mutate(confirmCat.id)}
       />
     </div>
   );

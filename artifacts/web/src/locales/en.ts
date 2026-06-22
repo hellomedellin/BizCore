@@ -602,6 +602,16 @@ const en: Record<keyof Translations, string> = {
   "settings.toast.couldntSave": "Couldn't save",
   "settings.toast.couldntUpdate": "Couldn't update",
 
+  "settings.categories.cardTitle": "Menu Categories",
+  "settings.categories.empty": "No categories yet.",
+  "settings.categories.placeholder.new": "New category…",
+  "settings.categories.toast.added": "Category added",
+  "settings.categories.toast.saved": "Category saved",
+  "settings.categories.toast.removed": "Category removed",
+  "settings.categories.confirmDelete.title": "Remove {name}?",
+  "settings.categories.confirmDelete.description": "Menu items in this category will become uncategorized. This can't be undone.",
+  "settings.categories.confirmDelete.confirmLabel": "Remove",
+
   "reports.title": "Reports",
   "reports.subtitle": "Financial and operational reports",
   "reports.btn.print": "Print / Export PDF",

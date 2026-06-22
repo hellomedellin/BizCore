@@ -612,6 +612,17 @@ const es = {
   "settings.toast.couldntSave": "No se pudo guardar",
   "settings.toast.couldntUpdate": "No se pudo actualizar",
 
+  // ── Settings: Categories ─────────────────────────────────────────────────────
+  "settings.categories.cardTitle": "Categorías del menú",
+  "settings.categories.empty": "Aún no hay categorías.",
+  "settings.categories.placeholder.new": "Nueva categoría…",
+  "settings.categories.toast.added": "Categoría agregada",
+  "settings.categories.toast.saved": "Categoría guardada",
+  "settings.categories.toast.removed": "Categoría eliminada",
+  "settings.categories.confirmDelete.title": "Eliminar {name}?",
+  "settings.categories.confirmDelete.description": "Los artículos del menú en esta categoría quedarán sin categoría. Esta acción no se puede deshacer.",
+  "settings.categories.confirmDelete.confirmLabel": "Eliminar",
+
   // ── Navigation: Reports ──────────────────────────────────────────────────────
   "nav.reports": "Informes",
 
