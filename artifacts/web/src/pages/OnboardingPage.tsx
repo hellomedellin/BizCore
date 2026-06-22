@@ -39,8 +39,8 @@ export function OnboardingPage() {
 
   // Step 1
   const [bizName, setBizName] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [timezone, setTimezone] = useState("America/New_York");
+  const [currency, setCurrency] = useState("COP");
+  const [timezone, setTimezone] = useState("America/Bogota");
 
   // Step 2
   const [locationName, setLocationName] = useState("");
@@ -110,7 +110,7 @@ export function OnboardingPage() {
                   <Label htmlFor="currency">Currency</Label>
                   <select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm">
-                    {["USD","COP","EUR","GBP","MXN","BRL","ARS","CLP","PEN","CRC"].map((c) => (
+                    {["COP","USD","EUR","GBP","MXN","BRL","ARS","CLP","PEN","CRC"].map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>

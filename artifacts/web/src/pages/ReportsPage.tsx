@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/lib/i18n";
+import { useCurrency } from "@/hooks/useCurrency";
 import { TrendingUp, ShoppingCart, Users, Printer, ChevronDown, ChevronUp } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -48,11 +49,6 @@ function defaultDates() {
   return { from: toLocalDateStr(from), to: toLocalDateStr(now) };
 }
 
-function fmtMoney(val: number | string): string {
-  const n = typeof val === "string" ? parseFloat(val) : val;
-  return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
 function fmtHours(minutes: number): string {
   const h = minutes / 60;
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(1)}h`;
@@ -94,7 +90,7 @@ function paymentMethodLabel(t: ReturnType<typeof useT>, method: string): string 
 
 // ── Bar chart row ─────────────────────────────────────────────────────────────
 
-function BarRow({ label, value, total, color = "#6366f1" }: { label: string; value: number; total: number; color?: string }) {
+function BarRow({ label, value, total, fmt, color = "#6366f1" }: { label: string; value: number; total: number; fmt: (v: number | string) => string; color?: string }) {
   const pct = total > 0 ? (value / total) * 100 : 0;
   return (
     <div className="flex items-center gap-3">
@@ -103,7 +99,7 @@ function BarRow({ label, value, total, color = "#6366f1" }: { label: string; val
         <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
       <span className="w-10 text-xs text-slate-500 tabular-nums">{pct.toFixed(0)}%</span>
-      <span className="w-24 text-xs font-semibold text-slate-800 text-right tabular-nums">{fmtMoney(value)}</span>
+      <span className="w-24 text-xs font-semibold text-slate-800 text-right tabular-nums">{fmt(value)}</span>
     </div>
   );
 }
@@ -139,6 +135,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function ProfitLossReport({ data }: { data: ProfitLoss }) {
   const t = useT();
+  const { fmt } = useCurrency();
   const totalRevenue = parseFloat(data.revenue);
   const [showDailyTable, setShowDailyTable] = useState(false);
 
@@ -146,21 +143,21 @@ function ProfitLossReport({ data }: { data: ProfitLoss }) {
     <div className="space-y-8 print:space-y-6">
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label={t("reports.pl.revenue")}      value={fmtMoney(data.revenue)}      accent />
-        <StatCard label={t("reports.pl.cogs")}         value={fmtMoney(data.cogs)} />
+        <StatCard label={t("reports.pl.revenue")}      value={fmt(data.revenue)}      accent />
+        <StatCard label={t("reports.pl.cogs")}         value={fmt(data.cogs)} />
         <StatCard
           label={t("reports.pl.grossProfit")}
-          value={fmtMoney(data.grossProfit)}
+          value={fmt(data.grossProfit)}
           sub={`${data.grossMarginPct}% ${t("reports.pl.margin")}`}
           accent
         />
-        <StatCard label={t("reports.pl.taxCollected")} value={fmtMoney(data.taxCollected)} />
+        <StatCard label={t("reports.pl.taxCollected")} value={fmt(data.taxCollected)} />
       </div>
 
       {/* Secondary stats */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label={t("reports.pl.orderCount")}    value={data.orderCount.toLocaleString()} />
-        <StatCard label={t("reports.pl.avgOrderValue")} value={fmtMoney(data.avgOrderValue)} />
+        <StatCard label={t("reports.pl.avgOrderValue")} value={fmt(data.avgOrderValue)} />
       </div>
 
       {/* P&L statement */}
@@ -170,15 +167,15 @@ function ProfitLossReport({ data }: { data: ProfitLoss }) {
             <tbody>
               <tr className="border-b border-slate-100">
                 <td className="px-4 py-3 text-slate-600">{t("reports.pl.revenue")}</td>
-                <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmtMoney(data.revenue)}</td>
+                <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{fmt(data.revenue)}</td>
               </tr>
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 <td className="px-4 py-3 text-slate-500 pl-8">({t("reports.pl.cogs")})</td>
-                <td className="px-4 py-3 text-right tabular-nums text-red-600">({fmtMoney(data.cogs)})</td>
+                <td className="px-4 py-3 text-right tabular-nums text-red-600">({fmt(data.cogs)})</td>
               </tr>
               <tr className="bg-indigo-50 font-bold">
                 <td className="px-4 py-3 text-indigo-800">{t("reports.pl.grossProfit")}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-indigo-700">{fmtMoney(data.grossProfit)}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-indigo-700">{fmt(data.grossProfit)}</td>
               </tr>
               <tr className="border-t border-slate-100">
                 <td className="px-4 py-3 text-slate-500 text-xs">{t("reports.pl.grossMargin")}</td>
@@ -194,7 +191,7 @@ function ProfitLossReport({ data }: { data: ProfitLoss }) {
         <Section title={t("reports.pl.byOrderType")}>
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
             {data.revenueByOrderType.map((row) => (
-              <BarRow key={row.orderType} label={orderTypeLabel(t, row.orderType)} value={row.revenue} total={totalRevenue} />
+              <BarRow key={row.orderType} label={orderTypeLabel(t, row.orderType)} value={row.revenue} total={totalRevenue} fmt={fmt} />
             ))}
           </div>
         </Section>
@@ -226,7 +223,7 @@ function ProfitLossReport({ data }: { data: ProfitLoss }) {
                     <tr key={row.date} className="border-b border-slate-100 last:border-0">
                       <td className="px-4 py-2 text-slate-700">{formatDateLabel(row.date)}</td>
                       <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{row.orderCount}</td>
-                      <td className="px-4 py-2 text-right font-semibold tabular-nums text-slate-900">{fmtMoney(row.revenue)}</td>
+                      <td className="px-4 py-2 text-right font-semibold tabular-nums text-slate-900">{fmt(row.revenue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -234,7 +231,7 @@ function ProfitLossReport({ data }: { data: ProfitLoss }) {
                   <tr className="bg-slate-50 border-t border-slate-200 font-bold">
                     <td className="px-4 py-2 text-slate-700">{t("reports.total")}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-slate-700">{data.orderCount}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-900">{fmtMoney(data.revenue)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-slate-900">{fmt(data.revenue)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -250,14 +247,15 @@ function ProfitLossReport({ data }: { data: ProfitLoss }) {
 
 function SalesReport({ data }: { data: SalesSummary }) {
   const t = useT();
+  const { fmt } = useCurrency();
 
   return (
     <div className="space-y-8 print:space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label={t("reports.sales.totalRevenue")} value={fmtMoney(data.totalRevenue)} accent />
+        <StatCard label={t("reports.sales.totalRevenue")} value={fmt(data.totalRevenue)} accent />
         <StatCard label={t("reports.sales.totalOrders")}  value={data.totalOrders.toLocaleString()} />
-        <StatCard label={t("reports.sales.avgOrder")}     value={fmtMoney(data.avgOrderValue)} />
+        <StatCard label={t("reports.sales.avgOrder")}     value={fmt(data.avgOrderValue)} />
       </div>
 
       {/* Top selling items */}
@@ -280,7 +278,7 @@ function SalesReport({ data }: { data: SalesSummary }) {
                     <td className="px-4 py-2 text-slate-400 tabular-nums text-xs">{i + 1}</td>
                     <td className="px-4 py-2 font-medium text-slate-800">{item.name}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-slate-600">{item.qty.toFixed(0)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-slate-900">{fmtMoney(item.revenue)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-slate-900">{fmt(item.revenue)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-slate-500 text-xs">
                       {data.totalRevenue > 0 ? ((item.revenue / data.totalRevenue) * 100).toFixed(0) : 0}%
                     </td>
@@ -297,7 +295,7 @@ function SalesReport({ data }: { data: SalesSummary }) {
         <Section title={t("reports.sales.byOrderType")}>
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
             {data.byOrderType.map((row) => (
-              <BarRow key={row.orderType} label={orderTypeLabel(t, row.orderType)} value={row.revenue} total={data.totalRevenue} color="#10b981" />
+              <BarRow key={row.orderType} label={orderTypeLabel(t, row.orderType)} value={row.revenue} total={data.totalRevenue} color="#10b981" fmt={fmt} />
             ))}
           </div>
         </Section>
@@ -321,8 +319,8 @@ function SalesReport({ data }: { data: SalesSummary }) {
                   <tr key={row.method} className="border-b border-slate-100 last:border-0">
                     <td className="px-4 py-2 font-medium text-slate-800">{paymentMethodLabel(t, row.method)}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-slate-600">{row.count}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-600">{fmtMoney(row.tips)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-slate-900">{fmtMoney(row.revenue)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-slate-600">{fmt(row.tips)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-slate-900">{fmt(row.revenue)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -338,6 +336,7 @@ function SalesReport({ data }: { data: SalesSummary }) {
 
 function PayrollReportView({ data }: { data: PayrollReport }) {
   const t = useT();
+  const { fmt } = useCurrency();
   const hasWages = data.employees.some((e) => e.hourlyRate !== null);
 
   return (
@@ -346,7 +345,7 @@ function PayrollReportView({ data }: { data: PayrollReport }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label={t("reports.payroll.totalHours")}   value={fmtHours(data.totals.totalMinutes)} />
         {hasWages && (
-          <StatCard label={t("reports.payroll.totalWages")} value={fmtMoney(data.totals.totalEstimatedWages)} accent />
+          <StatCard label={t("reports.payroll.totalWages")} value={fmt(data.totals.totalEstimatedWages)} accent />
         )}
         <StatCard label={t("reports.payroll.employees")} value={String(data.employees.length)} />
       </div>
@@ -384,12 +383,12 @@ function PayrollReportView({ data }: { data: PayrollReport }) {
                       <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-slate-900">{fmtHours(emp.totalMinutes)}</td>
                       {hasWages && (
                         <td className="px-4 py-2.5 text-right tabular-nums text-slate-600 text-xs">
-                          {emp.hourlyRate ? fmtMoney(emp.hourlyRate) : "—"}
+                          {emp.hourlyRate ? fmt(emp.hourlyRate) : "—"}
                         </td>
                       )}
                       {hasWages && (
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-slate-900">
-                          {parseFloat(emp.estimatedWages) > 0 ? fmtMoney(emp.estimatedWages) : "—"}
+                          {parseFloat(emp.estimatedWages) > 0 ? fmt(emp.estimatedWages) : "—"}
                         </td>
                       )}
                       <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">
@@ -416,7 +415,7 @@ function PayrollReportView({ data }: { data: PayrollReport }) {
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-700" colSpan={2} />
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-900">{fmtHours(data.totals.totalMinutes)}</td>
                     {hasWages && <td className="px-4 py-2.5" />}
-                    {hasWages && <td className="px-4 py-2.5 text-right tabular-nums text-slate-900">{fmtMoney(data.totals.totalEstimatedWages)}</td>}
+                    {hasWages && <td className="px-4 py-2.5 text-right tabular-nums text-slate-900">{fmt(data.totals.totalEstimatedWages)}</td>}
                     <td className="px-4 py-2.5" />
                   </tr>
                 </tfoot>
