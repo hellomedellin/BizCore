@@ -176,6 +176,11 @@ const en: Record<keyof Translations, string> = {
   "customers.form.label.notes": "Notes",
   "customers.form.placeholder.notes": "Optional — preferences, allergies…",
   "customers.toast.added": "Customer added",
+  "customers.history.title": "Order history",
+  "customers.history.visits": "Visits",
+  "customers.history.spent": "Total spent",
+  "customers.history.lastVisit": "Last visit",
+  "customers.history.never": "Never",
 
   "suppliers.title": "Suppliers",
   "suppliers.subtitle": "The businesses you buy ingredients and supplies from.",

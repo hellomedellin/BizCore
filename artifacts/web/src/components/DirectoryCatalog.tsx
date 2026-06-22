@@ -40,6 +40,9 @@ interface Props<T extends { id: string; name: string }, F extends Record<string,
   columns: DirectoryColumn<T>[];
   renderFields: (form: F, setForm: Dispatch<SetStateAction<F>>) => ReactNode;
   searchPlaceholder?: string;
+  // Optional extra panel shown in the edit dialog for an existing record
+  // (e.g. a customer's order history). Receives the record id.
+  renderDetail?: (id: string) => ReactNode;
 }
 
 export function DirectoryCatalog<T extends { id: string; name: string }, F extends Record<string, string>>({
@@ -60,6 +63,7 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
   columns,
   renderFields,
   searchPlaceholder,
+  renderDetail,
 }: Props<T, F>) {
   const t = useT();
   const qc = useQueryClient();
@@ -225,6 +229,7 @@ export function DirectoryCatalog<T extends { id: string; name: string }, F exten
             <DialogTitle>Edit {entitySingular}</DialogTitle>
           </DialogHeader>
           {renderFields(form, setForm)}
+          {editing && renderDetail ? renderDetail(editing.id) : null}
           <div className="flex items-center justify-between pt-1">
             <Button
               variant="ghost"

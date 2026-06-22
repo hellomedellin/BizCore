@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
-import { customersTable } from "@bizcore/db/schema";
-import { eq, and, ilike } from "drizzle-orm";
+import { customersTable, ordersTable } from "@bizcore/db/schema";
+import { eq, and, ilike, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireModule, requireRole, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -46,7 +46,29 @@ router.get("/customers/:id", ...guard, async (req, res): Promise<void> => {
   try {
     const [row] = await db.select().from(customersTable).where(and(eq(customersTable.id, req.params["id"] as string), tenantWhere(customersTable.businessId, businessId)));
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
-    res.json(row);
+
+    // Order history: visits (completed orders), total spent, last visit, recent.
+    const [stats] = await db
+      .select({
+        visitCount: sql<number>`count(*) FILTER (WHERE ${ordersTable.status} = 'completed')::int`,
+        totalSpent: sql<string>`coalesce(sum(${ordersTable.total}) FILTER (WHERE ${ordersTable.status} = 'completed'), 0)`,
+        lastVisit: sql<string | null>`max(${ordersTable.completedAt})`,
+      })
+      .from(ordersTable)
+      .where(and(tenantWhere(ordersTable.businessId, businessId), eq(ordersTable.customerId, row.id)));
+
+    const recentOrders = await db
+      .select({ id: ordersTable.id, total: ordersTable.total, status: ordersTable.status, createdAt: ordersTable.createdAt })
+      .from(ordersTable)
+      .where(and(tenantWhere(ordersTable.businessId, businessId), eq(ordersTable.customerId, row.id)))
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(5);
+
+    res.json({
+      ...row,
+      stats: { visitCount: stats?.visitCount ?? 0, totalSpent: stats?.totalSpent ?? "0", lastVisit: stats?.lastVisit ?? null },
+      recentOrders,
+    });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }

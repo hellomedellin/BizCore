@@ -148,6 +148,11 @@ const es = {
   "customers.form.label.notes": "Notas",
   "customers.form.placeholder.notes": "Opcional — preferencias, alergias…",
   "customers.toast.added": "Cliente agregado",
+  "customers.history.title": "Historial de pedidos",
+  "customers.history.visits": "Visitas",
+  "customers.history.spent": "Total gastado",
+  "customers.history.lastVisit": "Última visita",
+  "customers.history.never": "Nunca",
 
   // ── Suppliers ────────────────────────────────────────────────────────────────
   "suppliers.title": "Proveedores",
