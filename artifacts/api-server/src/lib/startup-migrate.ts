@@ -65,6 +65,65 @@ export async function runStartupMigrations(): Promise<void> {
       CREATE INDEX IF NOT EXISTS app_users_business_id_idx ON app_users(business_id)
     `);
 
+    // ── Enums: payment_method, payment_status, payment_pos_source ────────────
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE payment_method AS ENUM ('cash','card','transfer','nequi','daviplata','other');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE payment_status AS ENUM ('completed','refunded');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE payment_pos_source AS ENUM ('manual','pos_sync','siigo_sync');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
+    // ── Table: payments ───────────────────────────────────────────────────────
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+        business_id UUID NOT NULL,
+        location_id UUID,
+        amount NUMERIC(10,2) NOT NULL,
+        tip NUMERIC(10,2) NOT NULL DEFAULT 0,
+        currency_code TEXT NOT NULL DEFAULT 'USD',
+        method payment_method NOT NULL,
+        status payment_status NOT NULL DEFAULT 'completed',
+        external_transaction_id TEXT,
+        pos_source payment_pos_source NOT NULL DEFAULT 'manual',
+        processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes TEXT,
+        created_by TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS payments_order_id_idx ON payments(order_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS payments_business_id_idx ON payments(business_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS payments_business_created_at_idx ON payments(business_id, created_at)`);
+
+    // ── Table: pos_connections ────────────────────────────────────────────────
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS pos_connections (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        api_url TEXT NOT NULL,
+        api_key TEXT,
+        last_sync_at TIMESTAMPTZ,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT pos_connections_business_id_unique UNIQUE(business_id)
+      )
+    `);
+
     // ── Column: employee_roles.color + permission_level ───────────────────────
     await db.execute(sql`ALTER TABLE employee_roles ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '#6366f1'`);
     await db.execute(sql`ALTER TABLE employee_roles ADD COLUMN IF NOT EXISTS permission_level TEXT DEFAULT 'staff'`);

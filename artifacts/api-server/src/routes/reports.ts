@@ -129,21 +129,24 @@ router.get("/reports/sales-summary", ...guard, async (req, res): Promise<void> =
       LIMIT 15
     `)).rows as any[];
 
-    // Revenue by payment method
-    const byPayment = (await db.execute(sql`
-      SELECT
-        p.method,
-        COALESCE(SUM(p.amount::numeric), 0) AS revenue,
-        COALESCE(SUM(p.tip::numeric),    0) AS tips,
-        COUNT(*) AS count
-      FROM payments p
-      WHERE p.business_id = ${businessId}
-        AND p.status = 'completed'
-        AND p.processed_at >= ${dates.from}::date
-        AND p.processed_at <  (${dates.to}::date + interval '1 day')
-      GROUP BY p.method
-      ORDER BY revenue DESC
-    `)).rows as any[];
+    // Revenue by payment method (payments table may not exist yet — degrade gracefully)
+    let byPayment: any[] = [];
+    try {
+      byPayment = (await db.execute(sql`
+        SELECT
+          p.method,
+          COALESCE(SUM(p.amount::numeric), 0) AS revenue,
+          COALESCE(SUM(p.tip::numeric),    0) AS tips,
+          COUNT(*) AS count
+        FROM payments p
+        WHERE p.business_id = ${businessId}
+          AND p.status = 'completed'
+          AND p.processed_at >= ${dates.from}::date
+          AND p.processed_at <  (${dates.to}::date + interval '1 day')
+        GROUP BY p.method
+        ORDER BY revenue DESC
+      `)).rows as any[];
+    } catch { /* table not yet created — return empty */ }
 
     // Order type breakdown
     const byType = (await db.execute(sql`
