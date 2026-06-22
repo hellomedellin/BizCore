@@ -11,7 +11,8 @@ import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Sparkles, UmbrellaOff } from "lucide-react";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Sparkles, UmbrellaOff, Send, MessageCircle } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 interface Shift {
@@ -25,7 +26,7 @@ interface TimeOffRequest {
   startDate: string; endDate: string; notes: string | null;
 }
 interface Employee {
-  id: string; name: string; active?: boolean;
+  id: string; name: string; active?: boolean; phone?: string | null;
   roleId: string | null; primaryLocationId: string | null;
 }
 interface Role { id: string; name: string; color: string | null }
@@ -128,6 +129,7 @@ export function SchedulingPage() {
   const [timeOffOpen, setTimeOffOpen] = useState(false);
   const [timeOffForm, setTimeOffForm] = useState(EMPTY_TIME_OFF_FORM);
   const [deleteTimeOff, setDeleteTimeOff] = useState<TimeOffRequest | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const weekFrom = weekDates[0]!.toISOString();
   const weekToDate = new Date(weekDates[6]!);
@@ -217,6 +219,18 @@ export function SchedulingPage() {
     const h = weeklyHours.get(empId) ?? 0;
     if (h === 0) return "—";
     return h % 1 === 0 ? `${h}h` : `${h.toFixed(1)}h`;
+  }
+
+  // Plain-text week schedule for a WhatsApp message to one employee.
+  function buildScheduleText(emp: Employee): string {
+    const dayLabel = (d: Date) => d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    const lines: string[] = [];
+    for (const date of weekDates) {
+      const cell = shiftsByEmpDay.get(`${emp.id}:${toLocalDateStr(date)}`) ?? [];
+      if (cell.length) lines.push(`${dayLabel(date)}: ${cell.map(formatShiftRange).join(", ")}`);
+    }
+    const body = lines.length ? lines.join("\n") : t("scheduling.share.noShifts");
+    return `${t("scheduling.share.greeting", { name: emp.name, week: formatWeekLabel(weekDates) })}\n\n${body}\n\n${t("scheduling.share.total", { hours: formatWeeklyHours(emp.id) })}`;
   }
 
   // ── Mutations ───────────────────────────────────────────────────────────────
@@ -368,6 +382,10 @@ export function SchedulingPage() {
           <Button variant="outline" size="sm" onClick={() => { setTimeOffForm(EMPTY_TIME_OFF_FORM); setTimeOffOpen(true); }} className="gap-1.5">
             <UmbrellaOff className="h-3.5 w-3.5 text-amber-500" />
             {t("scheduling.btn.markTimeOff")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShareOpen(true)} className="gap-1.5">
+            <Send className="h-3.5 w-3.5 text-green-600" />
+            {t("scheduling.btn.sendSchedule")}
           </Button>
           <Button size="sm" onClick={() => { setShiftForm(EMPTY_SHIFT_FORM); setCreateOpen(true); }}>
             <Plus className="mr-1 h-4 w-4" /> {t("scheduling.btn.scheduleShift")}
@@ -843,6 +861,44 @@ export function SchedulingPage() {
             <Button disabled={!canSubmitTimeOff} onClick={() => createTimeOff.mutate()}>
               {createTimeOff.isPending ? t("common.saving") : t("scheduling.timeOff.btn.save")}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Send schedule dialog (WhatsApp deep-links) ── */}
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("scheduling.share.title")}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-2">
+            <Hint>{t("scheduling.share.hint")}</Hint>
+            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 max-h-80 overflow-y-auto">
+              {activeEmployees.map((emp) => {
+                const hrs = weeklyHours.get(emp.id) ?? 0;
+                const hasPhone = !!(emp.phone && emp.phone.replace(/\D/g, "").length >= 7);
+                return (
+                  <div key={emp.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{emp.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {hrs > 0 ? t("scheduling.share.hoursLabel", { hours: formatWeeklyHours(emp.id) }) : t("scheduling.share.noShifts")}
+                      </p>
+                    </div>
+                    {hasPhone ? (
+                      <a
+                        href={buildWhatsAppLink(emp.phone, buildScheduleText(emp))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" /> {t("scheduling.share.whatsapp")}
+                      </a>
+                    ) : (
+                      <span className="shrink-0 text-xs text-slate-400">{t("scheduling.share.noPhone")}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
