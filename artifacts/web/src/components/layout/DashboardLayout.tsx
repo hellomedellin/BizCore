@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Warehouse, ShoppingCart,
   Users, Clock, Calendar, Truck, Building2,
   Cog, ChevronLeft, ChevronRight, BookUser,
-  Tag, UtensilsCrossed, Carrot, LogOut,
+  Tag, UtensilsCrossed, Carrot, LogOut, TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LocationProvider, LocationSwitcher } from "@/hooks/useLocation";
@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { labelKey: "nav.employees",   href: "/dashboard/employees",    icon: Users,           module: "employees",    groupKey: "nav.group.team" },
   { labelKey: "nav.scheduling",  href: "/dashboard/scheduling",   icon: Calendar,        module: "scheduling",   groupKey: "nav.group.team" },
   { labelKey: "nav.timeTracking",href: "/dashboard/time-tracking",icon: Clock,           module: "time_tracking",groupKey: "nav.group.team" },
+  { labelKey: "nav.reports",     href: "/dashboard/reports",      icon: TrendingUp,      groupKey: "nav.group.finance" },
   { labelKey: "nav.settings",    href: "/dashboard/settings",     icon: Cog },
 ];
 
@@ -71,7 +72,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Sidebar */}
       <aside className={cn(
-        "flex flex-col border-r border-slate-200 bg-white transition-all duration-200",
+        "flex flex-col border-r border-slate-200 bg-white transition-all duration-200 print:hidden",
         collapsed ? "w-14" : "w-56"
       )}>
         {/* Logo */}
@@ -130,7 +131,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
-        <div className="sticky top-0 z-10 flex h-14 items-center justify-end border-b border-slate-200 bg-white/80 px-6 backdrop-blur">
+        <div className="sticky top-0 z-10 flex h-14 items-center justify-end border-b border-slate-200 bg-white/80 px-6 backdrop-blur print:hidden">
           <LocationSwitcher />
         </div>
         <div className="p-6">
