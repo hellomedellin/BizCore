@@ -69,6 +69,9 @@ export const itemVariantsTable = pgTable("item_variants", {
   price: numeric("price", { precision: 10, scale: 2 }),
   cost: numeric("cost", { precision: 10, scale: 2 }),
   attributes: jsonb("attributes"),
+  // "86" flag: temporarily sold out during service. Distinct from `active`
+  // (which is a soft-delete). An unavailable variant can't be added to an order.
+  isAvailable: boolean("is_available").notNull().default(true),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

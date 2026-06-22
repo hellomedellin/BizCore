@@ -19,7 +19,7 @@ import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Plus, Minus, Trash2, ShoppingCart, Printer, MessageCircle, CreditCard } from "lucide-react";
 
-interface MenuVariant { itemId: string; itemName: string; categoryName: string | null; variantId: string; variantName: string; price: string | null }
+interface MenuVariant { itemId: string; itemName: string; categoryName: string | null; variantId: string; variantName: string; price: string | null; isAvailable: boolean }
 interface Order { id: string; orderType: string; status: string; subtotal: string; tax: string; discount: string; total: string; currencyCode: string; customerId: string | null; createdAt: string; siigoInvoiceId: string | null; cufe: string | null; externalRef: string | null }
 interface OrderLine { id: string; name: string; quantity: string; unitPrice: string; lineTotal: string }
 interface Payment { id: string; method: string; amount: string; tip: string; processedAt: string; posSource: string; externalTransactionId: string | null }
@@ -274,12 +274,18 @@ export function SalesPage() {
                   {filteredMenu.map((v) => (
                     <button
                       key={v.variantId}
+                      disabled={!v.isAvailable}
                       onClick={() => addToCart(v)}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-left text-sm transition-colors hover:border-slate-900 hover:bg-slate-50"
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                        v.isAvailable
+                          ? "border-slate-200 hover:border-slate-900 hover:bg-slate-50"
+                          : "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                      }`}
                     >
-                      <div className="font-medium text-slate-900">
+                      <div className={`font-medium ${v.isAvailable ? "text-slate-900" : "text-slate-400"}`}>
                         {v.itemName}
                         {v.variantName && v.variantName !== "Default" ? <span className="text-slate-500"> · {v.variantName}</span> : null}
+                        {!v.isAvailable && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-600">{t("sales.builderDialog.soldOut")}</span>}
                       </div>
                       <div className="text-xs text-slate-500">{v.price ? fmt(v.price) : "—"}</div>
                     </button>

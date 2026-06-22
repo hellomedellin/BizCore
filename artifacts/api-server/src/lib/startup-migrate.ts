@@ -160,6 +160,9 @@ export async function runStartupMigrations(): Promise<void> {
       CREATE INDEX IF NOT EXISTS employee_default_shifts_employee_id_idx ON employee_default_shifts(employee_id)
     `);
 
+    // ── Column: item_variants.is_available (the "86" / sold-out flag) ─────────
+    await db.execute(sql`ALTER TABLE item_variants ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT true`);
+
     console.log("[migrate] Startup migrations complete");
   } catch (err) {
     console.error("[migrate] Startup migration failed:", err);

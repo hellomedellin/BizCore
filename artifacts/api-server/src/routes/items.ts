@@ -35,6 +35,8 @@ router.get("/items", ...guard, async (req, res): Promise<void> => {
         hasVariants: itemsTable.hasVariants,
         imageUrl: itemsTable.imageUrl,
         active: itemsTable.active,
+        // Available unless it has an active variant that's been marked sold out (86'd).
+        isAvailable: sql<boolean>`NOT EXISTS (SELECT 1 FROM item_variants iv WHERE iv.item_id = ${itemsTable.id} AND iv.active = true AND iv.is_available = false)`,
         createdAt: itemsTable.createdAt,
         updatedAt: itemsTable.updatedAt,
       })
@@ -62,6 +64,7 @@ router.get("/items/menu", ...guard, async (req, res): Promise<void> => {
         variantId: itemVariantsTable.id,
         variantName: itemVariantsTable.name,
         price: itemVariantsTable.price,
+        isAvailable: itemVariantsTable.isAvailable,
       })
       .from(itemVariantsTable)
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
@@ -266,6 +269,27 @@ const createVariantSchema = z.object({
   price: z.string().nullable().optional(),
   cost: z.string().nullable().optional(),
   attributes: z.record(z.string()).nullable().optional(),
+  isAvailable: z.boolean().optional(),
+});
+
+// Toggle a menu item's availability (the "86" button). Flips every active
+// variant so a one-tap switch on the menu row works for simple items.
+router.patch("/items/:id/availability", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const body = z.object({ isAvailable: z.boolean() }).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+    const [item] = await db.select({ id: itemsTable.id }).from(itemsTable).where(
+      and(eq(itemsTable.id, req.params["id"] as string), tenantWhere(itemsTable.businessId, businessId))
+    );
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+
+    await db.update(itemVariantsTable).set({ isAvailable: body.data.isAvailable }).where(eq(itemVariantsTable.itemId, item.id));
+    res.json({ id: item.id, isAvailable: body.data.isAvailable });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
 });
 
 router.post("/items/:id/variants", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {

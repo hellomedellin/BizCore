@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { RecipeEditor } from "@/components/RecipeEditor";
+import { Switch } from "@/components/ui/switch";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -27,6 +28,7 @@ interface Item {
   basePrice: string | null;
   cost: string | null;
   active: boolean;
+  isAvailable: boolean;
 }
 interface Category {
   id: string;
@@ -121,6 +123,25 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
       toast({ title: t("itemCatalog.toast.saved"), variant: "success" });
     },
     onError: (e) => toast({ title: t("itemCatalog.toast.couldntSave"), description: errText(e), variant: "destructive" }),
+  });
+
+  const toggleAvailable = useMutation({
+    mutationFn: (v: { id: string; isAvailable: boolean }) =>
+      api.patch(`/items/${v.id}/availability`, { isAvailable: v.isAvailable }),
+    onMutate: async (v) => {
+      // Optimistic: flip the row immediately so the toggle feels instant.
+      await qc.cancelQueries({ queryKey: ["items", kind] });
+      const prev = qc.getQueryData<Item[]>(["items", kind]);
+      qc.setQueryData<Item[]>(["items", kind], (old) =>
+        (old ?? []).map((it) => (it.id === v.id ? { ...it, isAvailable: v.isAvailable } : it)),
+      );
+      return { prev };
+    },
+    onError: (e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["items", kind], ctx.prev);
+      toast({ title: t("itemCatalog.toast.couldntSave"), description: errText(e), variant: "destructive" });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["items", kind] }),
   });
 
   const remove = useMutation({
@@ -221,12 +242,18 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                   <th className="px-4 py-3 text-left font-medium text-slate-600">{cfg.amountLabel}</th>
                   {kind === "menu" && <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.margin")}</th>}
                   {kind === "menu" && <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.category")}</th>}
+                  {kind === "menu" && <th className="px-4 py-3 text-right font-medium text-slate-600">{t("itemCatalog.table.col.available")}</th>}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((it) => (
-                  <tr key={it.id} onClick={() => openEdit(it)} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium">{it.name}</td>
+                  <tr key={it.id} onClick={() => openEdit(it)} className={`cursor-pointer border-b border-slate-50 hover:bg-slate-50 ${kind === "menu" && !it.isAvailable ? "bg-slate-50/60" : ""}`}>
+                    <td className="px-4 py-3 font-medium">
+                      <span className={kind === "menu" && !it.isAvailable ? "text-slate-400" : ""}>{it.name}</span>
+                      {kind === "menu" && !it.isAvailable && (
+                        <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">{t("itemCatalog.soldOut")}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{amountOf(it) ? fmt(amountOf(it)!) : "—"}</td>
                     {kind === "menu" && (
                       <td className="px-4 py-3">
@@ -239,11 +266,21 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                       </td>
                     )}
                     {kind === "menu" && <td className="px-4 py-3 text-slate-500">{it.categoryName ?? "—"}</td>}
+                    {kind === "menu" && (
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={it.isAvailable}
+                          onCheckedChange={(next) => toggleAvailable.mutate({ id: it.id, isAvailable: next })}
+                          aria-label={t("itemCatalog.table.col.available")}
+                          className="ml-auto"
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={kind === "menu" ? 4 : 2} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={kind === "menu" ? 5 : 2} className="px-4 py-8 text-center text-slate-400">
                       {t("itemCatalog.table.noMatches")}
                     </td>
                   </tr>
