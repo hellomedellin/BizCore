@@ -31,6 +31,7 @@ import paymentsRouter from "./routes/payments";
 import receiptsRouter from "./routes/receipts";
 import siigoRouter from "./routes/siigo";
 import meRouter from "./routes/me";
+import dashboardRouter from "./routes/dashboard";
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use("/api/v1", paymentsRouter);
 app.use("/api/v1", receiptsRouter);
 app.use("/api/v1", siigoRouter);
 app.use("/api/v1/me", meRouter);
+app.use("/api/v1", dashboardRouter);
 
 // Global error handler
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
