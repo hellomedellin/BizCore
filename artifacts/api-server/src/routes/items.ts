@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
-import { itemsTable, itemVariantsTable, categoriesTable } from "@bizcore/db/schema";
-import { eq, and, ilike, inArray, SQL } from "drizzle-orm";
+import { itemsTable, itemVariantsTable, categoriesTable, consumptionProfilesTable, consumptionProfileLinesTable } from "@bizcore/db/schema";
+import { eq, and, ilike, inArray, sql, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -84,12 +84,78 @@ router.get("/items/ingredients", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;
   try {
     const rows = await db
-      .select({ itemId: itemsTable.id, itemName: itemsTable.name, variantId: itemVariantsTable.id, variantName: itemVariantsTable.name })
+      .select({
+        itemId: itemsTable.id,
+        itemName: itemsTable.name,
+        variantId: itemVariantsTable.id,
+        variantName: itemVariantsTable.name,
+        cost: sql<string | null>`coalesce(${itemVariantsTable.cost}, ${itemsTable.cost})`,
+      })
       .from(itemVariantsTable)
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
       .where(and(tenantWhere(itemsTable.businessId, businessId), eq(itemsTable.type, "resource"), eq(itemsTable.active, true), eq(itemVariantsTable.active, true)))
       .orderBy(itemsTable.name);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Plate cost + margin per menu item, computed from recipes (consumption profiles).
+// plateCost = Σ (recipe line quantity × ingredient unit cost). Null when no recipe.
+// Note: assumes recipe quantity and ingredient cost share a unit (no unit conversion yet).
+router.get("/menu/costing", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const menuItems = await db
+      .select({ id: itemsTable.id, basePrice: itemsTable.basePrice })
+      .from(itemsTable)
+      .where(and(
+        tenantWhere(itemsTable.businessId, businessId),
+        inArray(itemsTable.type, ["product", "service", "bundle"]),
+        eq(itemsTable.active, true),
+      ));
+
+    const lines = await db
+      .select({
+        outputItemId: consumptionProfilesTable.outputItemId,
+        quantity: consumptionProfileLinesTable.quantity,
+        variantCost: itemVariantsTable.cost,
+        itemCost: itemsTable.cost,
+      })
+      .from(consumptionProfilesTable)
+      .innerJoin(consumptionProfileLinesTable, eq(consumptionProfileLinesTable.profileId, consumptionProfilesTable.id))
+      .leftJoin(itemVariantsTable, eq(consumptionProfileLinesTable.resourceVariantId, itemVariantsTable.id))
+      .leftJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .where(and(
+        tenantWhere(consumptionProfilesTable.businessId, businessId),
+        eq(consumptionProfilesTable.active, true),
+        eq(consumptionProfileLinesTable.lineType, "resource"),
+      ));
+
+    const costByItem = new Map<string, number>();
+    for (const l of lines) {
+      if (!l.quantity) continue;
+      const unit = parseFloat(l.variantCost ?? l.itemCost ?? "0");
+      const qty = parseFloat(l.quantity);
+      if (!Number.isFinite(unit) || !Number.isFinite(qty)) continue;
+      costByItem.set(l.outputItemId, (costByItem.get(l.outputItemId) ?? 0) + unit * qty);
+    }
+
+    const result = menuItems.map((it) => {
+      const plateCost = costByItem.has(it.id) ? costByItem.get(it.id)! : null;
+      const price = it.basePrice ? parseFloat(it.basePrice) : null;
+      const marginPct = plateCost != null && price != null && price > 0
+        ? Math.round(((price - plateCost) / price) * 100)
+        : null;
+      return {
+        itemId: it.id,
+        plateCost: plateCost != null ? plateCost.toFixed(2) : null,
+        price: it.basePrice ?? null,
+        marginPct,
+      };
+    });
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }

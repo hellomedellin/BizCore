@@ -71,6 +71,12 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
     queryKey: ["categories"],
     queryFn: () => api.get("/categories").then((r) => r.data as Category[]),
   });
+  const { data: costing } = useQuery({
+    queryKey: ["menu-costing"],
+    queryFn: () => api.get("/menu/costing").then((r) => r.data as { itemId: string; marginPct: number | null }[]),
+    enabled: kind === "menu",
+  });
+  const marginOf = (id: string) => costing?.find((c) => c.itemId === id)?.marginPct ?? null;
 
   const filtered = (items ?? []).filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -110,6 +116,7 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["menu-costing"] });
       setEditing(null);
       toast({ title: t("itemCatalog.toast.saved"), variant: "success" });
     },
@@ -212,6 +219,7 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.name")}</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">{cfg.amountLabel}</th>
+                  {kind === "menu" && <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.margin")}</th>}
                   {kind === "menu" && <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.category")}</th>}
                 </tr>
               </thead>
@@ -220,12 +228,22 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                   <tr key={it.id} onClick={() => openEdit(it)} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50">
                     <td className="px-4 py-3 font-medium">{it.name}</td>
                     <td className="px-4 py-3 text-slate-600">{amountOf(it) ? fmt(amountOf(it)!) : "—"}</td>
+                    {kind === "menu" && (
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const m = marginOf(it.id);
+                          if (m == null) return <span className="text-slate-300">—</span>;
+                          const tone = m >= 60 ? "text-emerald-600" : m >= 30 ? "text-amber-600" : "text-red-600";
+                          return <span className={`font-medium tabular-nums ${tone}`}>{m}%</span>;
+                        })()}
+                      </td>
+                    )}
                     {kind === "menu" && <td className="px-4 py-3 text-slate-500">{it.categoryName ?? "—"}</td>}
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={kind === "menu" ? 3 : 2} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={kind === "menu" ? 4 : 2} className="px-4 py-8 text-center text-slate-400">
                       {t("itemCatalog.table.noMatches")}
                     </td>
                   </tr>
@@ -261,7 +279,7 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
             <DialogTitle>Edit {cfg.editLabel}</DialogTitle>
           </DialogHeader>
           {renderFields()}
-          {kind === "menu" && editing ? <RecipeEditor itemId={editing.id} itemName={editing.name} /> : null}
+          {kind === "menu" && editing ? <RecipeEditor itemId={editing.id} itemName={editing.name} price={editing.basePrice} /> : null}
           <div className="flex items-center justify-between pt-1">
             <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirmDelete(true)}>
               {t("itemCatalog.btn.remove")}

@@ -73,6 +73,7 @@ const es = {
   "itemCatalog.search.placeholder": "Buscar…",
   "itemCatalog.table.col.name": "Nombre",
   "itemCatalog.table.col.category": "Categoría",
+  "itemCatalog.table.col.margin": "Margen",
   "itemCatalog.table.noMatches": "Sin resultados.",
   "itemCatalog.form.label.name": "Nombre *",
   "itemCatalog.form.label.category": "Categoría",

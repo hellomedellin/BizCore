@@ -6,17 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Hint } from "@/components/ui/hint";
 import { toast } from "@/hooks/use-toast";
+import { useCurrency } from "@/hooks/useCurrency";
 import { Plus, Trash2 } from "lucide-react";
 
 interface Profile { id: string; outputItemId: string }
 interface Line { id: string; lineType: string; resourceVariantId: string | null; quantity: string | null; unitId: string | null }
-interface Ingredient { itemId: string; itemName: string; variantId: string; variantName: string }
+interface Ingredient { itemId: string; itemName: string; variantId: string; variantName: string; cost: string | null }
 interface Unit { id: string; name: string; abbreviation: string }
 
 // Inline recipe editor shown on a menu item: list the ingredients it consumes so
-// selling the item auto-deducts stock. Optional, with a nudge.
-export function RecipeEditor({ itemId, itemName }: { itemId: string; itemName: string }) {
+// selling the item auto-deducts stock. Optional, with a nudge. Shows live plate
+// cost + margin so pricing isn't blind.
+export function RecipeEditor({ itemId, itemName, price }: { itemId: string; itemName: string; price?: string | null }) {
   const qc = useQueryClient();
+  const { fmt } = useCurrency();
   const [ingredientVariantId, setIngredientVariantId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unitId, setUnitId] = useState("");
@@ -33,8 +36,19 @@ export function RecipeEditor({ itemId, itemName }: { itemId: string; itemName: s
 
   const errText = (e: any) => e?.response?.data?.error ?? "Please try again.";
   const ingredientName = (vid: string | null) => ingredients?.find((i) => i.variantId === vid)?.itemName ?? "Ingredient";
+  const ingredientCost = (vid: string | null) => ingredients?.find((i) => i.variantId === vid)?.cost ?? null;
   const unitAbbr = (uid: string | null) => units?.find((u) => u.id === uid)?.abbreviation ?? "";
   const resourceLines = (detail?.lines ?? []).filter((l) => l.lineType === "resource");
+
+  // Live plate cost: Σ (line quantity × ingredient unit cost). Margin needs a price.
+  const plateCost = resourceLines.reduce((sum, l) => {
+    const c = parseFloat(ingredientCost(l.resourceVariantId) ?? "0");
+    const q = parseFloat(l.quantity ?? "0");
+    return sum + (Number.isFinite(c) && Number.isFinite(q) ? c * q : 0);
+  }, 0);
+  const priceNum = price ? parseFloat(price) : null;
+  const hasCost = resourceLines.some((l) => ingredientCost(l.resourceVariantId));
+  const marginPct = priceNum && priceNum > 0 && hasCost ? Math.round(((priceNum - plateCost) / priceNum) * 100) : null;
 
   const addLine = useMutation({
     mutationFn: async () => {
@@ -48,6 +62,7 @@ export function RecipeEditor({ itemId, itemName }: { itemId: string; itemName: s
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consumption-profiles"] });
       qc.invalidateQueries({ queryKey: ["consumption-profile"] });
+      qc.invalidateQueries({ queryKey: ["menu-costing"] });
       setIngredientVariantId("");
       setQuantity("");
       setUnitId("");
@@ -83,6 +98,18 @@ export function RecipeEditor({ itemId, itemName }: { itemId: string; itemName: s
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {resourceLines.length > 0 && hasCost && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-white px-3 py-2 text-xs border border-slate-100">
+          <span className="text-slate-500">Plate cost <span className="font-semibold text-slate-800">{fmt(plateCost)}</span></span>
+          {priceNum != null && <span className="text-slate-500">Sells for <span className="font-semibold text-slate-800">{fmt(priceNum)}</span></span>}
+          {marginPct != null && (
+            <span className={`font-semibold ${marginPct >= 60 ? "text-emerald-600" : marginPct >= 30 ? "text-amber-600" : "text-red-600"}`}>
+              {marginPct}% margin
+            </span>
+          )}
         </div>
       )}
 

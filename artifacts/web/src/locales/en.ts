@@ -73,6 +73,7 @@ const en: Record<keyof Translations, string> = {
   "itemCatalog.search.placeholder": "Search…",
   "itemCatalog.table.col.name": "Name",
   "itemCatalog.table.col.category": "Category",
+  "itemCatalog.table.col.margin": "Margin",
   "itemCatalog.table.noMatches": "No matches.",
   "itemCatalog.form.label.name": "Name *",
   "itemCatalog.form.label.category": "Category",
