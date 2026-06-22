@@ -53,6 +53,7 @@ export function IngredientsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [counting, setCounting] = useState<Row | null>(null);
   const [count, setCount] = useState("");
+  const [threshold, setThreshold] = useState("");
 
   const errText = (e: any) => e?.response?.data?.error ?? t("common.error");
 
@@ -150,19 +151,34 @@ export function IngredientsPage() {
   });
 
   const setCountM = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const row = counting!;
       const current = parseFloat(row.level?.quantity ?? "0");
       const target = parseFloat(count || "0");
       const delta = (target - current).toString();
-      return api.post("/inventory/adjust", {
-        variantId: row.level!.variantId,
-        locationId: activeLocationId,
-        type: "adjust",
-        quantityChange: delta,
-        ...(row.level?.unitId ? { unitId: row.level.unitId } : {}),
-        notes: "Stock count",
-      });
+      const promises: Promise<any>[] = [];
+
+      if (delta !== "0") {
+        promises.push(api.post("/inventory/adjust", {
+          variantId: row.level!.variantId,
+          locationId: activeLocationId,
+          type: "adjust",
+          quantityChange: delta,
+          ...(row.level?.unitId ? { unitId: row.level.unitId } : {}),
+          notes: "Stock count",
+        }));
+      }
+
+      const existingThreshold = row.level?.lowStockThreshold ?? "";
+      if (threshold !== existingThreshold) {
+        promises.push(api.patch("/inventory/threshold", {
+          variantId: row.level!.variantId,
+          locationId: activeLocationId,
+          lowStockThreshold: threshold || null,
+        }));
+      }
+
+      await Promise.all(promises);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-levels"] });
@@ -185,6 +201,7 @@ export function IngredientsPage() {
 
   function openCount(row: Row) {
     setCount(row.level?.quantity ?? "0");
+    setThreshold(row.level?.lowStockThreshold ?? "");
     setCounting(row);
   }
 
@@ -217,6 +234,18 @@ export function IngredientsPage() {
           <span>{t("ingredient.noLocationBanner")}</span>
         </div>
       )}
+
+      {/* Low stock warning banner */}
+      {showStock && (() => {
+        const lowCount = rows.filter((r) => r.level?.isLowStock).length;
+        if (!lowCount) return null;
+        return (
+          <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>{t("ingredient.lowStockBanner", { count: String(lowCount) })}</span>
+          </div>
+        );
+      })()}
 
       {isLoading ? null : (items ?? []).length === 0 ? (
         <GuidedEmptyState
@@ -263,10 +292,10 @@ export function IngredientsPage() {
                     <tr
                       key={ing.id}
                       onClick={() => openEdit(ing)}
-                      className="cursor-pointer border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors"
+                      className={`cursor-pointer border-b border-slate-50 last:border-0 transition-colors ${level?.isLowStock ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50"}`}
                     >
                       <td className="px-4 py-3">
-                        <p className="font-medium text-slate-900">{ing.name}</p>
+                        <p className={`font-medium ${level?.isLowStock ? "text-red-700" : "text-slate-900"}`}>{ing.name}</p>
                         {ing.description && (
                           <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">{ing.description}</p>
                         )}
@@ -277,9 +306,9 @@ export function IngredientsPage() {
                       </td>
                       {showStock && (
                         <>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                          <td className={`px-4 py-3 text-right tabular-nums font-medium ${level?.isLowStock ? "text-red-700" : "text-slate-700"}`}>
                             {qty !== null
-                              ? <>{qty % 1 === 0 ? qty.toFixed(0) : qty.toFixed(2)}{unit && <span className="text-slate-400 text-xs ml-1">{unit}</span>}</>
+                              ? <>{qty % 1 === 0 ? qty.toFixed(0) : qty.toFixed(2)}{unit && <span className={`text-xs ml-1 ${level?.isLowStock ? "text-red-400" : "text-slate-400"}`}>{unit}</span>}</>
                               : <span className="text-slate-300">—</span>
                             }
                           </td>
@@ -429,6 +458,16 @@ export function IngredientsPage() {
                 placeholder="0"
               />
               <Hint>{t("stock.countDialog.hint")}</Hint>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("ingredient.threshold.label")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
+              <Input
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                inputMode="decimal"
+                placeholder={t("ingredient.threshold.placeholder")}
+              />
+              <Hint>{t("ingredient.threshold.hint")}</Hint>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCounting(null)}>{t("stock.countDialog.btn.cancel")}</Button>

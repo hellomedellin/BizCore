@@ -65,6 +65,10 @@ const en: Record<keyof Translations, string> = {
   "ingredient.toast.added": "Ingredient added",
   "ingredient.toast.saved": "Ingredient saved",
   "ingredient.toast.removed": "Ingredient removed",
+  "ingredient.threshold.label": "Alert when stock drops below",
+  "ingredient.threshold.placeholder": "e.g. 5",
+  "ingredient.threshold.hint": "Row turns red and a warning appears when on-hand quantity reaches this level.",
+  "ingredient.lowStockBanner": "{count} ingredient(s) are running low — check the red rows below.",
 
   "itemCatalog.search.placeholder": "Search…",
   "itemCatalog.table.col.name": "Name",

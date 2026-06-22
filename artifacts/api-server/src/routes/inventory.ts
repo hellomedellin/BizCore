@@ -160,6 +160,44 @@ router.post("/inventory/adjust", ...guard, requireRole("admin", "manager"), asyn
   }
 });
 
+// Set low-stock alert threshold for a variant at a location
+const thresholdSchema = z.object({
+  variantId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  lowStockThreshold: z.string().nullable(),
+});
+
+router.patch("/inventory/threshold", ...guard, requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const { businessId, allowedLocationIds } = req as AuthedRequest;
+  try {
+    const body = thresholdSchema.safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+    if (!(await isLocationAllowed(db, businessId, allowedLocationIds, body.data.locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
+
+    const [ownsVariant] = await db.select({ id: itemVariantsTable.id }).from(itemVariantsTable)
+      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .where(and(eq(itemVariantsTable.id, body.data.variantId), tenantWhere(itemsTable.businessId, businessId)));
+    if (!ownsVariant) { res.status(404).json({ error: "Item not found" }); return; }
+
+    await db
+      .insert(inventoryTable)
+      .values({
+        variantId: body.data.variantId,
+        locationId: body.data.locationId,
+        quantity: "0",
+        lowStockThreshold: body.data.lowStockThreshold,
+      })
+      .onConflictDoUpdate({
+        target: [inventoryTable.variantId, inventoryTable.locationId],
+        set: { lowStockThreshold: body.data.lowStockThreshold },
+      });
+
+    res.json({ message: "Threshold updated" });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
 // Inventory transactions log
 router.get("/inventory/transactions", ...guard, async (req, res): Promise<void> => {
   const { businessId } = req as AuthedRequest;

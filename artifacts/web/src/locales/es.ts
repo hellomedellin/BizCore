@@ -65,6 +65,10 @@ const es = {
   "ingredient.toast.added": "Ingrediente agregado",
   "ingredient.toast.saved": "Ingrediente guardado",
   "ingredient.toast.removed": "Ingrediente eliminado",
+  "ingredient.threshold.label": "Alertar cuando el stock baje de",
+  "ingredient.threshold.placeholder": "ej. 5",
+  "ingredient.threshold.hint": "La fila se pone roja y aparece un aviso cuando la cantidad en mano llega a este nivel.",
+  "ingredient.lowStockBanner": "{count} ingrediente(s) están por agotarse — revisa las filas en rojo abajo.",
 
   "itemCatalog.search.placeholder": "Buscar…",
   "itemCatalog.table.col.name": "Nombre",
