@@ -20,6 +20,7 @@ import { SuppliersPage } from "@/pages/SuppliersPage";
 import { CustomersPage } from "@/pages/CustomersPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
+import { CashReconciliationPage } from "@/pages/CashReconciliationPage";
 
 // Employee portal pages
 import { MeHomePage } from "@/pages/me/MeHomePage";
@@ -108,6 +109,9 @@ export default function App() {
       </Route>
       <Route path="/dashboard/reports">
         <DashboardLayout><ReportsPage /></DashboardLayout>
+      </Route>
+      <Route path="/dashboard/cash">
+        <DashboardLayout><CashReconciliationPage /></DashboardLayout>
       </Route>
 
       <Route>

@@ -163,6 +163,27 @@ export async function runStartupMigrations(): Promise<void> {
     // ── Column: item_variants.is_available (the "86" / sold-out flag) ─────────
     await db.execute(sql`ALTER TABLE item_variants ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT true`);
 
+    // ── Table: cash_reconciliations (end-of-shift cash counts) ────────────────
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS cash_reconciliations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        location_id UUID NOT NULL,
+        opened_at TIMESTAMPTZ,
+        closed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expected_cash NUMERIC(12,2) NOT NULL,
+        counted_cash NUMERIC(12,2) NOT NULL,
+        variance NUMERIC(12,2) NOT NULL,
+        denominations TEXT,
+        notes TEXT,
+        created_by TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS cash_recon_business_location_idx ON cash_reconciliations(business_id, location_id)
+    `);
+
     console.log("[migrate] Startup migrations complete");
   } catch (err) {
     console.error("[migrate] Startup migration failed:", err);

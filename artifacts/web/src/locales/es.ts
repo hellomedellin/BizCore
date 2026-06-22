@@ -723,6 +723,26 @@ const es = {
 
   // ── Navigation: Reports ──────────────────────────────────────────────────────
   "nav.reports": "Informes",
+  "nav.cash": "Caja",
+  "cash.title": "Cuadre de caja",
+  "cash.subtitle": "Cuenta la caja al cierre de turno y detecta cualquier diferencia.",
+  "cash.noLocationBanner": "Selecciona una ubicación en la barra superior para cuadrar su caja.",
+  "cash.count.title": "Contar la caja",
+  "cash.count.countedLabel": "Total contado",
+  "cash.count.notes": "Notas",
+  "cash.count.notesPlaceholder": "ej. base dejada en la caja",
+  "cash.count.record": "Registrar conteo",
+  "cash.summary.title": "Esperado vs contado",
+  "cash.summary.hint": "Esperado = ventas en efectivo desde {since}.",
+  "cash.summary.start": "el inicio",
+  "cash.summary.expected": "Esperado en caja",
+  "cash.summary.counted": "Contaste",
+  "cash.summary.variance": "Diferencia",
+  "cash.history.title": "Conteos anteriores",
+  "cash.history.empty": "Aún no hay conteos registrados.",
+  "cash.history.when": "Cuándo",
+  "cash.toast.recorded": "Conteo de caja registrado",
+  "cash.toast.couldntRecord": "No se pudo registrar el conteo",
 
   // ── Reports ──────────────────────────────────────────────────────────────────
   "reports.title": "Informes",

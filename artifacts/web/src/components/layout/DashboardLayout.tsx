@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingCart,
   Users, Clock, Calendar, Truck, Building2,
   Cog, ChevronLeft, ChevronRight, BookUser,
-  Tag, UtensilsCrossed, Carrot, LogOut, TrendingUp,
+  Tag, UtensilsCrossed, Carrot, LogOut, TrendingUp, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LocationProvider, LocationSwitcher } from "@/hooks/useLocation";
@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   { labelKey: "nav.employees",   href: "/dashboard/employees",    icon: Users,           module: "employees",    groupKey: "nav.group.team" },
   { labelKey: "nav.scheduling",  href: "/dashboard/scheduling",   icon: Calendar,        module: "scheduling",   groupKey: "nav.group.team" },
   { labelKey: "nav.timeTracking",href: "/dashboard/time-tracking",icon: Clock,           module: "time_tracking",groupKey: "nav.group.team" },
+  { labelKey: "nav.cash",        href: "/dashboard/cash",         icon: Wallet,          groupKey: "nav.group.finance" },
   { labelKey: "nav.reports",     href: "/dashboard/reports",      icon: TrendingUp,      groupKey: "nav.group.finance" },
   { labelKey: "nav.settings",    href: "/dashboard/settings",     icon: Cog },
 ];

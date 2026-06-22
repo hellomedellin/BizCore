@@ -80,3 +80,27 @@ export const siigoConnectionsTable = pgTable("siigo_connections", {
 ]);
 
 export type SiigoConnection = typeof siigoConnectionsTable.$inferSelect;
+
+// ─── cash_reconciliations ─────────────────────────────────────────────────────
+// An end-of-shift cash count. expectedCash is the sum of cash payments at the
+// location since the previous reconciliation; countedCash is what the manager
+// physically counted; variance = counted − expected (negative = drawer short).
+
+export const cashReconciliationsTable = pgTable("cash_reconciliations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businessesTable.id, { onDelete: "cascade" }),
+  locationId: uuid("location_id").notNull(),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
+  expectedCash: numeric("expected_cash", { precision: 12, scale: 2 }).notNull(),
+  countedCash: numeric("counted_cash", { precision: 12, scale: 2 }).notNull(),
+  variance: numeric("variance", { precision: 12, scale: 2 }).notNull(),
+  denominations: text("denominations"), // JSON string: { "50000": 4, "10000": 7, … }
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("cash_recon_business_location_idx").on(t.businessId, t.locationId),
+]);
+
+export type CashReconciliation = typeof cashReconciliationsTable.$inferSelect;
