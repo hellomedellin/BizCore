@@ -723,7 +723,17 @@ const es = {
 
   // ── Navigation: Reports ──────────────────────────────────────────────────────
   "nav.reports": "Informes",
+  "nav.kitchen": "Cocina",
   "nav.cash": "Caja",
+  "kitchen.title": "Cocina",
+  "kitchen.back": "Volver al panel",
+  "kitchen.autoRefresh": "Actualizando solo",
+  "kitchen.empty": "No hay comandas abiertas. Todo al día.",
+  "kitchen.table": "Mesa",
+  "kitchen.btn.start": "Empezar a preparar",
+  "kitchen.btn.ready": "Marcar lista",
+  "kitchen.status.ready": "Lista ✓",
+  "kitchen.couldntUpdate": "No se pudo actualizar la comanda",
   "cash.title": "Cuadre de caja",
   "cash.subtitle": "Cuenta la caja al cierre de turno y detecta cualquier diferencia.",
   "cash.noLocationBanner": "Selecciona una ubicación en la barra superior para cuadrar su caja.",

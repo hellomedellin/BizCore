@@ -21,6 +21,7 @@ import { CustomersPage } from "@/pages/CustomersPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { CashReconciliationPage } from "@/pages/CashReconciliationPage";
+import { KitchenPage } from "@/pages/KitchenPage";
 
 // Employee portal pages
 import { MeHomePage } from "@/pages/me/MeHomePage";
@@ -64,6 +65,9 @@ export default function App() {
           <MeSchedulePage />
         </EmployeePortalLayout>
       </Route>
+
+      {/* Kitchen display — full-screen, no dashboard chrome */}
+      <Route path="/kitchen"><KitchenPage /></Route>
 
       {/* Onboarding */}
       <Route path="/onboarding" component={OnboardingPage} />

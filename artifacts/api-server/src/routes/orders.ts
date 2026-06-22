@@ -4,7 +4,7 @@ import {
   ordersTable, orderLinesTable, orderStatusHistoryTable,
   itemVariantsTable, itemsTable, businessesTable,
 } from "@bizcore/db/schema";
-import { eq, and, ne, desc, SQL } from "drizzle-orm";
+import { eq, and, ne, desc, inArray, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, requireApiKey, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -150,6 +150,33 @@ router.post("/orders/ingest", requireApiKey, async (req, res): Promise<void> => 
     });
 
     res.status(201).json(order);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+  }
+});
+
+// Kitchen display: open (not-yet-served) orders with their lines, one payload.
+// Oldest first so the kitchen works FIFO. Declared before /orders/:id.
+router.get("/orders/kitchen", ...guard, async (req, res): Promise<void> => {
+  const { businessId } = req as AuthedRequest;
+  try {
+    const conds = [
+      tenantWhere(ordersTable.businessId, businessId),
+      inArray(ordersTable.status, ["pending", "confirmed", "in_progress", "ready"]),
+    ];
+    if (req.query["locationId"]) conds.push(eq(ordersTable.locationId, req.query["locationId"] as string));
+
+    const orders = await db.select().from(ordersTable).where(and(...conds)).orderBy(ordersTable.createdAt);
+    const ids = orders.map((o) => o.id);
+    const lines = ids.length
+      ? await db.select().from(orderLinesTable).where(inArray(orderLinesTable.orderId, ids))
+      : [];
+    const byOrder = new Map<string, typeof lines>();
+    for (const l of lines) {
+      if (!byOrder.has(l.orderId)) byOrder.set(l.orderId, []);
+      byOrder.get(l.orderId)!.push(l);
+    }
+    res.json(orders.map((o) => ({ ...o, lines: byOrder.get(o.id) ?? [] })));
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
   }
