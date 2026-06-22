@@ -423,6 +423,7 @@ const es = {
   "scheduling.btn.generating": "Generando…",
   "scheduling.btn.thisWeek": "Esta semana",
   "scheduling.calendar.team": "Equipo",
+  "scheduling.calendar.hrsHeader": "Hrs",
   "scheduling.toast.generated": "Se generaron {count} turnos",
   "scheduling.toast.nothingToGenerate": "Sin cambios — todos los turnos ya existen o no hay plantillas configuradas",
   "scheduling.toast.couldntGenerate": "No se pudieron generar los turnos",

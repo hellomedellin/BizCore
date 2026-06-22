@@ -414,6 +414,7 @@ const en: Record<keyof Translations, string> = {
   "scheduling.btn.generating": "Generating…",
   "scheduling.btn.thisWeek": "This week",
   "scheduling.calendar.team": "Team",
+  "scheduling.calendar.hrsHeader": "Hrs",
   "scheduling.toast.generated": "Generated {count} shifts",
   "scheduling.toast.nothingToGenerate": "Nothing to generate — all shifts already exist or no defaults are set",
   "scheduling.toast.couldntGenerate": "Couldn't generate shifts",
