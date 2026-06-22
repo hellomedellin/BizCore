@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import {
-  LayoutDashboard, Warehouse, ShoppingCart,
+  LayoutDashboard, ShoppingCart,
   Users, Clock, Calendar, Truck, Building2,
   Cog, ChevronLeft, ChevronRight, BookUser,
   Tag, UtensilsCrossed, Carrot, LogOut, TrendingUp,
@@ -25,7 +25,6 @@ const NAV: NavItem[] = [
   { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
   { labelKey: "nav.menu",        href: "/dashboard/menu",         icon: UtensilsCrossed, module: "inventory",    groupKey: "nav.group.operations" },
   { labelKey: "nav.ingredients", href: "/dashboard/ingredients",  icon: Carrot,          module: "inventory",    groupKey: "nav.group.operations" },
-  { labelKey: "nav.stock",       href: "/dashboard/stock",        icon: Warehouse,       module: "inventory",    groupKey: "nav.group.operations" },
   { labelKey: "nav.sales",       href: "/dashboard/sales",        icon: ShoppingCart,    module: "orders",       groupKey: "nav.group.operations" },
   { labelKey: "nav.customers",   href: "/dashboard/customers",    icon: BookUser,        module: "customers",    groupKey: "nav.group.operations" },
   { labelKey: "nav.suppliers",   href: "/dashboard/suppliers",    icon: Tag,             module: "purchasing",   groupKey: "nav.group.purchasing" },
