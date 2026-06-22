@@ -155,22 +155,24 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
           <Input value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder={t("itemCatalog.form.placeholder.amount")} inputMode="decimal" />
           <Hint>{cfg.amountHint}</Hint>
         </div>
-        <div className="space-y-1.5">
-          <Label>{t("itemCatalog.form.label.category")}</Label>
-          <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
-            <SelectTrigger>
-              <SelectValue placeholder={t("itemCatalog.form.category.none")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t("itemCatalog.form.category.none")}</SelectItem>
-              {(categories ?? []).map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {kind === "menu" && (
+          <div className="space-y-1.5">
+            <Label>{t("itemCatalog.form.label.category")}</Label>
+            <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
+              <SelectTrigger>
+                <SelectValue placeholder={t("itemCatalog.form.category.none")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t("itemCatalog.form.category.none")}</SelectItem>
+                {(categories ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>{t("itemCatalog.form.label.description")}</Label>
           <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("itemCatalog.form.placeholder.description")} />
@@ -209,7 +211,7 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.name")}</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">{cfg.amountLabel}</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.category")}</th>
+                  {kind === "menu" && <th className="px-4 py-3 text-left font-medium text-slate-600">{t("itemCatalog.table.col.category")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -217,12 +219,12 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
                   <tr key={it.id} onClick={() => openEdit(it)} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50">
                     <td className="px-4 py-3 font-medium">{it.name}</td>
                     <td className="px-4 py-3 text-slate-600">{amountOf(it) ? formatCurrency(amountOf(it)!) : "—"}</td>
-                    <td className="px-4 py-3 text-slate-500">{it.categoryName ?? "—"}</td>
+                    {kind === "menu" && <td className="px-4 py-3 text-slate-500">{it.categoryName ?? "—"}</td>}
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={kind === "menu" ? 3 : 2} className="px-4 py-8 text-center text-slate-400">
                       {t("itemCatalog.table.noMatches")}
                     </td>
                   </tr>
