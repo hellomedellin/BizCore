@@ -143,7 +143,7 @@ export function CashReconciliationPage() {
           {/* History */}
           <Card className="lg:col-span-2">
             <CardHeader className="pb-3"><CardTitle className="text-base">{t("cash.history.title")}</CardTitle></CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {!(data?.history.length) ? (
                 <p className="px-5 py-6 text-sm text-slate-400">{t("cash.history.empty")}</p>
               ) : (

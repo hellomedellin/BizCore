@@ -560,6 +560,15 @@ const es = {
 
   // ── Settings ─────────────────────────────────────────────────────────────────
   "settings.title": "Configuración",
+  "settings.tab.business": "Negocio",
+  "settings.tab.team": "Equipo",
+  "settings.tab.locations": "Ubicaciones",
+  "settings.tab.categories": "Categorías",
+  "settings.tab.integrations": "Integraciones",
+  "settings.tab.advanced": "Avanzado",
+  "settings.modules.confirmOff.title": "¿Desactivar esta función?",
+  "settings.modules.confirmOff.description": "Su sección se ocultará del menú y sus datos no estarán accesibles hasta que la vuelvas a activar. No se elimina nada.",
+  "settings.modules.confirmOff.confirm": "Desactivar",
   "settings.business.cardTitle": "Negocio",
   "settings.business.btn.edit": "Editar",
   "settings.business.field.name": "Nombre",

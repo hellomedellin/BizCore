@@ -190,7 +190,7 @@ export function PurchasesPage() {
         />
       ) : (
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>

@@ -61,6 +61,9 @@ export function SettingsPage() {
   const { data: apiKeys } = useQuery({ queryKey: ["api-keys"], queryFn: () => api.get("/api-keys").then((r) => r.data) });
   const enabledSet = new Set((modules ?? []).filter((m) => m.enabled).map((m) => m.module));
 
+  const [settingsTab, setSettingsTab] = useState<"business" | "team" | "locations" | "categories" | "integrations" | "advanced">("business");
+  const [confirmModuleOff, setConfirmModuleOff] = useState<string | null>(null);
+
   // ── business edit ─────────────────────────────────────────────────────────
   const [bizOpen, setBizOpen] = useState(false);
   const [biz, setBiz] = useState({ name: "", currencyCode: "COP", timezone: "America/Bogota", phone: "", email: "", address: "" });
@@ -290,11 +293,38 @@ export function SettingsPage() {
     onError: (e) => toast({ title: t("settings.toast.syncFailed"), description: errText(e), variant: "destructive" }),
   });
 
+  const SETTINGS_TABS = [
+    { key: "business" as const, label: t("settings.tab.business") },
+    { key: "team" as const, label: t("settings.tab.team") },
+    { key: "locations" as const, label: t("settings.tab.locations") },
+    { key: "categories" as const, label: t("settings.tab.categories") },
+    { key: "integrations" as const, label: t("settings.tab.integrations") },
+    { key: "advanced" as const, label: t("settings.tab.advanced") },
+  ];
+
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-6 max-w-3xl">
       <h1 className="text-2xl font-bold text-slate-900">{t("settings.title")}</h1>
 
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-1 border-b border-slate-200 -mb-px overflow-x-auto">
+        {SETTINGS_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setSettingsTab(tab.key)}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              settingsTab === tab.key
+                ? "border-slate-900 text-slate-900"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Business */}
+      {settingsTab === "business" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("settings.business.cardTitle")}</CardTitle>
@@ -316,8 +346,10 @@ export function SettingsPage() {
           ))}
         </CardContent>
       </Card>
+      )}
 
       {/* Team */}
+      {settingsTab === "team" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("settings.team.cardTitle")}</CardTitle>
@@ -356,8 +388,10 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Locations */}
+      {settingsTab === "locations" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("settings.locations.cardTitle")}</CardTitle>
@@ -376,8 +410,10 @@ export function SettingsPage() {
           {!(locations ?? []).length && <p className="text-sm text-slate-400">{t("settings.locations.empty")}</p>}
         </CardContent>
       </Card>
+      )}
 
       {/* Categories */}
+      {settingsTab === "categories" && (
       <Card>
         <CardHeader><CardTitle>{t("settings.categories.cardTitle")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -451,8 +487,10 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Feature Modules */}
+      {settingsTab === "advanced" && (
       <Card>
         <CardHeader><CardTitle>{t("settings.modules.cardTitle")}</CardTitle></CardHeader>
         <CardContent>
@@ -461,7 +499,11 @@ export function SettingsPage() {
               <div key={m.key} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
                 <span className="text-sm font-medium">{m.label}</span>
                 <button
-                  onClick={() => toggleModule.mutate({ module: m.key, enabled: !enabledSet.has(m.key) })}
+                  onClick={() => {
+                    // Confirm before disabling a module (it hides a whole feature area).
+                    if (enabledSet.has(m.key)) setConfirmModuleOff(m.key);
+                    else toggleModule.mutate({ module: m.key, enabled: true });
+                  }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabledSet.has(m.key) ? "bg-slate-900" : "bg-slate-200"}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabledSet.has(m.key) ? "translate-x-6" : "translate-x-1"}`} />
@@ -471,8 +513,10 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* API Keys */}
+      {settingsTab === "integrations" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("settings.apiKeys.cardTitle")}</CardTitle>
@@ -527,6 +571,7 @@ export function SettingsPage() {
           ))}
         </CardContent>
       </Card>
+      )}
 
       {/* Business edit dialog */}
       <Dialog open={bizOpen} onOpenChange={setBizOpen}>
@@ -598,6 +643,7 @@ export function SettingsPage() {
       </Dialog>
 
       {/* POS Integration */}
+      {settingsTab === "integrations" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("settings.pos.cardTitle")}</CardTitle>
@@ -663,8 +709,10 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Siigo / DIAN Integration */}
+      {settingsTab === "integrations" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("settings.siigo.cardTitle")}</CardTitle>
@@ -738,6 +786,7 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Add user dialog */}
       <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
@@ -865,6 +914,16 @@ export function SettingsPage() {
         destructive
         loading={deleteCat.isPending}
         onConfirm={() => confirmCat && deleteCat.mutate(confirmCat.id)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmModuleOff}
+        onOpenChange={(o) => { if (!o) setConfirmModuleOff(null); }}
+        title={t("settings.modules.confirmOff.title")}
+        description={t("settings.modules.confirmOff.description")}
+        confirmLabel={t("settings.modules.confirmOff.confirm")}
+        destructive
+        onConfirm={() => { if (confirmModuleOff) toggleModule.mutate({ module: confirmModuleOff, enabled: false }); setConfirmModuleOff(null); }}
       />
     </div>
   );

@@ -234,7 +234,7 @@ export function ItemCatalog({ kind, cfg }: { kind: Kind; cfg: ItemCatalogConfig 
               <Input className="pl-9" placeholder={t("itemCatalog.search.placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-slate-100 bg-slate-50">
                 <tr>
