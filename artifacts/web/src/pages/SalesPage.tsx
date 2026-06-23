@@ -35,7 +35,7 @@ const EMPTY_PAY = { method: "cash", amount: "", addTip: false, tip: "", notes: "
 export function SalesPage() {
   const t = useT();
   const qc = useQueryClient();
-  const { fmt } = useCurrency();
+  const { fmt, round, decimals } = useCurrency();
   const { activeLocationId, locations } = useLocationContext();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -107,8 +107,10 @@ export function SalesPage() {
 
   function openPayDialog() {
     if (!detail) return;
-    const suggested = parseFloat(detail.total).toFixed(2);
-    const tipAmt = (parseFloat(detail.total) * TIP_RATE).toFixed(2);
+    // Round to the currency's precision so the prefill matches the displayed
+    // total (e.g. COP shows no decimals: a 79.50 total prefills as 80).
+    const suggested = round(parseFloat(detail.total)).toFixed(decimals);
+    const tipAmt = round(parseFloat(detail.total) * TIP_RATE).toFixed(decimals);
     setPayForm({ method: "cash", amount: suggested, addTip: false, tip: tipAmt, notes: "" });
     setPayOpen(true);
   }
@@ -127,10 +129,11 @@ export function SalesPage() {
   const cartTotal = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
   const filteredMenu = (menu ?? []).filter((v) => v.itemName.toLowerCase().includes(menuSearch.toLowerCase()));
 
-  // Payment dialog computed values
-  const orderTotal = detail ? parseFloat(detail.total) : 0;
-  const tipAmount = payForm.addTip ? parseFloat(payForm.tip || "0") : 0;
-  const amountCollected = parseFloat(payForm.amount || "0");
+  // Payment dialog computed values — all rounded to the currency's precision so
+  // the math agrees with what's displayed (COP has no fractional pesos).
+  const orderTotal = detail ? round(parseFloat(detail.total)) : 0;
+  const tipAmount = payForm.addTip ? round(parseFloat(payForm.tip || "0")) : 0;
+  const amountCollected = round(parseFloat(payForm.amount || "0"));
   const changeDue = Math.max(0, amountCollected - orderTotal - tipAmount);
   const isShort = amountCollected < orderTotal;
 
@@ -169,8 +172,8 @@ export function SalesPage() {
     mutationFn: () =>
       api.post("/payments", {
         orderId: detailId,
-        amount: parseFloat(payForm.amount).toFixed(2),
-        tip: payForm.addTip ? parseFloat(payForm.tip || "0").toFixed(2) : "0",
+        amount: round(parseFloat(payForm.amount)).toFixed(2),
+        tip: payForm.addTip ? round(parseFloat(payForm.tip || "0")).toFixed(2) : "0",
         method: payForm.method,
         notes: payForm.notes || undefined,
       }),
@@ -546,7 +549,7 @@ export function SalesPage() {
                 value={payForm.amount}
                 onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
                 inputMode="decimal"
-                placeholder={orderTotal.toFixed(2)}
+                placeholder={orderTotal.toFixed(decimals)}
               />
               {payForm.method === "cash" && amountCollected > 0 && !isShort && (
                 <p className="text-sm text-slate-600">

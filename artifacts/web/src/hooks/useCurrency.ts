@@ -15,8 +15,23 @@ export function useCurrency() {
     retry: false,
   });
   const currency = (data?.currencyCode as string | undefined) ?? "USD";
+
+  // Decimal places for this currency per Intl (COP/JPY → 0, USD/EUR → 2).
+  let decimals = 2;
+  try {
+    decimals = new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch { /* unknown currency → keep 2 */ }
+
+  // Round a value to the currency's precision (e.g. 79.50 COP → 80).
+  const round = (amount: number) => {
+    const f = 10 ** decimals;
+    return Math.round((amount + Number.EPSILON) * f) / f;
+  };
+
   return {
     currency,
+    decimals,
+    round,
     fmt: (amount: string | number) => formatCurrency(amount, currency),
   };
 }
