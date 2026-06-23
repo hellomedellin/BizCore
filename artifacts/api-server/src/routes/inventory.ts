@@ -90,8 +90,8 @@ router.get("/inventory/levels", ...guard, async (req, res): Promise<void> => {
         variantName: itemVariantsTable.name,
         quantity: inventoryTable.quantity,
         lowStockThreshold: inventoryTable.lowStockThreshold,
-        unitId: sql<string | null>`coalesce(${inventoryTable.unitId}, ${itemVariantsTable.unitId})`,
-        unitAbbreviation: sql<string | null>`coalesce(${unitsTable.abbreviation}, ${variantUnits.abbreviation})`,
+        unitId: sql<string | null>`coalesce(${itemVariantsTable.unitId}, ${inventoryTable.unitId})`,
+        unitAbbreviation: sql<string | null>`coalesce(${variantUnits.abbreviation}, ${unitsTable.abbreviation})`,
       })
       .from(itemVariantsTable)
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))

@@ -142,6 +142,8 @@ export function IngredientsPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["stock-levels"] });
+      qc.invalidateQueries({ queryKey: ["menu-costing"] });
       setEditing(null);
       toast({ title: t("ingredient.toast.saved"), variant: "success" });
     },
