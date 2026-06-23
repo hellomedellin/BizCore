@@ -68,6 +68,9 @@ export const itemVariantsTable = pgTable("item_variants", {
   sku: text("sku"),
   price: numeric("price", { precision: 10, scale: 2 }),
   cost: numeric("cost", { precision: 10, scale: 2 }),
+  // Unit of measure this variant is stocked/priced in (e.g. kg, lb, gal).
+  // Soft FK to units.id (no constraint to avoid a cross-file import cycle).
+  unitId: uuid("unit_id"),
   attributes: jsonb("attributes"),
   // "86" flag: temporarily sold out during service. Distinct from `active`
   // (which is a soft-delete). An unavailable variant can't be added to an order.

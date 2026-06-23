@@ -5,6 +5,7 @@ import {
   categoriesTable, locationsTable, unitsTable,
 } from "@bizcore/db/schema";
 import { eq, and, ilike, sql, SQL, desc, isNotNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
 import { tenantWhere } from "../lib/tenant";
@@ -78,6 +79,9 @@ router.get("/inventory/levels", ...guard, async (req, res): Promise<void> => {
     if (!locationId) { res.status(400).json({ error: "locationId is required" }); return; }
     if (!(await isLocationAllowed(db, businessId, allowedLocationIds, locationId))) { res.status(403).json({ error: "Location not allowed" }); return; }
 
+    // The unit shown is the inventory row's unit if stocked, else the
+    // ingredient's own unit of measure (so it appears before any stock exists).
+    const variantUnits = alias(unitsTable, "variant_units");
     const rows = await db
       .select({
         itemId: itemsTable.id,
@@ -86,13 +90,14 @@ router.get("/inventory/levels", ...guard, async (req, res): Promise<void> => {
         variantName: itemVariantsTable.name,
         quantity: inventoryTable.quantity,
         lowStockThreshold: inventoryTable.lowStockThreshold,
-        unitId: inventoryTable.unitId,
-        unitAbbreviation: unitsTable.abbreviation,
+        unitId: sql<string | null>`coalesce(${inventoryTable.unitId}, ${itemVariantsTable.unitId})`,
+        unitAbbreviation: sql<string | null>`coalesce(${unitsTable.abbreviation}, ${variantUnits.abbreviation})`,
       })
       .from(itemVariantsTable)
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
       .leftJoin(inventoryTable, and(eq(inventoryTable.variantId, itemVariantsTable.id), eq(inventoryTable.locationId, locationId)))
       .leftJoin(unitsTable, eq(inventoryTable.unitId, unitsTable.id))
+      .leftJoin(variantUnits, eq(itemVariantsTable.unitId, variantUnits.id))
       .where(and(tenantWhere(itemsTable.businessId, businessId), eq(itemsTable.type, "resource"), eq(itemsTable.active, true)))
       .orderBy(itemsTable.name);
 

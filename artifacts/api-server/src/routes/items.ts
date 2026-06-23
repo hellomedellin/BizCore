@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@bizcore/db";
-import { itemsTable, itemVariantsTable, categoriesTable, consumptionProfilesTable, consumptionProfileLinesTable, unitsTable, inventoryTable } from "@bizcore/db/schema";
+import { itemsTable, itemVariantsTable, categoriesTable, consumptionProfilesTable, consumptionProfileLinesTable, unitsTable } from "@bizcore/db/schema";
 import { eq, and, ilike, inArray, sql, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, loadBusiness, requireRole, requireModule, type AuthedRequest } from "../middlewares/auth";
@@ -37,6 +37,8 @@ router.get("/items", ...guard, async (req, res): Promise<void> => {
         active: itemsTable.active,
         // Available unless it has an active variant that's been marked sold out (86'd).
         isAvailable: sql<boolean>`NOT EXISTS (SELECT 1 FROM item_variants iv WHERE iv.item_id = ${itemsTable.id} AND iv.active = true AND iv.is_available = false)`,
+        // The default variant's unit of measure (for ingredients).
+        unitId: sql<string | null>`(SELECT iv.unit_id FROM item_variants iv WHERE iv.item_id = ${itemsTable.id} AND iv.active = true ORDER BY iv.created_at LIMIT 1)`,
         createdAt: itemsTable.createdAt,
         updatedAt: itemsTable.updatedAt,
       })
@@ -93,11 +95,13 @@ router.get("/items/ingredients", ...guard, async (req, res): Promise<void> => {
         variantId: itemVariantsTable.id,
         variantName: itemVariantsTable.name,
         cost: sql<string | null>`coalesce(${itemVariantsTable.cost}, ${itemsTable.cost})`,
-        // The unit the cost is "per" — i.e. the unit this ingredient is stocked in.
-        costUnitId: sql<string | null>`(SELECT inv.unit_id FROM inventory inv WHERE inv.variant_id = ${itemVariantsTable.id} AND inv.unit_id IS NOT NULL LIMIT 1)`,
+        // The unit the cost is "per" — the ingredient's own unit of measure.
+        costUnitId: itemVariantsTable.unitId,
+        unitAbbreviation: unitsTable.abbreviation,
       })
       .from(itemVariantsTable)
       .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
+      .leftJoin(unitsTable, eq(itemVariantsTable.unitId, unitsTable.id))
       .where(and(tenantWhere(itemsTable.businessId, businessId), eq(itemsTable.type, "resource"), eq(itemsTable.active, true), eq(itemVariantsTable.active, true)))
       .orderBy(itemsTable.name);
     res.json(rows);
@@ -128,22 +132,13 @@ router.get("/menu/costing", ...guard, async (req, res): Promise<void> => {
     const units = await db.select({ id: unitsTable.id, toBase: unitsTable.conversionToBase, type: unitsTable.unitType }).from(unitsTable);
     const unitById = new Map(units.map((u) => [u.id, u]));
 
-    // Each resource variant's cost unit = the unit it's stocked in.
-    const stockUnits = await db
-      .select({ variantId: inventoryTable.variantId, unitId: inventoryTable.unitId })
-      .from(inventoryTable)
-      .innerJoin(itemVariantsTable, eq(inventoryTable.variantId, itemVariantsTable.id))
-      .innerJoin(itemsTable, eq(itemVariantsTable.itemId, itemsTable.id))
-      .where(tenantWhere(itemsTable.businessId, businessId));
-    const costUnitByVariant = new Map<string, string>();
-    for (const s of stockUnits) if (s.unitId && !costUnitByVariant.has(s.variantId)) costUnitByVariant.set(s.variantId, s.unitId);
-
     const lines = await db
       .select({
         outputItemId: consumptionProfilesTable.outputItemId,
         resourceVariantId: consumptionProfileLinesTable.resourceVariantId,
         quantity: consumptionProfileLinesTable.quantity,
         recipeUnitId: consumptionProfileLinesTable.unitId,
+        costUnitId: itemVariantsTable.unitId,
         variantCost: itemVariantsTable.cost,
         itemCost: itemsTable.cost,
       })
@@ -165,9 +160,8 @@ router.get("/menu/costing", ...guard, async (req, res): Promise<void> => {
       const qty = parseFloat(l.quantity ?? "");
       if (!Number.isFinite(unitCost) || !Number.isFinite(qty)) { e.complete = false; agg.set(l.outputItemId, e); continue; }
 
-      const costUnitId = l.resourceVariantId ? costUnitByVariant.get(l.resourceVariantId) : undefined;
       const recipeU = l.recipeUnitId ? unitById.get(l.recipeUnitId) : undefined;
-      const costU = costUnitId ? unitById.get(costUnitId) : undefined;
+      const costU = l.costUnitId ? unitById.get(l.costUnitId) : undefined;
 
       let qtyInCostUnit: number | null;
       if (!recipeU || !costU || recipeU.id === costU.id) {
@@ -212,6 +206,7 @@ const createItemSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   basePrice: z.string().nullable().optional(),
   cost: z.string().nullable().optional(),
+  unitId: z.string().uuid().nullable().optional(),
   trackInventory: z.boolean().optional(),
   hasVariants: z.boolean().optional(),
   imageUrl: z.string().nullable().optional(),
@@ -232,6 +227,7 @@ router.post("/items", ...guard, requireRole("admin", "manager"), async (req, res
         name: "Default",
         price: body.data.basePrice ?? null,
         cost: body.data.cost ?? null,
+        unitId: body.data.unitId ?? null,
       });
     }
 
@@ -287,12 +283,17 @@ router.patch("/items/:id", ...guard, requireRole("admin", "manager"), async (req
     ).returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
 
-    // Keep the auto-created single "Default" variant's price in sync so the
-    // sellable price always matches the edited menu price for simple items.
-    if (body.data.basePrice !== undefined) {
+    // Keep the auto-created single "Default" variant in sync with item-level
+    // price/cost/unit so simple items (ingredients) stay consistent — the
+    // sellable price and the cost basis used for recipe costing both follow.
+    const variantSync: Record<string, unknown> = {};
+    if (body.data.basePrice !== undefined) variantSync["price"] = body.data.basePrice;
+    if (body.data.cost !== undefined) variantSync["cost"] = body.data.cost;
+    if (body.data.unitId !== undefined) variantSync["unitId"] = body.data.unitId;
+    if (Object.keys(variantSync).length > 0) {
       const variants = await db.select({ id: itemVariantsTable.id }).from(itemVariantsTable).where(eq(itemVariantsTable.itemId, row.id));
       if (variants.length === 1) {
-        await db.update(itemVariantsTable).set({ price: body.data.basePrice }).where(eq(itemVariantsTable.id, variants[0]!.id));
+        await db.update(itemVariantsTable).set(variantSync).where(eq(itemVariantsTable.id, variants[0]!.id));
       }
     }
 
@@ -309,6 +310,7 @@ const createVariantSchema = z.object({
   sku: z.string().nullable().optional(),
   price: z.string().nullable().optional(),
   cost: z.string().nullable().optional(),
+  unitId: z.string().uuid().nullable().optional(),
   attributes: z.record(z.string()).nullable().optional(),
   isAvailable: z.boolean().optional(),
 });

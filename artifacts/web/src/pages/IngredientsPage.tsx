@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
@@ -22,7 +23,10 @@ interface Ingredient {
   name: string;
   cost: string | null;
   description: string | null;
+  unitId: string | null;
 }
+
+interface Unit { id: string; name: string; abbreviation: string; unitType: string }
 
 interface Level {
   itemId: string;
@@ -39,7 +43,7 @@ interface Row {
   level: Level | null;
 }
 
-const EMPTY_FORM = { name: "", cost: "", description: "" };
+const EMPTY_FORM = { name: "", cost: "", description: "", unitId: "" };
 
 export function IngredientsPage() {
   const t = useT();
@@ -70,8 +74,14 @@ export function IngredientsPage() {
             name: i.name,
             cost: i.cost ?? null,
             description: i.description ?? null,
+            unitId: i.unitId ?? null,
           }))
       ),
+  });
+
+  const { data: units } = useQuery({
+    queryKey: ["units"],
+    queryFn: () => api.get("/units").then((r) => (r.data as Unit[]).filter((u) => u.unitType !== "time")),
   });
 
   const { data: levels, isLoading: levelsLoading } = useQuery({
@@ -109,6 +119,7 @@ export function IngredientsPage() {
         type: "resource",
         cost: form.cost || null,
         description: form.description || null,
+        unitId: form.unitId || null,
         trackInventory: true,
       }),
     onSuccess: () => {
@@ -127,6 +138,7 @@ export function IngredientsPage() {
         name: form.name.trim(),
         cost: form.cost || null,
         description: form.description || null,
+        unitId: form.unitId || null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["items"] });
@@ -196,7 +208,7 @@ export function IngredientsPage() {
   }
 
   function openEdit(ing: Ingredient) {
-    setForm({ name: ing.name, cost: ing.cost ?? "", description: ing.description ?? "" });
+    setForm({ name: ing.name, cost: ing.cost ?? "", description: ing.description ?? "", unitId: ing.unitId ?? "" });
     setEditing(ing);
   }
 
@@ -361,16 +373,28 @@ export function IngredientsPage() {
                 onKeyDown={(e) => { if (e.key === "Enter" && form.name.trim()) create.mutate(); }}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>{t("ingredient.form.cost")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
-              <Input
-                value={form.cost}
-                onChange={(e) => setForm({ ...form, cost: e.target.value })}
-                placeholder="0.00"
-                inputMode="decimal"
-              />
-              <Hint>{t("ingredient.amountHint")}</Hint>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t("ingredient.form.cost")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
+                <Input
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                  placeholder="0.00"
+                  inputMode="decimal"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("ingredient.form.unit")}</Label>
+                <Select value={form.unitId || "none"} onValueChange={(v) => setForm({ ...form, unitId: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder={t("ingredient.form.unitNone")} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("ingredient.form.unitNone")}</SelectItem>
+                    {(units ?? []).map((u) => <SelectItem key={u.id} value={u.id}>{u.name} ({u.abbreviation})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <Hint>{t("ingredient.form.unitHint")}</Hint>
             <div className="space-y-1.5">
               <Label>{t("ingredient.form.description")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
               <Input
@@ -402,16 +426,28 @@ export function IngredientsPage() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>{t("ingredient.form.cost")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
-              <Input
-                value={form.cost}
-                onChange={(e) => setForm({ ...form, cost: e.target.value })}
-                placeholder="0.00"
-                inputMode="decimal"
-              />
-              <Hint>{t("ingredient.amountHint")}</Hint>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t("ingredient.form.cost")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
+                <Input
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                  placeholder="0.00"
+                  inputMode="decimal"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("ingredient.form.unit")}</Label>
+                <Select value={form.unitId || "none"} onValueChange={(v) => setForm({ ...form, unitId: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder={t("ingredient.form.unitNone")} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("ingredient.form.unitNone")}</SelectItem>
+                    {(units ?? []).map((u) => <SelectItem key={u.id} value={u.id}>{u.name} ({u.abbreviation})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <Hint>{t("ingredient.form.unitHint")}</Hint>
             <div className="space-y-1.5">
               <Label>{t("ingredient.form.description")} <span className="text-slate-400 text-xs">({t("common.optional")})</span></Label>
               <Input

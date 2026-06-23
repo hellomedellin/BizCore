@@ -163,6 +163,9 @@ export async function runStartupMigrations(): Promise<void> {
     // ── Column: item_variants.is_available (the "86" / sold-out flag) ─────────
     await db.execute(sql`ALTER TABLE item_variants ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT true`);
 
+    // ── Column: item_variants.unit_id (unit of measure for the variant) ───────
+    await db.execute(sql`ALTER TABLE item_variants ADD COLUMN IF NOT EXISTS unit_id UUID`);
+
     // ── Table: cash_reconciliations (end-of-shift cash counts) ────────────────
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS cash_reconciliations (
