@@ -8,7 +8,7 @@ import { itemVariantsTable } from "./items";
 import { unitsTable } from "./units";
 
 export const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
-  "draft", "ai_processing", "ai_complete", "submitted", "received", "cancelled",
+  "draft", "ai_processing", "ai_complete", "pending_review", "submitted", "received", "cancelled",
 ]);
 
 export const purchaseOrderSourceEnum = pgEnum("purchase_order_source", [
@@ -48,6 +48,12 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   source: purchaseOrderSourceEnum("source").notNull().default("manual"),
   invoiceUrl: text("invoice_url"),
   notes: text("notes"),
+  // Purchase-capture / accounting fields.
+  taxId: text("tax_id"),                       // vendor tax ID (nullable — some receipts have none)
+  expenseCategory: text("expense_category"),   // accounting bucket (e.g. cleaning supplies, food)
+  receiptMissing: boolean("receipt_missing").notNull().default(false),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
   expectedAt: timestamp("expected_at", { withTimezone: true }),
   receivedAt: timestamp("received_at", { withTimezone: true }),
   createdBy: text("created_by"),

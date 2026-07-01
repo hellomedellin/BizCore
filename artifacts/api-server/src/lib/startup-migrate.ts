@@ -166,6 +166,14 @@ export async function runStartupMigrations(): Promise<void> {
     // ── Column: item_variants.unit_id (unit of measure for the variant) ───────
     await db.execute(sql`ALTER TABLE item_variants ADD COLUMN IF NOT EXISTS unit_id UUID`);
 
+    // ── Purchase capture: pending_review status + capture/accounting columns ──
+    await db.execute(sql`ALTER TYPE purchase_order_status ADD VALUE IF NOT EXISTS 'pending_review' BEFORE 'submitted'`);
+    await db.execute(sql`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS tax_id TEXT`);
+    await db.execute(sql`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS expense_category TEXT`);
+    await db.execute(sql`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS receipt_missing BOOLEAN NOT NULL DEFAULT false`);
+    await db.execute(sql`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS approved_by TEXT`);
+    await db.execute(sql`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`);
+
     // ── Table: cash_reconciliations (end-of-shift cash counts) ────────────────
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS cash_reconciliations (
