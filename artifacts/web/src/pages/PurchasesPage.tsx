@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GuidedEmptyState } from "@/components/GuidedEmptyState";
 import { Hint } from "@/components/ui/hint";
+import { PurchaseCapture } from "@/components/PurchaseCapture";
 import { toast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -178,6 +179,17 @@ export function PurchasesPage() {
           <Button onClick={openBuilder}><Plus className="mr-1 h-4 w-4" /> {t("purchases.btn.new")}</Button>
         </div>
       </div>
+
+      {/* Capture a purchase — scan a receipt or enter manually */}
+      <Card>
+        <CardContent className="space-y-2 p-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900">{t("capture.cardTitle")}</p>
+            <p className="text-xs text-slate-500">{t("capture.cardSubtitle")}</p>
+          </div>
+          <PurchaseCapture locationId={activeLocationId} />
+        </CardContent>
+      </Card>
 
       {isLoading ? null : visiblePOs.length === 0 ? (
         <GuidedEmptyState
