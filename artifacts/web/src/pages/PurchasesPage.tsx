@@ -31,7 +31,7 @@ const statusVariant = (s: string): "success" | "secondary" | "warning" => (s ===
 export function PurchasesPage() {
   const t = useT();
   const qc = useQueryClient();
-  const { fmt } = useCurrency();
+  const { fmt, fmtCost } = useCurrency();
   const { activeLocationId, locations } = useLocationContext();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supplierId, setSupplierId] = useState("");
@@ -253,7 +253,7 @@ export function PurchasesPage() {
                     {lines.map((l, i) => (
                       <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
                         <span className="flex-1 font-medium">{l.description}</span>
-                        <span className="text-slate-500">{parseFloat(l.quantity)} {unitAbbr(l.unitId)} × {fmt(l.unitCost)}</span>
+                        <span className="text-slate-500">{parseFloat(l.quantity)} {unitAbbr(l.unitId)} × {fmtCost(l.unitCost)}</span>
                         <span className="w-20 text-right font-medium">{fmt(parseFloat(l.quantity) * parseFloat(l.unitCost))}</span>
                         <button onClick={() => setLines((prev) => prev.filter((_, x) => x !== i))} className="text-slate-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
                       </div>

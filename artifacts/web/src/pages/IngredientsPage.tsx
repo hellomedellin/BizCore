@@ -49,7 +49,7 @@ export function IngredientsPage() {
   const t = useT();
   const qc = useQueryClient();
   const { activeLocationId } = useLocationContext();
-  const { fmt } = useCurrency();
+  const { fmtCost } = useCurrency();
 
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -316,7 +316,7 @@ export function IngredientsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600 tabular-nums">
-                        {ing.cost ? fmt(ing.cost) : <span className="text-slate-300">—</span>}
+                        {ing.cost ? fmtCost(ing.cost) : <span className="text-slate-300">—</span>}
                         {ing.cost && unit && <span className="text-slate-400 text-xs"> / {unit}</span>}
                       </td>
                       {showStock && (

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatCost } from "@/lib/utils";
 
 // Reads the business's configured currency and returns a bound formatter.
 // Use `fmt(amount)` anywhere you'd reach for a hardcoded currency — it respects
@@ -33,5 +33,7 @@ export function useCurrency() {
     decimals,
     round,
     fmt: (amount: string | number) => formatCurrency(amount, currency),
+    // For per-unit costs / rates — shows decimals so a sub-unit cost isn't "$0".
+    fmtCost: (amount: string | number) => formatCost(amount, currency),
   };
 }

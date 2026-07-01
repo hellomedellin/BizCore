@@ -19,7 +19,7 @@ interface Unit { id: string; name: string; abbreviation: string; conversionToBas
 // cost + margin so pricing isn't blind.
 export function RecipeEditor({ itemId, itemName, price }: { itemId: string; itemName: string; price?: string | null }) {
   const qc = useQueryClient();
-  const { fmt } = useCurrency();
+  const { fmt, fmtCost } = useCurrency();
   const [ingredientVariantId, setIngredientVariantId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unitId, setUnitId] = useState("");
@@ -120,7 +120,7 @@ export function RecipeEditor({ itemId, itemName, price }: { itemId: string; item
       {resourceLines.length > 0 && hasCost && (
         <div className="space-y-1 rounded-md bg-white px-3 py-2 text-xs border border-slate-100">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="text-slate-500">Plate cost <span className="font-semibold text-slate-800">{fmt(plateCost)}</span></span>
+            <span className="text-slate-500">Plate cost <span className="font-semibold text-slate-800">{fmtCost(plateCost)}</span></span>
             {priceNum != null && <span className="text-slate-500">Sells for <span className="font-semibold text-slate-800">{fmt(priceNum)}</span></span>}
             {marginPct != null && (
               <span className={`font-semibold ${marginPct >= 60 ? "text-emerald-600" : marginPct >= 30 ? "text-amber-600" : "text-red-600"}`}>
