@@ -1,15 +1,34 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PurchaseCapture } from "@/components/PurchaseCapture";
 import { formatDateTime } from "@/lib/utils";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import { Clock, LogIn, LogOut, Camera } from "lucide-react";
+
+const ROLE_BADGE: Record<string, string> = {
+  owner: "bg-amber-100 text-amber-700",
+  admin: "bg-violet-100 text-violet-700",
+  manager: "bg-blue-100 text-blue-700",
+  accountant: "bg-emerald-100 text-emerald-700",
+  staff: "bg-slate-100 text-slate-500",
+};
 
 export function MeHomePage() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [breakMinutes, setBreakMinutes] = useState(0);
+
+  const canCapture = user?.role === "owner" || user?.role === "admin" || user?.role === "manager";
+  const { data: locations } = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => api.get("/locations").then((r) => r.data as Array<{ id: string; active?: boolean }>),
+    enabled: canCapture,
+  });
+  const captureLocationId = (locations ?? []).find((l) => l.active !== false)?.id ?? null;
 
   const { data: profile } = useQuery({
     queryKey: ["me-profile"],
@@ -38,7 +57,14 @@ export function MeHomePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Hello, {profile?.name?.split(" ")[0] ?? "there"} 👋</h1>
-        {profile?.role && <p className="text-sm text-slate-500">{profile.role.name}</p>}
+        <div className="mt-1 flex items-center gap-2">
+          {profile?.role && <span className="text-sm text-slate-500">{profile.role.name}</span>}
+          {user?.role && (
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ROLE_BADGE[user.role] ?? "bg-slate-100 text-slate-500"}`}>
+              {user.role}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Clock in / out */}
@@ -69,6 +95,16 @@ export function MeHomePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Scan receipt — managers only */}
+      {canCapture && (
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" /> Purchases</CardTitle></CardHeader>
+          <CardContent>
+            <PurchaseCapture locationId={captureLocationId} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent time entries */}
       <Card>

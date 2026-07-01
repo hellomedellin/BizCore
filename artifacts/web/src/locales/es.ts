@@ -777,6 +777,7 @@ const es = {
   // ── Navigation: Reports ──────────────────────────────────────────────────────
   "nav.reports": "Informes",
   "nav.kitchen": "Cocina",
+  "nav.myPortal": "Mi portal (marcar entrada)",
   "nav.cash": "Caja",
   "kitchen.title": "Cocina",
   "kitchen.back": "Volver al panel",

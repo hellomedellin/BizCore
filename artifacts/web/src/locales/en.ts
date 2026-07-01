@@ -19,6 +19,7 @@ const en: Record<keyof Translations, string> = {
   "nav.settings": "Settings",
   "nav.reports": "Reports",
   "nav.kitchen": "Kitchen",
+  "nav.myPortal": "My portal (clock in)",
   "nav.cash": "Cash",
   "kitchen.title": "Kitchen",
   "kitchen.back": "Back to dashboard",

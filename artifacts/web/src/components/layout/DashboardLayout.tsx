@@ -130,13 +130,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Controls row */}
           <div className={cn("flex items-center", collapsed ? "flex-col gap-2" : "justify-between px-1")}>
-            <button
-              onClick={logout}
-              title="Sign out"
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <Link href="/me" title={t("nav.myPortal")} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900">
+                <Clock className="h-4 w-4" />
+              </Link>
+              <button
+                onClick={logout}
+                title="Sign out"
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
             <div className="flex items-center gap-1">
               {!collapsed && (
                 <button
